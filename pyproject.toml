@@ -1,0 +1,48 @@
+[build-system]
+requires = ["setuptools >= 61.2.0"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "deep_code"
+dynamic = ["version"]
+authors = [
+  {name = "Tejas Morbagal Harish", email = "tejas.morbagalharish@brockmann-consult.de"}
+]
+description = """\
+  deepesdl earthcode integration utility tool
+  """
+keywords = [
+  "analysis ready data", "data science", "datacube", "xarray", "zarr", "xcube",
+    "stac", "FAIR", "reproducible workflow", "DeepESDL"
+]
+readme = {file = "README.md", content-type = "text/markdown"}
+license = {text = "MIT"}
+requires-python = ">=3.10"
+dependencies = [
+    "pystac",
+    "jsonschema",
+    "click"
+]
+
+[tool.setuptools.dynamic]
+version = {attr = "deep_code.__version__"}
+
+[tool.setuptools.packages.find]
+exclude = [
+  "test*",
+  "doc*"
+]
+
+[project.optional-dependencies]
+dev = [
+  "black",
+  "flake8",
+  "pytest",
+  "pytest-cov",
+  "pytest-recording"
+]
+
+[project.urls]
+Repository = "https://github.com/deepesdl/deep-code"
+Issues = "https://github.com/deepesdl/deep-code/issues"
+Changelog = "https://github.com/deepesdl/deep-code/blob/main/CHANGES.md"

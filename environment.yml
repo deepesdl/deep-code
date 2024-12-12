@@ -1,0 +1,10 @@
+name: deep-code
+channels:
+  - conda-forge
+dependencies:
+  # Required
+  - pystac
+  - jsonschema
+  - click
+  - pyyaml
+  - requests
