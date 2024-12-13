@@ -1,0 +1,181 @@
+from typing import Optional, Union, Literal, List
+import pystac
+from pystac import SpatialExtent, TemporalExtent, Extent
+from pystac.extensions.base import PropertiesExtension, ExtensionManagementMixin
+from deep_code.constants import OSC_SCHEMA_URI
+
+
+class OscExtension(
+    PropertiesExtension, ExtensionManagementMixin[Union[pystac.Item, pystac.Collection]]
+):
+    name: Literal["osc"] = "osc"
+
+    def __init__(self, obj: Union[pystac.Item, pystac.Collection]):
+        if isinstance(obj, pystac.Collection):
+            self.properties = obj.extra_fields
+        else:
+            self.properties = obj.properties
+        self.obj = obj
+
+    # Existing properties...
+    @property
+    def osc_type(self) -> Optional[str]:
+        return self._get_property("osc:type", str)
+
+    @osc_type.setter
+    def osc_type(self, v: str) -> None:
+        self._set_property("osc:type", v, pop_if_none=False)
+
+    @property
+    def osc_name(self) -> Optional[str]:
+        return self._get_property("osc:name", str)
+
+    @osc_name.setter
+    def osc_name(self, v: str) -> None:
+        self._set_property("osc:name", v, pop_if_none=False)
+
+    @property
+    def osc_status(self) -> Optional[str]:
+        return self._get_property("osc:status", str)
+
+    @osc_status.setter
+    def osc_status(self, value: str) -> None:
+        self._set_property("osc:status", value, pop_if_none=False)
+
+    @property
+    def osc_project(self) -> Optional[str]:
+        return self._get_property("osc:project", str)
+
+    @osc_project.setter
+    def osc_project(self, v: str) -> None:
+        self._set_property("osc:project", v, pop_if_none=False)
+
+    @property
+    def osc_theme(self) -> Optional[List[str]]:
+        return self._get_property("osc:themes", list)
+
+    @osc_theme.setter
+    def osc_theme(self, value: List[str]) -> None:
+        if not isinstance(value, list) or not all(
+            isinstance(item, str) for item in value
+        ):
+            raise ValueError("osc:themes must be a list of strings")
+        self._set_property("osc:themes", value, pop_if_none=False)
+
+    @property
+    def osc_region(self) -> Optional[str]:
+        return self._get_property("osc:region", str)
+
+    @osc_region.setter
+    def osc_region(self, value: str) -> None:
+        self._set_property("osc:region", value, pop_if_none=False)
+
+    @property
+    def osc_missions(self) -> Optional[List[str]]:
+        return self._get_property("osc:missions", list)
+
+    @osc_missions.setter
+    def osc_missions(self, value: List[str]) -> None:
+        if not isinstance(value, list) or not all(
+            isinstance(item, str) for item in value
+        ):
+            raise ValueError("osc:missions must be a list of strings")
+        self._set_property("osc:missions", value, pop_if_none=False)
+
+    # Utility methods for handling temporal and spatial extent
+    def set_extent(self, spatial: List[List[float]], temporal: List[List[str]]) -> None:
+        self.obj.extent = Extent(SpatialExtent(spatial), TemporalExtent(temporal))
+
+    @property
+    def osc_variables(self) -> Optional[List[str]]:
+        return self._get_property("osc:variables", list)
+
+    @osc_variables.setter
+    def osc_variables(self, v: List[str]) -> None:
+        if not isinstance(v, list) or not all(isinstance(item, str) for item in v):
+            raise ValueError("osc:variables must be a list of strings")
+        self._set_property("osc:variables", v, pop_if_none=False)
+
+    # Keywords property
+    @property
+    def keywords(self) -> Optional[List[str]]:
+        return self._get_property("keywords", list)
+
+    @keywords.setter
+    def keywords(self, value: List[str]) -> None:
+        if not isinstance(value, list) or not all(
+            isinstance(item, str) for item in value
+        ):
+            raise ValueError("keywords must be a list of strings")
+        self._set_property("keywords", value, pop_if_none=False)
+
+    # CF Parameters
+    @property
+    def cf_parameters(self) -> Optional[List[dict]]:
+        return self._get_property("cf:parameter", list)
+
+    @cf_parameters.setter
+    def cf_parameters(self, value: List[dict]) -> None:
+        if not isinstance(value, list) or not all(
+            isinstance(item, dict) for item in value
+        ):
+            raise ValueError("cf:parameter must be a list of dictionaries")
+        self._set_property("cf:parameter", value, pop_if_none=False)
+
+    # Created and Updated timestamps
+    @property
+    def created(self) -> Optional[str]:
+        return self._get_property("created", str)
+
+    @created.setter
+    def created(self, value: str) -> None:
+        self._set_property("created", value, pop_if_none=False)
+
+    @property
+    def updated(self) -> Optional[str]:
+        return self._get_property("updated", str)
+
+    @updated.setter
+    def updated(self, value: str) -> None:
+        self._set_property("updated", value, pop_if_none=False)
+
+    @classmethod
+    def get_schema_uri(cls) -> str:
+        return OSC_SCHEMA_URI
+
+    @classmethod
+    def ext(
+        cls, obj: Union[pystac.Item, pystac.Collection], add_if_missing: bool = False
+    ) -> "OscExtension":
+        """Returns the OscExtension instance for the given object, adding the extension if missing."""
+        if cls.has_extension(obj):
+            return OscExtension(obj)
+        elif add_if_missing:
+            return cls.add_to(obj)
+        else:
+            raise ValueError(
+                "OSC extension is not present and add_if_missing is False."
+            )
+
+    @classmethod
+    def has_extension(cls, obj: Union[pystac.Item, pystac.Collection]) -> bool:
+        """Checks if the OSC extension is present in the object's extensions."""
+        return cls.get_schema_uri() in obj.stac_extensions
+
+    @classmethod
+    def add_to(cls, obj: Union[pystac.Item, pystac.Collection]) -> "OscExtension":
+        """Adds the OSC extension to the object's extensions."""
+        if cls.get_schema_uri() not in obj.stac_extensions:
+            obj.stac_extensions.append(cls.get_schema_uri())
+        return OscExtension(obj)
+
+    def validate_extension(self) -> None:
+        """Validates that all required fields for the OSC extension are set."""
+        required_fields = ["osc:type", "osc:project", "osc:status"]
+        missing_fields = [
+            field
+            for field in required_fields
+            if self._get_property(field, None) is None
+        ]
+        if missing_fields:
+            raise ValueError(f"Missing required fields: {', '.join(missing_fields)}")
