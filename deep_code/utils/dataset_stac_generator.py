@@ -5,6 +5,7 @@ from datetime import datetime, timezone
 from typing import List, Optional
 from xcube.core.store import new_data_store
 from deep_code.utils.osc_extension import OscExtension
+import logging
 
 
 class OSCProductSTACGenerator:
@@ -44,27 +45,65 @@ class OSCProductSTACGenerator:
 
     def _open_dataset(self):
         """Open the dataset using a S3 store as an xarray Dataset."""
-        try:
-            store = new_data_store(
-                "s3", root="deep-esdl-public", storage_options=dict(anon=True)
-            )
-            return store.open_data(self.dataset_id)
-        except Exception as e:
+        # Configure logging
+        logger = logging.getLogger(__name__)
+
+        store_configs = [
+            {
+                "description": "Public store",
+                "params": {
+                    "storage_type": "s3",
+                    "root": "deep-esdl-public",
+                    "storage_options": {"anon": True},
+                },
+            },
+            {
+                "description": "Authenticated store",
+                "params": {
+                    "storage_type": "s3",
+                    "root": os.environ.get("S3_USER_STORAGE_BUCKET"),
+                    "storage_options": {
+                        "anon": False,
+                        "key": os.environ.get("S3_USER_STORAGE_KEY"),
+                        "secret": os.environ.get("S3_USER_STORAGE_SECRET"),
+                    },
+                },
+            },
+        ]
+
+        # Iterate through configurations and attempt to open the dataset
+        last_exception = None
+        tried_configurations = []
+        for config in store_configs:
+            tried_configurations.append(config["description"])
             try:
-                store = new_data_store(
-                    "s3",
-                    root=os.environ["S3_USER_STORAGE_BUCKET"],
-                    storage_options=dict(
-                        anon=False,
-                        key=os.environ.get("S3_USER_STORAGE_KEY"),
-                        secret=os.environ.get("S3_USER_STORAGE_SECRET"),
-                    ),
+                logger.info(
+                    f"Attempting to open dataset with configuration: {config['description']}"
                 )
-                return store.open_data(self.dataset_id)
-            except Exception as inner_e:
-                raise ValueError(
-                    f"Failed to open Zarr dataset with ID {self.dataset_id}: {inner_e}"
-                ) from e
+                store = new_data_store(
+                    config["params"]["storage_type"],
+                    root=config["params"]["root"],
+                    storage_options=config["params"]["storage_options"],
+                )
+                # Try to open the dataset; return immediately if successful
+                dataset = store.open_data(self.dataset_id)
+                logger.info(
+                    f"Successfully opened dataset with configuration: {config['description']}"
+                )
+                return dataset
+            except Exception as e:
+                logger.error(
+                    f"Failed to open dataset with configuration: {config['description']}. Error: {e}"
+                )
+                last_exception = e
+
+        # If all attempts fail, raise an error
+        logger.critical(
+            f"Failed to open Zarr dataset with ID {self.dataset_id}. Tried configurations: {', '.join(tried_configurations)}. Last error: {last_exception}"
+        )
+        raise ValueError(
+            f"Failed to open Zarr dataset with ID {self.dataset_id}. Tried configurations: {', '.join(tried_configurations)}. Last error: {last_exception}"
+        )
 
     def _get_spatial_extent(self) -> SpatialExtent:
         """Extract spatial extent from the dataset."""

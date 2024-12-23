@@ -3,9 +3,9 @@ from unittest.mock import patch, MagicMock
 from datetime import datetime, timezone
 from deep_code.utils.dataset_stac_generator import OSCProductSTACGenerator
 from pystac import Collection
-from pystac.extensions.base import PropertiesExtension
 from xarray import Dataset
 import numpy as np
+import os
 
 
 class TestOSCProductSTACGenerator(unittest.TestCase):
@@ -103,3 +103,104 @@ class TestOSCProductSTACGenerator(unittest.TestCase):
         self.generator.dataset = Dataset(coords={})
         with self.assertRaises(ValueError):
             self.generator._get_temporal_extent()
+
+
+class TestOpenDataset(unittest.TestCase):
+    @patch("deep_code.utils.dataset_stac_generator.new_data_store")
+    @patch("deep_code.utils.dataset_stac_generator.logging.getLogger")
+    def test_open_dataset_success_public_store(self, mock_logger, mock_new_data_store):
+        """Test dataset opening with the public store configuration."""
+        # Create a mock store and mock its `open_data` method
+        mock_store = MagicMock()
+        mock_new_data_store.return_value = mock_store
+        mock_store.open_data.return_value = "mock_dataset"
+
+        # Instantiate the generator (this will implicitly call _open_dataset)
+        generator = OSCProductSTACGenerator("mock-dataset-id", "mock-collection-id")
+
+        # Validate that the dataset is assigned correctly
+        self.assertEqual(generator.dataset, "mock_dataset")
+
+        # Validate that `new_data_store` was called once with the correct parameters
+        mock_new_data_store.assert_called_once_with(
+            "s3", root="deep-esdl-public", storage_options={"anon": True}
+        )
+
+        # Ensure `open_data` was called once on the returned store
+        mock_store.open_data.assert_called_once_with("mock-dataset-id")
+
+        # Validate logging behavior
+        mock_logger().info.assert_any_call(
+            "Attempting to open dataset with configuration: Public store"
+        )
+        mock_logger().info.assert_any_call(
+            "Successfully opened dataset with configuration: Public store"
+        )
+
+    @patch("deep_code.utils.dataset_stac_generator.new_data_store")
+    @patch("deep_code.utils.dataset_stac_generator.logging.getLogger")
+    def test_open_dataset_success_authenticated_store(
+        self, mock_logger, mock_new_data_store
+    ):
+        """Test dataset opening with the authenticated store configuration."""
+        # Simulate public store failure
+        mock_store = MagicMock()
+        mock_new_data_store.side_effect = [
+            Exception("Public store failure"),
+            # First call (public store) raises an exception
+            mock_store,
+            # Second call (authenticated store) returns a mock store
+        ]
+        mock_store.open_data.return_value = "mock_dataset"
+
+        os.environ["S3_USER_STORAGE_BUCKET"] = "mock-bucket"
+        os.environ["S3_USER_STORAGE_KEY"] = "mock-key"
+        os.environ["S3_USER_STORAGE_SECRET"] = "mock-secret"
+
+        generator = OSCProductSTACGenerator("mock-dataset-id", "mock-collection-id")
+
+        # Validate that the dataset was successfully opened with the authenticated store
+        self.assertEqual(generator.dataset, "mock_dataset")
+        self.assertEqual(mock_new_data_store.call_count, 2)
+
+        # Validate calls to `new_data_store`
+        mock_new_data_store.assert_any_call(
+            "s3", root="deep-esdl-public", storage_options={"anon": True}
+        )
+        mock_new_data_store.assert_any_call(
+            "s3",
+            root="mock-bucket",
+            storage_options={"anon": False, "key": "mock-key", "secret": "mock-secret"},
+        )
+
+        # Validate logging calls
+        mock_logger().info.assert_any_call(
+            "Attempting to open dataset with configuration: Public store"
+        )
+        mock_logger().info.assert_any_call(
+            "Attempting to open dataset with configuration: Authenticated store"
+        )
+        mock_logger().info.assert_any_call(
+            "Successfully opened dataset with configuration: Authenticated store"
+        )
+
+    @patch("deep_code.utils.dataset_stac_generator.new_data_store")
+    @patch("deep_code.utils.dataset_stac_generator.logging.getLogger")
+    def test_open_dataset_failure(self, mock_logger, mock_new_data_store):
+        """Test dataset opening failure with all configurations."""
+        # Simulate all store failures
+        mock_new_data_store.side_effect = Exception("Store failure")
+        os.environ["S3_USER_STORAGE_BUCKET"] = "mock-bucket"
+        os.environ["S3_USER_STORAGE_KEY"] = "mock-key"
+        os.environ["S3_USER_STORAGE_SECRET"] = "mock-secret"
+
+        with self.assertRaises(ValueError) as context:
+            OSCProductSTACGenerator("mock-dataset-id", "mock-collection-id")
+
+        self.assertIn(
+            "Failed to open Zarr dataset with ID mock-dataset-id",
+            str(context.exception),
+        )
+        self.assertIn("Public store, Authenticated store", str(context.exception))
+        self.assertEqual(mock_new_data_store.call_count, 2)
+        mock_logger().critical.assert_called_once()
