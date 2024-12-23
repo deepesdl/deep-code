@@ -12,17 +12,38 @@ class OSCProductSTACGenerator:
     A class to generate OSC STAC Collections for a product from Zarr datasets.
     """
 
-    def __init__(self, dataset_id: str):
+    def __init__(
+        self,
+        dataset_id: str,
+        collection_id: str,
+        access_link: Optional[str] = None,
+        documentation_link: Optional[str] = None,
+        osc_status: str = "ongoing",
+        osc_region: str = "Global",
+        osc_themes: Optional[List[str]] = None,
+    ):
         """
-        Initialize the generator with the path to the Zarr dataset.
+        Initialize the generator with the path to the Zarr dataset and metadata.
 
-        :param dataset_path: Path to the Zarr dataset.
+        :param dataset_id: Path to the Zarr dataset.
+        :param collection_id: Unique ID for the collection.
+        :param access_link: Public access link to the dataset.
+        :param documentation_link: Link to documentation related to the dataset.
+        :param osc_status: Status of the dataset (e.g., "ongoing").
+        :param osc_region: Geographical region of the dataset.
+        :param osc_themes: Themes of the dataset (e.g., ["climate", "environment"]).
         """
         self.dataset_id = dataset_id
+        self.collection_id = collection_id
+        self.access_link = access_link or f"s3://deep-esdl-public/{dataset_id}"
+        self.documentation_link = documentation_link
+        self.osc_status = osc_status
+        self.osc_region = osc_region
+        self.osc_themes = osc_themes or []
         self.dataset = self._open_dataset()
 
     def _open_dataset(self):
-        """Open the dataset using a s3 store as a xarray Dataset."""
+        """Open the dataset using a S3 store as an xarray Dataset."""
         try:
             store = new_data_store(
                 "s3", root="deep-esdl-public", storage_options=dict(anon=True)
@@ -42,14 +63,8 @@ class OSCProductSTACGenerator:
                 return store.open_data(self.dataset_id)
             except Exception as inner_e:
                 raise ValueError(
-                    f"Failed to open Zarr dataset with ID "
-                    f"{self.dataset_id}: {inner_e}"
+                    f"Failed to open Zarr dataset with ID {self.dataset_id}: {inner_e}"
                 ) from e
-
-        except Exception as e:
-            raise ValueError(
-                f"Failed to open Zarr dataset with ID " f"{self.dataset_id}: {e}"
-            )
 
     def _get_spatial_extent(self) -> SpatialExtent:
         """Extract spatial extent from the dataset."""
@@ -123,36 +138,12 @@ class OSCProductSTACGenerator:
             "title": self.dataset.attrs.get("title", "No title available."),
         }
 
-    def build_stac_collection(
-        self,
-        collection_id: str,
-        access_link: Optional[str] = None,
-        documentation_link: Optional[str] = None,
-        osc_status: str = "ongoing",
-        osc_region: str = "Global",
-        osc_themes: Optional[List[str]] = None,
-    ) -> Collection:
+    def build_stac_collection(self) -> Collection:
         """
         Build an OSC STAC Collection for the product.
 
-        :param access_link: Public access link to the dataset.
-        :param collection_id: Unique ID for the collection.
-        :param documentation_link: (Optional) Link to documentation related to the dataset.
-        :param osc_status: Status of the dataset (e.g., "ongoing").
-        :param osc_region: Geographical region of the dataset.
-        :param osc_themes: (Optional) Themes of the dataset (e.g., ["climate", "environment"]).
         :return: A pystac.Collection object.
         """
-
-        # Set default access link if not provided, assume dataset_id is
-        # already in deepesdl public s3
-        if access_link is None:
-            access_link = f"s3://deep-esdl-public/{self.dataset_id}"
-
-        # Ensure osc_themes has a default value
-        if osc_themes is None:
-            osc_themes = []
-
         # Extract metadata
         try:
             spatial_extent = self._get_spatial_extent()
@@ -164,7 +155,7 @@ class OSCProductSTACGenerator:
 
         # Build base STAC Collection
         collection = Collection(
-            id=collection_id,
+            id=self.collection_id,
             description=general_metadata.get("description", "No description provided."),
             extent=Extent(spatial=spatial_extent, temporal=temporal_extent),
             title=general_metadata.get("title", "Unnamed Collection"),
@@ -175,9 +166,9 @@ class OSCProductSTACGenerator:
         # osc_project and osc_type are fixed constant values
         osc_extension.osc_project = "deep-earth-system-data-lab"
         osc_extension.osc_type = "product"
-        osc_extension.osc_status = osc_status
-        osc_extension.osc_region = osc_region
-        osc_extension.osc_themes = osc_themes
+        osc_extension.osc_status = self.osc_status
+        osc_extension.osc_region = self.osc_region
+        osc_extension.osc_themes = self.osc_themes
         osc_extension.osc_variables = variables
         osc_extension.osc_missions = []
 
@@ -186,13 +177,13 @@ class OSCProductSTACGenerator:
         collection.extra_fields["created"] = now_iso
         collection.extra_fields["updated"] = now_iso
 
-        collection_name = f"{general_metadata.get('title', collection_id).replace(' ', '-').lower()}.json"
+        collection_name = f"{general_metadata.get('title', self.collection_id).replace(' ', '-').lower()}.json"
         collection.set_self_href(collection_name)
 
-        collection.add_link(Link(rel="self", target=access_link, title="Access"))
-        if documentation_link:
+        collection.add_link(Link(rel="self", target=self.access_link, title="Access"))
+        if self.documentation_link:
             collection.add_link(
-                Link(rel="via", target=documentation_link, title="Documentation")
+                Link(rel="via", target=self.documentation_link, title="Documentation")
             )
 
         # Validate OSC extension fields

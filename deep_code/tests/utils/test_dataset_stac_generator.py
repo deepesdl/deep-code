@@ -1,8 +1,9 @@
 import unittest
 from unittest.mock import patch, MagicMock
-from datetime import datetime
+from datetime import datetime, timezone
 from deep_code.utils.dataset_stac_generator import OSCProductSTACGenerator
 from pystac import Collection
+from pystac.extensions.base import PropertiesExtension
 from xarray import Dataset
 import numpy as np
 
@@ -18,8 +19,8 @@ class TestOSCProductSTACGenerator(unittest.TestCase):
                 "time": (
                     "time",
                     [
-                        np.datetime64("2023-01-01T00:00:00Z", "ns"),
-                        np.datetime64("2023-01-02T00:00:00Z", "ns"),
+                        np.datetime64(datetime(2023, 1, 1), "ns"),
+                        np.datetime64(datetime(2023, 1, 2), "ns"),
                     ],
                 ),
             },
@@ -33,7 +34,15 @@ class TestOSCProductSTACGenerator(unittest.TestCase):
         mock_store.open_data.return_value = self.mock_dataset
         mock_data_store.return_value = mock_store
 
-        self.generator = OSCProductSTACGenerator("mock-dataset-id")
+        self.generator = OSCProductSTACGenerator(
+            dataset_id="mock-dataset-id",
+            collection_id="mock-collection-id",
+            access_link="s3://mock-bucket/mock-dataset",
+            documentation_link="https://example.com/docs",
+            osc_status="ongoing",
+            osc_region="Global",
+            osc_themes=["climate", "environment"],
+        )
 
     def test_open_dataset(self):
         """Test if the dataset is opened correctly."""
@@ -68,14 +77,7 @@ class TestOSCProductSTACGenerator(unittest.TestCase):
     @patch("pystac.Collection.set_self_href")
     def test_build_stac_collection(self, mock_set_self_href, mock_add_link):
         """Test STAC collection creation."""
-        collection = self.generator.build_stac_collection(
-            collection_id="mock-collection-id",
-            access_link="s3://mock-bucket/mock-dataset",
-            documentation_link="https://example.com/docs",
-            osc_status="ongoing",
-            osc_region="Global",
-            osc_themes=["climate", "environment"],
-        )
+        collection = self.generator.build_stac_collection()
         self.assertIsInstance(collection, Collection)
         self.assertEqual(collection.id, "mock-collection-id")
         self.assertEqual(collection.description, "Mock dataset for testing.")
