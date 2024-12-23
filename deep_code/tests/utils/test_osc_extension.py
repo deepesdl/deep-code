@@ -113,7 +113,3 @@ class TestOscExtension(unittest.TestCase):
             extension.validate_extension()
         self.assertIn("Missing required fields", str(context.exception))
         self.assertIn("osc:type", str(context.exception))
-
-
-if __name__ == "__main__":
-    unittest.main()

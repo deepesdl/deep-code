@@ -117,7 +117,3 @@ class TestGitHubAutomation(unittest.TestCase):
 
         mock_chdir.assert_called_once_with("..")
         mock_run.assert_called_once_with(["rm", "-rf", self.github.local_clone_dir])
-
-
-if __name__ == "__main__":
-    unittest.main()

@@ -24,9 +24,9 @@ class OSCProductSTACGenerator:
     def _open_dataset(self):
         """Open the dataset using a s3 store as a xarray Dataset."""
         try:
-            store = new_data_store('s3',
-                                   root="deep-esdl-public",
-                                   storage_options=dict(anon=True))
+            store = new_data_store(
+                "s3", root="deep-esdl-public", storage_options=dict(anon=True)
+            )
             return store.open_data(self.dataset_id)
         except Exception as e:
             try:
@@ -37,12 +37,14 @@ class OSCProductSTACGenerator:
                         anon=False,
                         key=os.environ.get("S3_USER_STORAGE_KEY"),
                         secret=os.environ.get("S3_USER_STORAGE_SECRET"),
-                    )
+                    ),
                 )
                 return store.open_data(self.dataset_id)
             except Exception as inner_e:
-                raise ValueError(f"Failed to open Zarr dataset with ID "
-                                 f"{self.dataset_id}: {inner_e}") from e
+                raise ValueError(
+                    f"Failed to open Zarr dataset with ID "
+                    f"{self.dataset_id}: {inner_e}"
+                ) from e
 
         except Exception as e:
             raise ValueError(
@@ -64,14 +66,8 @@ class OSCProductSTACGenerator:
             return SpatialExtent([[lon_min, lat_min, lon_max, lat_max]])
         elif "x" in self.dataset.coords and "y" in self.dataset.coords:
             # For irregular gridding
-            x_min, x_max = (
-                float(self.dataset.x.min()),
-                float(self.dataset.x.max()),
-            )
-            y_min, y_max = (
-                float(self.dataset.y.min()),
-                float(self.dataset.y.max()),
-            )
+            x_min, x_max = (float(self.dataset.x.min()), float(self.dataset.x.max()))
+            y_min, y_max = (float(self.dataset.y.min()), float(self.dataset.y.max()))
             return SpatialExtent([[x_min, y_min, x_max, y_max]])
         else:
             raise ValueError(
@@ -84,9 +80,11 @@ class OSCProductSTACGenerator:
             try:
                 # Convert the time bounds to datetime objects
                 time_min = pd.to_datetime(
-                    self.dataset.time.min().values).to_pydatetime()
+                    self.dataset.time.min().values
+                ).to_pydatetime()
                 time_max = pd.to_datetime(
-                    self.dataset.time.max().values).to_pydatetime()
+                    self.dataset.time.max().values
+                ).to_pydatetime()
                 return TemporalExtent([[time_min, time_max]])
             except Exception as e:
                 raise ValueError(f"Failed to parse temporal extent: {e}")
@@ -119,8 +117,9 @@ class OSCProductSTACGenerator:
         :return: A dictionary containing metadata such as 'description' and 'title'.
         """
         return {
-            "description": self.dataset.attrs.get("description",
-                                                  "No description available."),
+            "description": self.dataset.attrs.get(
+                "description", "No description available."
+            ),
             "title": self.dataset.attrs.get("title", "No title available."),
         }
 
@@ -166,9 +165,9 @@ class OSCProductSTACGenerator:
         # Build base STAC Collection
         collection = Collection(
             id=collection_id,
-            description=general_metadata.get('description', "No description provided."),
+            description=general_metadata.get("description", "No description provided."),
             extent=Extent(spatial=spatial_extent, temporal=temporal_extent),
-            title=general_metadata.get('title', "Unnamed Collection"),
+            title=general_metadata.get("title", "Unnamed Collection"),
         )
 
         # Add OSC extension metadata
@@ -190,13 +189,11 @@ class OSCProductSTACGenerator:
         collection_name = f"{general_metadata.get('title', collection_id).replace(' ', '-').lower()}.json"
         collection.set_self_href(collection_name)
 
-
-        collection.add_link(Link(rel="self", target=access_link,
-                            title="Access"))
+        collection.add_link(Link(rel="self", target=access_link, title="Access"))
         if documentation_link:
             collection.add_link(
-                Link(rel="via", target=documentation_link,
-                     title="Documentation"))
+                Link(rel="via", target=documentation_link, title="Documentation")
+            )
 
         # Validate OSC extension fields
         try:
@@ -205,5 +202,3 @@ class OSCProductSTACGenerator:
             raise ValueError(f"OSC Extension validation failed: {e}")
 
         return collection
-
-

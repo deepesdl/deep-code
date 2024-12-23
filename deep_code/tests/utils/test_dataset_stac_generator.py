@@ -8,7 +8,6 @@ import numpy as np
 
 
 class TestOSCProductSTACGenerator(unittest.TestCase):
-
     @patch("deep_code.utils.dataset_stac_generator.new_data_store")
     def setUp(self, mock_data_store):
         """Set up a mock dataset and generator."""
@@ -18,17 +17,17 @@ class TestOSCProductSTACGenerator(unittest.TestCase):
                 "lat": ("lat", np.linspace(-90, 90, 5)),
                 "time": (
                     "time",
-                    [np.datetime64("2023-01-01T00:00:00Z", "ns"), np.datetime64("2023-01-02T00:00:00Z", "ns")]
+                    [
+                        np.datetime64("2023-01-01T00:00:00Z", "ns"),
+                        np.datetime64("2023-01-02T00:00:00Z", "ns"),
+                    ],
                 ),
             },
-            attrs={
-                "description": "Mock dataset for testing.",
-                "title": "Mock Dataset",
-            },
+            attrs={"description": "Mock dataset for testing.", "title": "Mock Dataset"},
             data_vars={
                 "var1": (("time", "lat", "lon"), np.random.rand(2, 5, 10)),
                 "var2": (("time", "lat", "lon"), np.random.rand(2, 5, 10)),
-            }
+            },
         )
         mock_store = MagicMock()
         mock_store.open_data.return_value = self.mock_dataset
@@ -51,10 +50,7 @@ class TestOSCProductSTACGenerator(unittest.TestCase):
     def test_get_temporal_extent(self):
         """Test temporal extent extraction."""
         extent = self.generator._get_temporal_extent()
-        expected_intervals = [
-            datetime(2023, 1, 1, 0, 0),
-            datetime(2023, 1, 2, 0, 0),
-        ]
+        expected_intervals = [datetime(2023, 1, 1, 0, 0), datetime(2023, 1, 2, 0, 0)]
         self.assertEqual(extent.intervals[0], expected_intervals)
 
     def test_get_variables(self):
@@ -84,7 +80,9 @@ class TestOSCProductSTACGenerator(unittest.TestCase):
         self.assertEqual(collection.id, "mock-collection-id")
         self.assertEqual(collection.description, "Mock dataset for testing.")
         self.assertEqual(collection.title, "Mock Dataset")
-        self.assertEqual(collection.extent.spatial.bboxes[0], [-180.0, -90.0, 180.0, 90.0])
+        self.assertEqual(
+            collection.extent.spatial.bboxes[0], [-180.0, -90.0, 180.0, 90.0]
+        )
         self.assertEqual(
             collection.extent.temporal.intervals[0],
             [datetime(2023, 1, 1, 0, 0), datetime(2023, 1, 2, 0, 0)],
@@ -103,4 +101,3 @@ class TestOSCProductSTACGenerator(unittest.TestCase):
         self.generator.dataset = Dataset(coords={})
         with self.assertRaises(ValueError):
             self.generator._get_temporal_extent()
-
