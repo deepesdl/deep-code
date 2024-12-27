@@ -1,5 +1,5 @@
 [build-system]
-requires = ["setuptools >= 61.2.0"]
+requires = ["setuptools >= 61.2.0", "wheel", "build"]
 build-backend = "setuptools.build_meta"
 
 [project]
@@ -8,7 +8,7 @@ dynamic = ["version"]
 authors = [
   {name = "Tejas Morbagal Harish", email = "tejas.morbagalharish@brockmann-consult.de"}
 ]
-description = """\
+description = """
   deepesdl earthcode integration utility tool
   """
 keywords = [
@@ -21,7 +21,8 @@ requires-python = ">=3.10"
 dependencies = [
     "pystac",
     "jsonschema",
-    "click"
+    "click",
+    "xcube"
 ]
 
 [tool.setuptools.dynamic]
@@ -41,6 +42,10 @@ dev = [
   "pytest-cov",
   "pytest-recording"
 ]
+
+# entry point CLI
+[project.scripts]
+deep-code = "deep_code.cli.main:main"
 
 [project.urls]
 Repository = "https://github.com/deepesdl/deep-code"
