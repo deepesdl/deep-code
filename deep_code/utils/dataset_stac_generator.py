@@ -24,6 +24,7 @@ class OSCProductSTACGenerator:
         osc_status: str = "ongoing",
         osc_region: str = "Global",
         osc_themes: Optional[List[str]] = None,
+        osc_missions: Optional[List[str]] = None,
     ):
         """
         Initialize the generator with the path to the Zarr dataset and metadata.
@@ -43,6 +44,7 @@ class OSCProductSTACGenerator:
         self.osc_status = osc_status
         self.osc_region = osc_region
         self.osc_themes = osc_themes or []
+        self.osc_missions = osc_missions or []
         self.logger = logging.getLogger(__name__)
         self.dataset = self._open_dataset()
 
@@ -182,8 +184,7 @@ class OSCProductSTACGenerator:
         return {
             "description": self.dataset.attrs.get(
                 "description", "No description available."
-            ),
-            "title": self.dataset.attrs.get("title", "No title available."),
+            )
         }
 
     def build_stac_collection(self) -> Collection:
@@ -206,7 +207,6 @@ class OSCProductSTACGenerator:
             id=self.collection_id,
             description=general_metadata.get("description", "No description provided."),
             extent=Extent(spatial=spatial_extent, temporal=temporal_extent),
-            title=general_metadata.get("title", "Unnamed Collection"),
         )
 
         # Add OSC extension metadata
@@ -218,7 +218,7 @@ class OSCProductSTACGenerator:
         osc_extension.osc_region = self.osc_region
         osc_extension.osc_themes = self.osc_themes
         osc_extension.osc_variables = variables
-        osc_extension.osc_missions = []
+        osc_extension.osc_missions = self.osc_missions
 
         # Add creation and update timestamps for the collection
         now_iso = datetime.now(timezone.utc).isoformat()

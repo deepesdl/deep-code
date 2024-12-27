@@ -4,7 +4,7 @@ import fsspec
 
 from deep_code.utils.github_automation import GitHubAutomation
 from deep_code.utils.dataset_stac_generator import OSCProductSTACGenerator
-from deep_code.constants import OSC_REPO_OWNER, OSC_REPO_NAME, OSC_NEW_BRANCH_NAME
+from deep_code.constants import OSC_REPO_OWNER, OSC_REPO_NAME, OSC_BRANCH_NAME
 
 logger = logging.getLogger(__name__)
 logging.basicConfig(level=logging.INFO)
@@ -69,10 +69,13 @@ class ProductPublisher:
             logger.info("Automating GitHub tasks...")
             self.github_automation.fork_repository()
             self.github_automation.clone_repository()
+            OSC_NEW_BRANCH_NAME = OSC_BRANCH_NAME + "-" + collection_id
             self.github_automation.create_branch(OSC_NEW_BRANCH_NAME)
             self.github_automation.add_file(file_path, collection.to_dict())
             self.github_automation.commit_and_push(
-                OSC_NEW_BRANCH_NAME, f"Add new collection: {collection_id}"
+                OSC_NEW_BRANCH_NAME, f"Add new "
+                                                           f"collection:"
+                                           f" {collection_id}"
             )
             pr_url = self.github_automation.create_pull_request(
                 OSC_NEW_BRANCH_NAME,
