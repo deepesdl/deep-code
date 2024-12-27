@@ -1,11 +1,13 @@
 import os
-import pandas as pd
-from pystac import Collection, Extent, Link, SpatialExtent, TemporalExtent
+import logging
 from datetime import datetime, timezone
 from typing import List, Optional
+
+import pandas as pd
+from pystac import Collection, Extent, Link, SpatialExtent, TemporalExtent
 from xcube.core.store import new_data_store
+
 from deep_code.utils.osc_extension import OscExtension
-import logging
 
 
 class OSCProductSTACGenerator:
@@ -41,12 +43,11 @@ class OSCProductSTACGenerator:
         self.osc_status = osc_status
         self.osc_region = osc_region
         self.osc_themes = osc_themes or []
+        self.logger = logging.getLogger(__name__)
         self.dataset = self._open_dataset()
 
     def _open_dataset(self):
         """Open the dataset using a S3 store as an xarray Dataset."""
-        # Configure logging
-        logger = logging.getLogger(__name__)
 
         store_configs = [
             {
@@ -77,7 +78,7 @@ class OSCProductSTACGenerator:
         for config in store_configs:
             tried_configurations.append(config["description"])
             try:
-                logger.info(
+                self.logger.info(
                     f"Attempting to open dataset with configuration: {config['description']}"
                 )
                 store = new_data_store(
@@ -87,18 +88,18 @@ class OSCProductSTACGenerator:
                 )
                 # Try to open the dataset; return immediately if successful
                 dataset = store.open_data(self.dataset_id)
-                logger.info(
+                self.logger.info(
                     f"Successfully opened dataset with configuration: {config['description']}"
                 )
                 return dataset
             except Exception as e:
-                logger.error(
+                self.logger.error(
                     f"Failed to open dataset with configuration: {config['description']}. Error: {e}"
                 )
                 last_exception = e
 
         # If all attempts fail, raise an error
-        logger.critical(
+        self.logger.critical(
             f"Failed to open Zarr dataset with ID {self.dataset_id}. Tried configurations: {', '.join(tried_configurations)}. Last error: {last_exception}"
         )
         raise ValueError(
@@ -156,9 +157,17 @@ class OSCProductSTACGenerator:
         """
         variables = []
         for var_name, variable in self.dataset.data_vars.items():
-            # Fetch 'long_name' or 'standard_name' if they exist
             long_name = variable.attrs.get("long_name")
             standard_name = variable.attrs.get("standard_name")
+            # Replace spaces with hyphens and convert to lowercase if attributes exist
+            long_name = long_name.replace(" ", "-").lower() if long_name else None
+            standard_name = (
+                standard_name.replace(" ", "-").lower() if standard_name else None
+            )
+            if not long_name and not standard_name:
+                self.logger.error(
+                    f"Metadata missing for variable '{var_name}': 'long_name' and 'standard_name' attributes are not available."
+                )
             # Prioritize 'long_name', fallback to 'standard_name', then use variable key
             variables.append(long_name or standard_name or var_name)
         return variables
@@ -216,14 +225,32 @@ class OSCProductSTACGenerator:
         collection.extra_fields["created"] = now_iso
         collection.extra_fields["updated"] = now_iso
 
-        collection_name = f"{general_metadata.get('title', self.collection_id).replace(' ', '-').lower()}.json"
-        collection.set_self_href(collection_name)
-
-        collection.add_link(Link(rel="self", target=self.access_link, title="Access"))
+        # Remove any existing root link and re-add it properly
+        collection.remove_links("root")
+        collection.add_link(
+            Link(
+                rel="root",
+                target="../../catalog.json",
+                media_type="application/json",
+                title="Open Science Catalog",
+            )
+        )
+        collection.add_link(Link(rel="via", target=self.access_link, title="Access"))
         if self.documentation_link:
             collection.add_link(
                 Link(rel="via", target=self.documentation_link, title="Documentation")
             )
+        collection.add_link(
+            Link(
+                rel="parent",
+                target="../catalog.json",
+                media_type="application/json",
+                title="Products",
+            )
+        )
+
+        self_href = "https://esa-earthcode.github.io/open-science-catalog-metadata/products/deepesdl/collection.json"
+        collection.set_self_href(self_href)
 
         # Validate OSC extension fields
         try:

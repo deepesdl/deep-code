@@ -1,7 +1,9 @@
 from typing import Optional, Union, Literal, List
+
 import pystac
 from pystac import SpatialExtent, TemporalExtent, Extent
 from pystac.extensions.base import PropertiesExtension, ExtensionManagementMixin
+
 from deep_code.constants import OSC_SCHEMA_URI
 
 
