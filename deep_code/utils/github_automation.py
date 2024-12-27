@@ -4,8 +4,6 @@ import subprocess
 import requests
 from pathlib import Path
 
-from deep_code.utils.dataset_stac_generator import OSCProductSTACGenerator
-
 
 class GitHubAutomation:
     def __init__(self, username: str, token: str, repo_owner: str, repo_name: str):
@@ -90,4 +88,3 @@ class GitHubAutomation:
         print("Cleaning up local repository...")
         os.chdir("..")
         subprocess.run(["rm", "-rf", self.local_clone_dir])
-
