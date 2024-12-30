@@ -45,6 +45,7 @@ class ProductPublisher:
         dataset_status = dataset_config.get("dataset-status")
         osc_region = dataset_config.get("dataset-region")
         dataset_theme = dataset_config.get("dataset-theme")
+        cf_params = dataset_config.get("cf-parameter")
 
         if not dataset_id or not collection_id:
             raise ValueError(
@@ -61,6 +62,7 @@ class ProductPublisher:
                 osc_status=dataset_status,
                 osc_region=osc_region,
                 osc_themes=dataset_theme,
+                cf_params=cf_params,
             )
             collection = generator.build_stac_collection()
 
@@ -84,9 +86,3 @@ class ProductPublisher:
 
         finally:
             self.github_automation.clean_up()
-
-if __name__ == '__main__':
-    p = ProductPublisher(git_config_path="/home/tejas/bc/projects/deepesdl"
-                                         "/deep-code/git.yaml")
-    p.publish_product(dataset_config_path="/home/tejas/bc/projects/deepesdl"
-                                          "/deep-code/dataset-config.yaml")

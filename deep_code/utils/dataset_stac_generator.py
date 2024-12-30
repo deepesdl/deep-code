@@ -25,6 +25,7 @@ class OSCProductSTACGenerator:
         osc_region: str = "Global",
         osc_themes: Optional[List[str]] = None,
         osc_missions: Optional[List[str]] = None,
+        cf_params: Optional[List[dict[str]]] = None,
     ):
         """
         Initialize the generator with the path to the Zarr dataset and metadata.
@@ -45,6 +46,7 @@ class OSCProductSTACGenerator:
         self.osc_region = osc_region
         self.osc_themes = osc_themes or []
         self.osc_missions = osc_missions or []
+        self.cf_params = cf_params or {}
         self.logger = logging.getLogger(__name__)
         self.dataset = self._open_dataset()
 
@@ -219,6 +221,14 @@ class OSCProductSTACGenerator:
         osc_extension.osc_themes = self.osc_themes
         osc_extension.osc_variables = variables
         osc_extension.osc_missions = self.osc_missions
+        if self.cf_params:
+            osc_extension.cf_parameter = self.cf_params
+        else:
+            osc_extension.cf_parameter = [
+                {
+                    "Name": self.collection_id
+                }
+            ]
 
         # Add creation and update timestamps for the collection
         now_iso = datetime.now(timezone.utc).isoformat()

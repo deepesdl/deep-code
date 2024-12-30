@@ -52,8 +52,8 @@ class TestOscExtension(unittest.TestCase):
     def test_cf_parameters(self):
         """Test the cf:parameter property."""
         extension = OscExtension.ext(self.collection)
-        extension.cf_parameters = [{"name": "hydrology-4D"}]
-        self.assertEqual(extension.cf_parameters, [{"name": "hydrology-4D"}])
+        extension.cf_parameter = [{"name": "hydrology-4D"}]
+        self.assertEqual(extension.cf_parameter, [{"name": "hydrology-4D"}])
 
     def test_created_updated(self):
         """Test the created and updated properties."""

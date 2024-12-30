@@ -113,11 +113,11 @@ class OscExtension(
 
     # CF Parameters
     @property
-    def cf_parameters(self) -> Optional[List[dict]]:
+    def cf_parameter(self) -> Optional[List[dict]]:
         return self._get_property("cf:parameter", list)
 
-    @cf_parameters.setter
-    def cf_parameters(self, value: List[dict]) -> None:
+    @cf_parameter.setter
+    def cf_parameter(self, value: List[dict]) -> None:
         if not isinstance(value, list) or not all(
             isinstance(item, dict) for item in value
         ):
