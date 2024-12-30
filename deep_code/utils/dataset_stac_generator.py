@@ -1,7 +1,6 @@
 import os
 import logging
 from datetime import datetime, timezone
-from typing import List, Optional
 
 import pandas as pd
 from pystac import Collection, Extent, Link, SpatialExtent, TemporalExtent
@@ -19,13 +18,13 @@ class OSCProductSTACGenerator:
         self,
         dataset_id: str,
         collection_id: str,
-        access_link: Optional[str] = None,
-        documentation_link: Optional[str] = None,
+        access_link: str | None = None,
+        documentation_link: str | None = None,
         osc_status: str = "ongoing",
         osc_region: str = "Global",
-        osc_themes: Optional[List[str]] = None,
-        osc_missions: Optional[List[str]] = None,
-        cf_params: Optional[List[dict[str]]] = None,
+        osc_themes: list[str] | None = None,
+        osc_missions: list[str] | None = None,
+        cf_params: list[dict[str]] | None = None,
     ):
         """
         Initialize the generator with the path to the Zarr dataset and metadata.
@@ -37,6 +36,8 @@ class OSCProductSTACGenerator:
         :param osc_status: Status of the dataset (e.g., "ongoing").
         :param osc_region: Geographical region of the dataset.
         :param osc_themes: Themes of the dataset (e.g., ["climate", "environment"]).
+        :param osc_missions: Satellite mission to which dataset belongs.
+        :param cf_params: params related to CF metadata convention.
         """
         self.dataset_id = dataset_id
         self.collection_id = collection_id
@@ -158,7 +159,11 @@ class OSCProductSTACGenerator:
         else:
             raise ValueError("Dataset does not have a 'time' coordinate.")
 
-    def _get_variables(self) -> List[str]:
+    @staticmethod
+    def _normalize_name(name: str | None) -> str | None:
+        return name.replace(" ", "-").lower() if name else None
+
+    def _get_variables(self) -> list[str]:
         """
         Extract variable names from the dataset.
 
@@ -171,13 +176,9 @@ class OSCProductSTACGenerator:
         """
         variables = []
         for var_name, variable in self.dataset.data_vars.items():
-            long_name = variable.attrs.get("long_name")
-            standard_name = variable.attrs.get("standard_name")
             # Replace spaces with hyphens and convert to lowercase if attributes exist
-            long_name = long_name.replace(" ", "-").lower() if long_name else None
-            standard_name = (
-                standard_name.replace(" ", "-").lower() if standard_name else None
-            )
+            long_name = self._normalize_name(variable.attrs.get("long_name"))
+            standard_name = self._normalize_name(variable.attrs.get("standard_name"))
             if not long_name and not standard_name:
                 self.logger.error(
                     f"Metadata missing for variable '{var_name}': 'long_name' and "
@@ -206,7 +207,6 @@ class OSCProductSTACGenerator:
 
         :return: A pystac.Collection object.
         """
-        # Extract metadata
         try:
             spatial_extent = self._get_spatial_extent()
             temporal_extent = self._get_temporal_extent()

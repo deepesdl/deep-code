@@ -76,8 +76,7 @@ class ProductPublisher:
             self.github_automation.create_branch(OSC_NEW_BRANCH_NAME)
             self.github_automation.add_file(file_path, collection.to_dict())
             self.github_automation.commit_and_push(
-                OSC_NEW_BRANCH_NAME, f"Add new " f"collection:" 
-                                     f" {collection_id}"
+                OSC_NEW_BRANCH_NAME, f"Add new collection:{collection_id}"
             )
             pr_url = self.github_automation.create_pull_request(
                 OSC_NEW_BRANCH_NAME,

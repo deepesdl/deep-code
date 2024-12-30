@@ -1,4 +1,4 @@
-from typing import Optional, Union, Literal, List
+from typing import Literal
 
 import pystac
 from pystac import SpatialExtent, TemporalExtent, Extent
@@ -8,11 +8,11 @@ from deep_code.constants import OSC_SCHEMA_URI, CF_SCHEMA_URI
 
 
 class OscExtension(
-    PropertiesExtension, ExtensionManagementMixin[Union[pystac.Item, pystac.Collection]]
+    PropertiesExtension, ExtensionManagementMixin[pystac.Item | pystac.Collection]
 ):
     name: Literal["osc"] = "osc"
 
-    def __init__(self, obj: Union[pystac.Item, pystac.Collection]):
+    def __init__(self, obj: pystac.Item | pystac.Collection):
         if isinstance(obj, pystac.Collection):
             self.properties = obj.extra_fields
         else:
@@ -21,7 +21,7 @@ class OscExtension(
 
     # Existing properties...
     @property
-    def osc_type(self) -> Optional[str]:
+    def osc_type(self) -> str | None:
         return self._get_property("osc:type", str)
 
     @osc_type.setter
@@ -29,7 +29,7 @@ class OscExtension(
         self._set_property("osc:type", v, pop_if_none=False)
 
     @property
-    def osc_name(self) -> Optional[str]:
+    def osc_name(self) -> str | None:
         return self._get_property("osc:name", str)
 
     @osc_name.setter
@@ -37,7 +37,7 @@ class OscExtension(
         self._set_property("osc:name", v, pop_if_none=False)
 
     @property
-    def osc_status(self) -> Optional[str]:
+    def osc_status(self) -> str | None:
         return self._get_property("osc:status", str)
 
     @osc_status.setter
@@ -45,7 +45,7 @@ class OscExtension(
         self._set_property("osc:status", value, pop_if_none=False)
 
     @property
-    def osc_project(self) -> Optional[str]:
+    def osc_project(self) -> str | None:
         return self._get_property("osc:project", str)
 
     @osc_project.setter
@@ -53,11 +53,11 @@ class OscExtension(
         self._set_property("osc:project", v, pop_if_none=False)
 
     @property
-    def osc_themes(self) -> Optional[List[str]]:
+    def osc_themes(self) -> list[str] | None:
         return self._get_property("osc:themes", list)
 
     @osc_themes.setter
-    def osc_themes(self, value: List[str]) -> None:
+    def osc_themes(self, value: list[str]) -> None:
         if not isinstance(value, list) or not all(
             isinstance(item, str) for item in value
         ):
@@ -65,7 +65,7 @@ class OscExtension(
         self._set_property("osc:themes", value, pop_if_none=False)
 
     @property
-    def osc_region(self) -> Optional[str]:
+    def osc_region(self) -> str | None:
         return self._get_property("osc:region", str)
 
     @osc_region.setter
@@ -73,11 +73,11 @@ class OscExtension(
         self._set_property("osc:region", value, pop_if_none=False)
 
     @property
-    def osc_missions(self) -> Optional[List[str]]:
+    def osc_missions(self) -> list[str] | None:
         return self._get_property("osc:missions", list)
 
     @osc_missions.setter
-    def osc_missions(self, value: List[str]) -> None:
+    def osc_missions(self, value: list[str]) -> None:
         if not isinstance(value, list) or not all(
             isinstance(item, str) for item in value
         ):
@@ -85,26 +85,26 @@ class OscExtension(
         self._set_property("osc:missions", value, pop_if_none=False)
 
     # Utility methods for handling temporal and spatial extent
-    def set_extent(self, spatial: List[List[float]], temporal: List[List[str]]) -> None:
+    def set_extent(self, spatial: list[list[float]], temporal: list[list[str]]) -> None:
         self.obj.extent = Extent(SpatialExtent(spatial), TemporalExtent(temporal))
 
     @property
-    def osc_variables(self) -> Optional[List[str]]:
+    def osc_variables(self) -> list[str] | None:
         return self._get_property("osc:variables", list)
 
     @osc_variables.setter
-    def osc_variables(self, v: List[str]) -> None:
+    def osc_variables(self, v: list[str]) -> None:
         if not isinstance(v, list) or not all(isinstance(item, str) for item in v):
             raise ValueError("osc:variables must be a list of strings")
         self._set_property("osc:variables", v, pop_if_none=False)
 
     # Keywords property
     @property
-    def keywords(self) -> Optional[List[str]]:
+    def keywords(self) -> list[str] | None:
         return self._get_property("keywords", list)
 
     @keywords.setter
-    def keywords(self, value: List[str]) -> None:
+    def keywords(self, value: list[str]) -> None:
         if not isinstance(value, list) or not all(
             isinstance(item, str) for item in value
         ):
@@ -113,11 +113,11 @@ class OscExtension(
 
     # CF Parameters
     @property
-    def cf_parameter(self) -> Optional[List[dict]]:
+    def cf_parameter(self) -> list[dict] | None:
         return self._get_property("cf:parameter", list)
 
     @cf_parameter.setter
-    def cf_parameter(self, value: List[dict]) -> None:
+    def cf_parameter(self, value: list[dict]) -> None:
         if not isinstance(value, list) or not all(
             isinstance(item, dict) for item in value
         ):
@@ -126,7 +126,7 @@ class OscExtension(
 
     # Created and Updated timestamps
     @property
-    def created(self) -> Optional[str]:
+    def created(self) -> str | None:
         return self._get_property("created", str)
 
     @created.setter
@@ -134,7 +134,7 @@ class OscExtension(
         self._set_property("created", value, pop_if_none=False)
 
     @property
-    def updated(self) -> Optional[str]:
+    def updated(self) -> str | None:
         return self._get_property("updated", str)
 
     @updated.setter
@@ -142,12 +142,12 @@ class OscExtension(
         self._set_property("updated", value, pop_if_none=False)
 
     @classmethod
-    def get_schema_uri(cls) -> List[str]:
+    def get_schema_uri(cls) -> list[str]:
         return [OSC_SCHEMA_URI, CF_SCHEMA_URI]
 
     @classmethod
     def ext(
-        cls, obj: Union[pystac.Item, pystac.Collection], add_if_missing: bool = False
+        cls, obj: pystac.Item | pystac.Collection, add_if_missing: bool = False
     ) -> "OscExtension":
         """Returns the OscExtension instance for the given object, adding the extension
         if missing."""
@@ -161,7 +161,7 @@ class OscExtension(
             )
 
     @classmethod
-    def has_extension(cls, obj: Union[pystac.Item, pystac.Collection]) -> bool:
+    def has_extension(cls, obj: pystac.Item | pystac.Collection) -> bool:
         """Checks if all required extensions are present."""
         schema_uris = cls.get_schema_uri()
         if isinstance(schema_uris, list):
@@ -170,7 +170,7 @@ class OscExtension(
             return schema_uris in obj.stac_extensions
 
     @classmethod
-    def add_to(cls, obj: Union[pystac.Item, pystac.Collection]) -> "OscExtension":
+    def add_to(cls, obj: pystac.Item | pystac.Collection) -> "OscExtension":
         """Adds the OSC and CF extensions to the object's extensions."""
         schema_uris = cls.get_schema_uri()
         if isinstance(schema_uris, list):  # Handle list of URIs

@@ -21,5 +21,4 @@ def publish_product(git_config, dataset_config):
     Command-line interface for the ProductPublisher API.
     """
     publisher = ProductPublisher(git_config_path=git_config)
-
     publisher.publish_product(dataset_config_path=dataset_config)
