@@ -9,6 +9,7 @@ from deep_code.constants import OSC_REPO_OWNER, OSC_REPO_NAME, OSC_BRANCH_NAME
 logger = logging.getLogger(__name__)
 logging.basicConfig(level=logging.INFO)
 
+
 class ProductPublisher:
     def __init__(self, git_config_path: str):
         """
@@ -28,10 +29,7 @@ class ProductPublisher:
             self.github_username, self.github_token, OSC_REPO_OWNER, OSC_REPO_NAME
         )
 
-    def publish_product(
-        self,
-        dataset_config_path: str,
-    ):
+    def publish_product(self, dataset_config_path: str):
         """
         Publish a product collection to the specified GitHub repository.
 
@@ -49,7 +47,9 @@ class ProductPublisher:
         dataset_theme = dataset_config.get("dataset-theme")
 
         if not dataset_id or not collection_id:
-            raise ValueError("Dataset ID or Collection ID is missing in the dataset-config.yaml file.")
+            raise ValueError(
+                "Dataset ID or Collection ID is missing in the dataset-config.yaml file."
+            )
 
         try:
             logger.info("Generating STAC collection...")
@@ -60,7 +60,7 @@ class ProductPublisher:
                 access_link=access_link,
                 osc_status=dataset_status,
                 osc_region=osc_region,
-                osc_themes=dataset_theme
+                osc_themes=dataset_theme,
             )
             collection = generator.build_stac_collection()
             collection.extra_fields["documentation_link"] = documentation_link
@@ -73,9 +73,7 @@ class ProductPublisher:
             self.github_automation.create_branch(OSC_NEW_BRANCH_NAME)
             self.github_automation.add_file(file_path, collection.to_dict())
             self.github_automation.commit_and_push(
-                OSC_NEW_BRANCH_NAME, f"Add new "
-                                                           f"collection:"
-                                           f" {collection_id}"
+                OSC_NEW_BRANCH_NAME, f"Add new " f"collection:" f" {collection_id}"
             )
             pr_url = self.github_automation.create_pull_request(
                 OSC_NEW_BRANCH_NAME,
@@ -87,6 +85,3 @@ class ProductPublisher:
 
         finally:
             self.github_automation.clean_up()
-
-
-
