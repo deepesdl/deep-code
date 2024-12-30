@@ -63,7 +63,6 @@ class ProductPublisher:
                 osc_themes=dataset_theme,
             )
             collection = generator.build_stac_collection()
-            collection.extra_fields["documentation_link"] = documentation_link
 
             file_path = f"products/{collection_id}/collection.json"
             logger.info("Automating GitHub tasks...")
@@ -85,3 +84,9 @@ class ProductPublisher:
 
         finally:
             self.github_automation.clean_up()
+
+if __name__ == '__main__':
+    p = ProductPublisher(git_config_path="/home/tejas/bc/projects/deepesdl"
+                                         "/deep-code/git.yaml")
+    p.publish_product(dataset_config_path="/home/tejas/bc/projects/deepesdl"
+                                          "/deep-code/dataset-config.yaml")

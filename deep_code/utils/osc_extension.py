@@ -53,11 +53,11 @@ class OscExtension(
         self._set_property("osc:project", v, pop_if_none=False)
 
     @property
-    def osc_theme(self) -> Optional[List[str]]:
+    def osc_themes(self) -> Optional[List[str]]:
         return self._get_property("osc:themes", list)
 
-    @osc_theme.setter
-    def osc_theme(self, value: List[str]) -> None:
+    @osc_themes.setter
+    def osc_themes(self, value: List[str]) -> None:
         if not isinstance(value, list) or not all(
             isinstance(item, str) for item in value
         ):
