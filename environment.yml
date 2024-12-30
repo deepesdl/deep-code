@@ -6,7 +6,9 @@ dependencies:
   - python >=3.9
   - click
   - jsonschema
+  - requests
   - pystac
   - pyyaml
-  - requests
   - xcube
+  # test dependencies
+  - pytest
