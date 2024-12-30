@@ -20,6 +20,7 @@ license = {text = "MIT"}
 requires-python = ">=3.10"
 dependencies = [
     "click",
+    "fsspec",
     "jsonschema",
     "requests",
     "pystac",

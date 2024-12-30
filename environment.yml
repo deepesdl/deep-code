@@ -5,6 +5,7 @@ dependencies:
   # Required
   - python >=3.9
   - click
+  - fsspec
   - jsonschema
   - requests
   - pystac
