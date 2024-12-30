@@ -149,7 +149,8 @@ class OscExtension(
     def ext(
         cls, obj: Union[pystac.Item, pystac.Collection], add_if_missing: bool = False
     ) -> "OscExtension":
-        """Returns the OscExtension instance for the given object, adding the extension if missing."""
+        """Returns the OscExtension instance for the given object, adding the extension
+        if missing."""
         if cls.has_extension(obj):
             return OscExtension(obj)
         elif add_if_missing:

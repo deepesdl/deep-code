@@ -83,7 +83,8 @@ class OSCProductSTACGenerator:
             tried_configurations.append(config["description"])
             try:
                 self.logger.info(
-                    f"Attempting to open dataset with configuration: {config['description']}"
+                    f"Attempting to open dataset with configuration: "
+                    f"{config['description']}"
                 )
                 store = new_data_store(
                     config["params"]["storage_type"],
@@ -93,21 +94,27 @@ class OSCProductSTACGenerator:
                 # Try to open the dataset; return immediately if successful
                 dataset = store.open_data(self.dataset_id)
                 self.logger.info(
-                    f"Successfully opened dataset with configuration: {config['description']}"
+                    f"Successfully opened dataset with configuration: "
+                    f"{config['description']}"
                 )
                 return dataset
             except Exception as e:
                 self.logger.error(
-                    f"Failed to open dataset with configuration: {config['description']}. Error: {e}"
+                    f"Failed to open dataset with configuration: "
+                    f"{config['description']}. Error: {e}"
                 )
                 last_exception = e
 
         # If all attempts fail, raise an error
         self.logger.critical(
-            f"Failed to open Zarr dataset with ID {self.dataset_id}. Tried configurations: {', '.join(tried_configurations)}. Last error: {last_exception}"
+            f"Failed to open Zarr dataset with ID {self.dataset_id}. "
+            f"Tried configurations: {', '.join(tried_configurations)}. "
+            f"Last error: {last_exception}"
         )
         raise ValueError(
-            f"Failed to open Zarr dataset with ID {self.dataset_id}. Tried configurations: {', '.join(tried_configurations)}. Last error: {last_exception}"
+            f"Failed to open Zarr dataset with ID {self.dataset_id}. "
+            f"Tried configurations: {', '.join(tried_configurations)}. "
+            f"Last error: {last_exception}"
         )
 
     def _get_spatial_extent(self) -> SpatialExtent:
@@ -130,7 +137,8 @@ class OSCProductSTACGenerator:
             return SpatialExtent([[x_min, y_min, x_max, y_max]])
         else:
             raise ValueError(
-                "Dataset does not have recognized spatial coordinates ('lon', 'lat' or 'x', 'y')."
+                "Dataset does not have recognized spatial coordinates "
+                "('lon', 'lat' or 'x', 'y')."
             )
 
     def _get_temporal_extent(self) -> TemporalExtent:
@@ -154,8 +162,10 @@ class OSCProductSTACGenerator:
         """
         Extract variable names from the dataset.
 
-        Prioritize fetching `long_name` or `standard_name` from each variable's attributes.
-        If neither is available, return the variable's name from `dataset.data_vars.keys()`.
+        Prioritize fetching `long_name` or `standard_name` from each variable's
+        attributes.
+        If neither is available, return the variable's name from
+        `dataset.data_vars.keys()`.
 
         :return: A list of variable names or descriptions.
         """
@@ -170,7 +180,8 @@ class OSCProductSTACGenerator:
             )
             if not long_name and not standard_name:
                 self.logger.error(
-                    f"Metadata missing for variable '{var_name}': 'long_name' and 'standard_name' attributes are not available."
+                    f"Metadata missing for variable '{var_name}': 'long_name' and "
+                    f"'standard_name' attributes are not available."
                 )
             # Prioritize 'long_name', fallback to 'standard_name', then use variable key
             variables.append(long_name or standard_name or var_name)
@@ -224,11 +235,7 @@ class OSCProductSTACGenerator:
         if self.cf_params:
             osc_extension.cf_parameter = self.cf_params
         else:
-            osc_extension.cf_parameter = [
-                {
-                    "Name": self.collection_id
-                }
-            ]
+            osc_extension.cf_parameter = [{"Name": self.collection_id}]
 
         # Add creation and update timestamps for the collection
         now_iso = datetime.now(timezone.utc).isoformat()
@@ -259,7 +266,10 @@ class OSCProductSTACGenerator:
             )
         )
 
-        self_href = "https://esa-earthcode.github.io/open-science-catalog-metadata/products/deepesdl/collection.json"
+        self_href = (
+            "https://esa-earthcode.github.io/"
+            "open-science-catalog-metadata/products/deepesdl/collection.json"
+        )
         collection.set_self_href(self_href)
 
         # Validate OSC extension fields

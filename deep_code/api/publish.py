@@ -33,7 +33,8 @@ class ProductPublisher:
         """
         Publish a product collection to the specified GitHub repository.
 
-        :param dataset_config_path: Path to the YAML file containing dataset configuration
+        :param dataset_config_path: Path to the YAML file containing dataset
+        configuration
         """
         with fsspec.open(dataset_config_path, "r") as file:
             dataset_config = yaml.safe_load(file)
@@ -49,7 +50,8 @@ class ProductPublisher:
 
         if not dataset_id or not collection_id:
             raise ValueError(
-                "Dataset ID or Collection ID is missing in the dataset-config.yaml file."
+                "Dataset ID or Collection ID is missing in the dataset-config.yaml "
+                "file."
             )
 
         try:
@@ -74,7 +76,8 @@ class ProductPublisher:
             self.github_automation.create_branch(OSC_NEW_BRANCH_NAME)
             self.github_automation.add_file(file_path, collection.to_dict())
             self.github_automation.commit_and_push(
-                OSC_NEW_BRANCH_NAME, f"Add new " f"collection:" f" {collection_id}"
+                OSC_NEW_BRANCH_NAME, f"Add new " f"collection:" 
+                                     f" {collection_id}"
             )
             pr_url = self.github_automation.create_pull_request(
                 OSC_NEW_BRANCH_NAME,
