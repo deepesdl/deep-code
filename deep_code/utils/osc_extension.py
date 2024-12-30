@@ -4,7 +4,7 @@ import pystac
 from pystac import SpatialExtent, TemporalExtent, Extent
 from pystac.extensions.base import PropertiesExtension, ExtensionManagementMixin
 
-from deep_code.constants import OSC_SCHEMA_URI
+from deep_code.constants import OSC_SCHEMA_URI, CF_SCHEMA_URI
 
 
 class OscExtension(
@@ -142,8 +142,8 @@ class OscExtension(
         self._set_property("updated", value, pop_if_none=False)
 
     @classmethod
-    def get_schema_uri(cls) -> str:
-        return OSC_SCHEMA_URI
+    def get_schema_uri(cls) -> List[str]:
+        return [OSC_SCHEMA_URI, CF_SCHEMA_URI]
 
     @classmethod
     def ext(
@@ -161,14 +161,24 @@ class OscExtension(
 
     @classmethod
     def has_extension(cls, obj: Union[pystac.Item, pystac.Collection]) -> bool:
-        """Checks if the OSC extension is present in the object's extensions."""
-        return cls.get_schema_uri() in obj.stac_extensions
+        """Checks if all required extensions are present."""
+        schema_uris = cls.get_schema_uri()
+        if isinstance(schema_uris, list):
+            return all(uri in obj.stac_extensions for uri in schema_uris)
+        elif isinstance(schema_uris, str):
+            return schema_uris in obj.stac_extensions
 
     @classmethod
     def add_to(cls, obj: Union[pystac.Item, pystac.Collection]) -> "OscExtension":
-        """Adds the OSC extension to the object's extensions."""
-        if cls.get_schema_uri() not in obj.stac_extensions:
-            obj.stac_extensions.append(cls.get_schema_uri())
+        """Adds the OSC and CF extensions to the object's extensions."""
+        schema_uris = cls.get_schema_uri()
+        if isinstance(schema_uris, list):  # Handle list of URIs
+            for uri in schema_uris:
+                if uri not in obj.stac_extensions:
+                    obj.stac_extensions.append(uri)
+        elif isinstance(schema_uris, str):  # Handle single URI
+            if schema_uris not in obj.stac_extensions:
+                obj.stac_extensions.append(schema_uris)
         return OscExtension(obj)
 
     def validate_extension(self) -> None:
