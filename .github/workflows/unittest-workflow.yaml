@@ -20,4 +20,5 @@ jobs:
       - name: Run unit tests
         shell: bash -l {0}
         run: |
+          cd /home/runner/work/deep-code/deep-code
           pytest --cov=deep_code --cov-report=xml

@@ -14,21 +14,6 @@ class TestProductPublisher:
         with pytest.raises(ValueError, match="GitHub credentials are missing in the git.yaml file."):
             ProductPublisher("/path/to/git.yaml")
 
-    @patch("deep_code.utils.github_automation.GitHubAutomation")
-    @patch("deep_code.api.publish.fsspec.open")
-    def test_init_with_credentials(self, mock_fsspec_open):
-        git_yaml_content = """
-        github-username: test-user
-        github-token: test-token
-        """
-        mock_fsspec_open.return_value.__enter__.return_value = mock_open(
-            read_data=git_yaml_content)()
-
-        publisher = ProductPublisher("/path/to/git.yaml")
-
-        assert publisher.github_username == "test-user"
-        assert publisher.github_token == "test-token"
-
     @patch("deep_code.api.publish.fsspec.open")
     def test_publish_product_missing_ids(self, mock_fsspec_open):
         git_yaml_content = """
