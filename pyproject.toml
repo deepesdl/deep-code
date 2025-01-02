@@ -23,6 +23,7 @@ dependencies = [
     "fsspec",
     "jsonschema",
     "requests",
+    "pandas",
     "pystac",
     "pyyaml",
     "xcube-core"
@@ -41,6 +42,7 @@ exclude = [
 dev = [
   "black",
   "flake8",
+  "numpy",
   "pytest",
   "pytest-cov",
   "pytest-recording"

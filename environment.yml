@@ -3,7 +3,7 @@ channels:
   - conda-forge
 dependencies:
   # Required
-  - python >=3.9
+  - python >=3.10
   - click
   - fsspec
   - jsonschema
@@ -13,6 +13,6 @@ dependencies:
   - pyyaml
   - xcube
   # test dependencies
+  - numpy
   - pytest
   - pytest-cov
-  - numpy
