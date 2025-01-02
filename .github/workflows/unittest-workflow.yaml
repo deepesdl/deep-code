@@ -17,6 +17,11 @@ jobs:
         with:
           environment-file: environment.yml
 
+      - name: Install deep-code in editable mode
+        run: |
+          cd /home/runner/work/deep-code/deep-code
+          pip install -e .
+
       - name: Run unit tests
         shell: bash -l {0}
         run: |
