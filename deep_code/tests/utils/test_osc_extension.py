@@ -83,7 +83,7 @@ class TestOscExtension(unittest.TestCase):
 
     def test_add_osc_extension(self):
         osc_ext = OscExtension.add_to(self.collection)
-        self.assertIn(OscExtension.get_schema_uri(), self.collection.stac_extensions)
+        self.assertEqual(OscExtension.get_schema_uri(), self.collection.stac_extensions)
         self.assertIsInstance(osc_ext, OscExtension)
 
     def test_has_extension(self):

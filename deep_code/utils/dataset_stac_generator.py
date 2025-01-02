@@ -98,7 +98,6 @@ class OSCProductSTACGenerator:
                     root=config["params"]["root"],
                     storage_options=config["params"]["storage_options"],
                 )
-                # Try to open the dataset; return immediately if successful
                 dataset = store.open_data(self.dataset_id)
                 self.logger.info(
                     f"Successfully opened dataset with configuration: "
@@ -112,7 +111,6 @@ class OSCProductSTACGenerator:
                 )
                 last_exception = e
 
-        # If all attempts fail, raise an error
         self.logger.critical(
             f"Failed to open Zarr dataset with ID {self.dataset_id}. "
             f"Tried configurations: {', '.join(tried_configurations)}. "

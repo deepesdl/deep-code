@@ -8,8 +8,10 @@ dependencies:
   - fsspec
   - jsonschema
   - requests
+  - pandas
   - pystac
   - pyyaml
   - xcube
   # test dependencies
   - pytest
+  - numpy

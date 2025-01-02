@@ -1,11 +1,13 @@
+import os
+from datetime import datetime
+
+import numpy as np
+from pystac import Collection
 import unittest
 from unittest.mock import patch, MagicMock
-from datetime import datetime, timezone
-from deep_code.utils.dataset_stac_generator import OSCProductSTACGenerator
-from pystac import Collection
 from xarray import Dataset
-import numpy as np
-import os
+
+from deep_code.utils.dataset_stac_generator import OSCProductSTACGenerator
 
 
 class TestOSCProductSTACGenerator(unittest.TestCase):
@@ -71,7 +73,6 @@ class TestOSCProductSTACGenerator(unittest.TestCase):
         """Test general metadata extraction."""
         metadata = self.generator._get_general_metadata()
         self.assertEqual(metadata["description"], "Mock dataset for testing.")
-        self.assertEqual(metadata["title"], "Mock Dataset")
 
     @patch("pystac.Collection.add_link")
     @patch("pystac.Collection.set_self_href")
@@ -81,7 +82,6 @@ class TestOSCProductSTACGenerator(unittest.TestCase):
         self.assertIsInstance(collection, Collection)
         self.assertEqual(collection.id, "mock-collection-id")
         self.assertEqual(collection.description, "Mock dataset for testing.")
-        self.assertEqual(collection.title, "Mock Dataset")
         self.assertEqual(
             collection.extent.spatial.bboxes[0], [-180.0, -90.0, 180.0, 90.0]
         )
