@@ -1,5 +1,3 @@
-import os
-
 import pytest
 from unittest.mock import patch, MagicMock, mock_open
 
@@ -35,31 +33,41 @@ class TestProductPublisher:
                                  "dataset-config.yaml file."):
             publisher.publish_product("/path/to/dataset-config.yaml")
 
-    @patch("os.makedirs")
-    @patch("subprocess.run")
+    @patch("deep_code.utils.github_automation.os.chdir")
+    @patch("deep_code.utils.github_automation.subprocess.run")
+    @patch("deep_code.utils.github_automation.os.path.expanduser",
+           return_value="/tmp")
     @patch("requests.post")
     @patch("deep_code.utils.github_automation.GitHubAutomation")
     @patch("deep_code.api.publish.fsspec.open")
-    def test_publish_product_success(self, mock_fsspec_open, mock_github_automation,
-                                     mock_requests_post, mock_subprocess_run,
-                                     mock_makedirs):
+    def test_publish_product_success(
+            self,
+            mock_fsspec_open,
+            mock_github_automation,
+            mock_requests_post,
+            mock_expanduser,
+            mock_subprocess_run,
+            mock_chdir
+    ):
+
+        #  Mock the YAML reads
         git_yaml_content = """
-        github-username: test-user
-        github-token: test-token
-        """
+          github-username: test-user
+          github-token: test-token
+          """
         dataset_yaml_content = """
-        dataset-id: test-dataset
-        collection-id: test-collection
-        documentation-link: http://example.com/doc
-        access-link: http://example.com/access
-        dataset-status: ongoing
-        dataset-region: Global
-        dataset-theme: ["climate"]
-        cf-parameter: []
-        """
+          dataset-id: test-dataset
+          collection-id: test-collection
+          documentation-link: http://example.com/doc
+          access-link: http://example.com/access
+          dataset-status: ongoing
+          dataset-region: Global
+          dataset-theme: ["climate"]
+          cf-parameter: []
+          """
         mock_fsspec_open.side_effect = [
             mock_open(read_data=git_yaml_content)(),
-            mock_open(read_data=dataset_yaml_content)()
+            mock_open(read_data=dataset_yaml_content)(),
         ]
 
         # Mock GitHubAutomation methods
@@ -70,22 +78,13 @@ class TestProductPublisher:
         mock_git.add_file.return_value = None
         mock_git.commit_and_push.return_value = None
         mock_git.create_pull_request.return_value = "http://example.com/pr"
+        mock_git.clean_up.return_value = None
 
-        # Mock requests.post for GitHub API calls
-        mock_response = MagicMock()
-        mock_response.raise_for_status.return_value = None
-        mock_requests_post.return_value = mock_response
-
-        # Mock subprocess.run for git commands
+        # Mock subprocess.run & os.chdir
         mock_subprocess_run.return_value = None
+        mock_chdir.return_value = None
 
-        home_dir = os.path.expanduser("~")
-        local_clone_dir = os.path.join(home_dir, "temp_repo")
-
-        # Mock os.makedirs to avoid real directory creation
-        mock_makedirs.return_value = None
-
-        # Mock OSCProductSTACGenerator
+        # Mock STAC generator
         mock_collection = MagicMock()
         mock_collection.to_dict.return_value = {
             "type": "Collection",
@@ -98,15 +97,24 @@ class TestProductPublisher:
             "links": [],
             "stac_version": "1.0.0",
         }
-
         with patch("deep_code.api.publish.OSCProductSTACGenerator") as mock_generator:
             mock_generator.return_value.build_stac_collection.return_value = mock_collection
 
-            publisher = ProductPublisher("/path/to/git.yaml")
-            publisher.publish_product("/path/to/dataset-config.yaml")
+            # Instantiate & publish
+            publisher = ProductPublisher("/fake/path/to/git.yaml")
+            publisher.publish_product("/fake/path/to/dataset-config.yaml")
 
-            auth_url = "https://test-user:test-token@github.com/test-user/open-science-catalog-metadata-testing.git"
-            mock_subprocess_run.assert_any_call(
-                ["git", "clone", auth_url, local_clone_dir], check=True
-            )
+        # 6Assert that we called git clone with /tmp/temp_repo
+        # Because expanduser("~") is now patched to /tmp, the actual path is /tmp/temp_repo
+        auth_url = "https://test-user:test-token@github.com/test-user/open-science-catalog-metadata-testing.git"
+        mock_subprocess_run.assert_any_call(
+            ["git", "clone", auth_url, "/tmp/temp_repo"],
+            check=True
+        )
+
+        # Also confirm we changed directories to /tmp/temp_repo
+        mock_chdir.assert_any_call("/tmp/temp_repo")
+
+
+
 
