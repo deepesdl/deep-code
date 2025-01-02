@@ -4,10 +4,11 @@
 # Permissions are hereby granted under the terms of the MIT License:
 # https://opensource.org/licenses/MIT.
 
-import os
 import json
-import subprocess
+import logging
+import os
 import requests
+import subprocess
 from pathlib import Path
 
 
@@ -33,29 +34,36 @@ class GitHubAutomation:
 
     def fork_repository(self):
         """Fork the repository to the user's GitHub account."""
-        print("Forking repository...")
+        logging.info("Forking repository...")
         url = f"https://api.github.com/repos/{self.repo_owner}/{self.repo_name}/forks"
         headers = {"Authorization": f"token {self.token}"}
         response = requests.post(url, headers=headers)
         response.raise_for_status()
-        print(f"Repository forked to {self.username}/{self.repo_name}")
+        logging.info(f"Repository forked to {self.username}/{self.repo_name}")
 
     def clone_repository(self):
         """Clone the forked repository locally."""
-        print("Cloning forked repository...")
-        subprocess.run(
-            ["git", "clone", self.fork_repo_url, self.local_clone_dir], check=True
-        )
-        os.chdir(self.local_clone_dir)
+        logging.info("Cloning forked repository...")
+        try:
+            subprocess.run(
+                ["git", "clone", self.fork_repo_url, self.local_clone_dir], check=True
+            )
+            os.chdir(self.local_clone_dir)
+        except subprocess.CalledProcessError as e:
+            raise RuntimeError(f"Failed to clone repository: {e}")
 
-    def create_branch(self, branch_name: str):
+    @staticmethod
+    def create_branch(branch_name: str):
         """Create a new branch in the local repository."""
-        print(f"Creating new branch: {branch_name}...")
-        subprocess.run(["git", "checkout", "-b", branch_name], check=True)
+        logging.info(f"Creating new branch: {branch_name}...")
+        try:
+            subprocess.run(["git", "checkout", "-b", branch_name], check=True)
+        except subprocess.CalledProcessError as e:
+            raise RuntimeError(f"Failed Creating branch: '{branch_name}': {e}")
 
     def add_file(self, file_path: str, content):
         """Add a new file to the local repository."""
-        print(f"Adding new file: {file_path}...")
+        logging.info(f"Adding new file: {file_path}...")
         full_path = Path(self.local_clone_dir) / file_path
         full_path.parent.mkdir(parents=True, exist_ok=True)
         with open(full_path, "w") as f:
@@ -63,19 +71,26 @@ class GitHubAutomation:
             if hasattr(content, "to_dict"):
                 content = content.to_dict()
             f.write(json.dumps(content, indent=2))
-        subprocess.run(["git", "add", str(full_path)], check=True)
+        try:
+            subprocess.run(["git", "add", str(full_path)], check=True)
+        except subprocess.CalledProcessError as e:
+            raise RuntimeError(f"Failed to add file '{file_path}': {e}")
 
-    def commit_and_push(self, branch_name: str, commit_message: str):
+    @staticmethod
+    def commit_and_push(branch_name: str, commit_message: str):
         """Commit changes and push to the forked repository."""
-        print("Committing and pushing changes...")
-        subprocess.run(["git", "commit", "-m", commit_message], check=True)
-        subprocess.run(["git", "push", "-u", "origin", branch_name], check=True)
+        logging.info("Committing and pushing changes...")
+        try:
+            subprocess.run(["git", "commit", "-m", commit_message], check=True)
+            subprocess.run(["git", "push", "-u", "origin", branch_name], check=True)
+        except subprocess.CalledProcessError as e:
+            raise RuntimeError(f"Failed to commit and push: {e}")
 
     def create_pull_request(
         self, branch_name: str, pr_title: str, pr_body: str, base_branch: str = "main"
     ):
         """Create a pull request from the forked repository to the base repository."""
-        print("Creating a pull request...")
+        logging.info("Creating a pull request...")
         url = f"https://api.github.com/repos/{self.repo_owner}/{self.repo_name}/pulls"
         headers = {"Authorization": f"token {self.token}"}
         data = {
@@ -87,10 +102,13 @@ class GitHubAutomation:
         response = requests.post(url, headers=headers, json=data)
         response.raise_for_status()
         pr_url = response.json()["html_url"]
-        print(f"Pull request created: {pr_url}")
+        logging.info(f"Pull request created: {pr_url}")
 
     def clean_up(self):
         """Clean up the local cloned repository."""
-        print("Cleaning up local repository...")
+        logging.info("Cleaning up local repository...")
         os.chdir("..")
-        subprocess.run(["rm", "-rf", self.local_clone_dir])
+        try:
+            subprocess.run(["rm", "-rf", self.local_clone_dir])
+        except subprocess.CalledProcessError as e:
+            raise RuntimeError(f"Failed to clean-up local repository: {e}")
