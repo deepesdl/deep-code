@@ -28,3 +28,9 @@ jobs:
         run: |
           cd /home/runner/work/deep-code/deep-code
           pytest --cov=deep_code --cov-report=xml
+
+      - name: Upload coverage reports to Codecov
+        uses: codecov/codecov-action@v5
+        with:
+          token: ${{ secrets.CODECOV_TOKEN }}
+          slug: deepesdl/deep-code
