@@ -1,0 +1,23 @@
+name: Unittest deep-code
+
+on:
+  push:
+  release:
+    types: [published]
+
+jobs:
+  unittest:
+    runs-on: ubuntu-latest
+    steps:
+      - name: checkout deep-code
+        uses: actions/checkout@v4
+
+      - name: Set up MicroMamba
+        uses: mamba-org/setup-micromamba@v1
+        with:
+          environment-file: environment.yml
+
+      - name: Run unit tests
+        shell: bash -l {0}
+        run: |
+          pytest --cov=deep_code --cov-report=xml
