@@ -8,9 +8,9 @@ import fsspec
 import logging
 import yaml
 
-from deep_code.utils.github_automation import GitHubAutomation
-from deep_code.utils.dataset_stac_generator import OSCProductSTACGenerator
 from deep_code.constants import OSC_REPO_OWNER, OSC_REPO_NAME, OSC_BRANCH_NAME
+from deep_code.utils.dataset_stac_generator import OSCProductSTACGenerator
+from deep_code.utils.github_automation import GitHubAutomation
 
 logger = logging.getLogger(__name__)
 logging.basicConfig(level=logging.INFO)

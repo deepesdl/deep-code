@@ -3,13 +3,17 @@ from unittest.mock import patch, MagicMock, mock_open
 
 from deep_code.api.publish import ProductPublisher
 
-class TestProductPublisher:
 
+class TestProductPublisher:
     @patch("deep_code.api.publish.fsspec.open")
     def test_init_missing_credentials(self, mock_fsspec_open):
-        mock_fsspec_open.return_value.__enter__.return_value = mock_open(read_data="{}")()
+        mock_fsspec_open.return_value.__enter__.return_value = mock_open(
+            read_data="{}"
+        )()
 
-        with pytest.raises(ValueError, match="GitHub credentials are missing in the git.yaml file."):
+        with pytest.raises(
+            ValueError, match="GitHub credentials are missing in the git.yaml file."
+        ):
             ProductPublisher("/path/to/git.yaml")
 
     @patch("deep_code.api.publish.fsspec.open")
@@ -23,31 +27,32 @@ class TestProductPublisher:
         """
         mock_fsspec_open.side_effect = [
             mock_open(read_data=git_yaml_content)(),
-            mock_open(read_data=dataset_yaml_content)()
+            mock_open(read_data=dataset_yaml_content)(),
         ]
 
         publisher = ProductPublisher("/path/to/git.yaml")
 
-        with pytest.raises(ValueError,
-                           match="Dataset ID or Collection ID is missing in the "
-                                 "dataset-config.yaml file."):
+        with pytest.raises(
+            ValueError,
+            match="Dataset ID or Collection ID is missing in the "
+            "dataset-config.yaml file.",
+        ):
             publisher.publish_product("/path/to/dataset-config.yaml")
 
     @patch("deep_code.utils.github_automation.os.chdir")
     @patch("deep_code.utils.github_automation.subprocess.run")
-    @patch("deep_code.utils.github_automation.os.path.expanduser",
-           return_value="/tmp")
+    @patch("deep_code.utils.github_automation.os.path.expanduser", return_value="/tmp")
     @patch("requests.post")
     @patch("deep_code.utils.github_automation.GitHubAutomation")
     @patch("deep_code.api.publish.fsspec.open")
     def test_publish_product_success(
-            self,
-            mock_fsspec_open,
-            mock_github_automation,
-            mock_requests_post,
-            mock_expanduser,
-            mock_subprocess_run,
-            mock_chdir
+        self,
+        mock_fsspec_open,
+        mock_github_automation,
+        mock_requests_post,
+        mock_expanduser,
+        mock_subprocess_run,
+        mock_chdir,
     ):
 
         #  Mock the YAML reads
@@ -98,7 +103,9 @@ class TestProductPublisher:
             "stac_version": "1.0.0",
         }
         with patch("deep_code.api.publish.OSCProductSTACGenerator") as mock_generator:
-            mock_generator.return_value.build_stac_collection.return_value = mock_collection
+            mock_generator.return_value.build_stac_collection.return_value = (
+                mock_collection
+            )
 
             # Instantiate & publish
             publisher = ProductPublisher("/fake/path/to/git.yaml")
@@ -108,13 +115,8 @@ class TestProductPublisher:
         # Because expanduser("~") is now patched to /tmp, the actual path is /tmp/temp_repo
         auth_url = "https://test-user:test-token@github.com/test-user/open-science-catalog-metadata-testing.git"
         mock_subprocess_run.assert_any_call(
-            ["git", "clone", auth_url, "/tmp/temp_repo"],
-            check=True
+            ["git", "clone", auth_url, "/tmp/temp_repo"], check=True
         )
 
         # Also confirm we changed directories to /tmp/temp_repo
         mock_chdir.assert_any_call("/tmp/temp_repo")
-
-
-
-
