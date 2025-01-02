@@ -4,9 +4,9 @@
 # Permissions are hereby granted under the terms of the MIT License:
 # https://opensource.org/licenses/MIT.
 
+import fsspec
 import logging
 import yaml
-import fsspec
 
 from deep_code.utils.github_automation import GitHubAutomation
 from deep_code.utils.dataset_stac_generator import OSCProductSTACGenerator
