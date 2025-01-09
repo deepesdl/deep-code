@@ -70,7 +70,7 @@ Usage: deep-code publish-dataset [OPTIONS]
 Options:
   --git-config PATH      Path to the git.yaml file with GitHub credentials.
                          [required]
-  --dataset-config PATH  Path to the dataset-config.yaml file with dataset
+  --product-config PATH  Path to the dataset-config.yaml file with dataset
                          information.  [required]
   --help                 Show this message and exit.
 
