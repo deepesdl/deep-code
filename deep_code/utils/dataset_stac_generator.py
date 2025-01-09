@@ -16,8 +16,18 @@ from deep_code.utils.osc_extension import OscExtension
 
 
 class OSCProductSTACGenerator:
-    """
-    A class to generate OSC STAC Collections for a product from Zarr datasets.
+    """Generates OSC STAC Collections for a product from Zarr datasets.
+
+    Args:
+        dataset_id: ID of the Zarr dataset.
+        collection_id: Unique identifier for the STAC collection.
+        access_link: Public access link to the dataset.
+        documentation_link: Link to dataset documentation.
+        osc_status: Status of the dataset (e.g., "ongoing").
+        osc_region: Geographical region associated with the dataset.
+        osc_themes: List of themes related to the dataset (e.g., ["climate"]).
+        osc_missions: List of satellite missions associated with the dataset.
+        cf_params: CF metadata parameters for the dataset.
     """
 
     def __init__(
@@ -32,19 +42,6 @@ class OSCProductSTACGenerator:
         osc_missions: list[str] | None = None,
         cf_params: list[dict[str]] | None = None,
     ):
-        """
-        Initialize the generator with the path to the Zarr dataset and metadata.
-
-        :param dataset_id: Path to the Zarr dataset.
-        :param collection_id: Unique ID for the collection.
-        :param access_link: Public access link to the dataset.
-        :param documentation_link: Link to documentation related to the dataset.
-        :param osc_status: Status of the dataset (e.g., "ongoing").
-        :param osc_region: Geographical region of the dataset.
-        :param osc_themes: Themes of the dataset (e.g., ["climate", "environment"]).
-        :param osc_missions: Satellite mission to which dataset belongs.
-        :param cf_params: params related to CF metadata convention.
-        """
         self.dataset_id = dataset_id
         self.collection_id = collection_id
         self.access_link = access_link or f"s3://deep-esdl-public/{dataset_id}"
@@ -58,7 +55,7 @@ class OSCProductSTACGenerator:
         self.dataset = self._open_dataset()
 
     def _open_dataset(self):
-        """Open the dataset using a S3 store as an xarray Dataset."""
+        """Open the dataset using a S3 store as a xarray Dataset."""
 
         store_configs = [
             {
@@ -179,19 +176,17 @@ class OSCProductSTACGenerator:
         return name.replace(" ", "-").lower() if name else None
 
     def _get_variables(self) -> list[str]:
-        """
-        Extract variable names from the dataset.
+        """Extracts variable names or descriptions from the dataset.
 
-        Prioritize fetching `long_name` or `standard_name` from each variable's
-        attributes.
-        If neither is available, return the variable's name from
-        `dataset.data_vars.keys()`.
+        Variables are prioritized based on their `long_name` or `standard_name`
+        attributes. If neither is available, the variable's key from
+        `dataset.data_vars.keys()` is used.
 
-        :return: A list of variable names or descriptions.
+        Returns:
+            A list of variable names or descriptions.
         """
         variables = []
         for var_name, variable in self.dataset.data_vars.items():
-            # Replace spaces with hyphens and convert to lowercase if attributes exist
             long_name = self._normalize_name(variable.attrs.get("long_name"))
             standard_name = self._normalize_name(variable.attrs.get("standard_name"))
             if not long_name and not standard_name:
@@ -204,12 +199,6 @@ class OSCProductSTACGenerator:
         return variables
 
     def _get_general_metadata(self) -> dict:
-        """
-        Extract general metadata from the dataset attributes.
-        Fallback to default values if the keys are missing.
-
-        :return: A dictionary containing metadata such as 'description' and 'title'.
-        """
         return {
             "description": self.dataset.attrs.get(
                 "description", "No description available."
@@ -218,7 +207,7 @@ class OSCProductSTACGenerator:
 
     def build_stac_collection(self) -> Collection:
         """
-        Build an OSC STAC Collection for the product.
+        Build an OSC STAC Collection for the dataset.
 
         :return: A pystac.Collection object.
         """

@@ -16,6 +16,11 @@ from deep_code.constants import OSC_SCHEMA_URI, CF_SCHEMA_URI
 class OscExtension(
     PropertiesExtension, ExtensionManagementMixin[pystac.Item | pystac.Collection]
 ):
+    """Handles the OSC extension for STAC Items and Collections.
+
+    Args:
+        obj: The STAC Item or Collection to which the OSC extension is applied.
+    """
     name: Literal["osc"] = "osc"
 
     def __init__(self, obj: pystac.Item | pystac.Collection):
@@ -25,7 +30,6 @@ class OscExtension(
             self.properties = obj.properties
         self.obj = obj
 
-    # Existing properties...
     @property
     def osc_type(self) -> str | None:
         return self._get_property("osc:type", str)
@@ -90,7 +94,6 @@ class OscExtension(
             raise ValueError("osc:missions must be a list of strings")
         self._set_property("osc:missions", value, pop_if_none=False)
 
-    # Utility methods for handling temporal and spatial extent
     def set_extent(self, spatial: list[list[float]], temporal: list[list[str]]) -> None:
         self.obj.extent = Extent(SpatialExtent(spatial), TemporalExtent(temporal))
 
@@ -104,7 +107,6 @@ class OscExtension(
             raise ValueError("osc:variables must be a list of strings")
         self._set_property("osc:variables", v, pop_if_none=False)
 
-    # Keywords property
     @property
     def keywords(self) -> list[str] | None:
         return self._get_property("keywords", list)
@@ -117,7 +119,6 @@ class OscExtension(
             raise ValueError("keywords must be a list of strings")
         self._set_property("keywords", value, pop_if_none=False)
 
-    # CF Parameters
     @property
     def cf_parameter(self) -> list[dict] | None:
         return self._get_property("cf:parameter", list)
@@ -130,7 +131,6 @@ class OscExtension(
             raise ValueError("cf:parameter must be a list of dictionaries")
         self._set_property("cf:parameter", value, pop_if_none=False)
 
-    # Created and Updated timestamps
     @property
     def created(self) -> str | None:
         return self._get_property("created", str)

@@ -6,7 +6,7 @@
 
 import click
 
-from deep_code.cli.publish import publish_product
+from deep_code.cli.publish import publish_dataset
 
 
 @click.group()
@@ -15,6 +15,6 @@ def main():
     pass
 
 
-main.add_command(publish_product)
+main.add_command(publish_dataset)
 if __name__ == "__main__":
     main()

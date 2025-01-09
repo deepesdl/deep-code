@@ -16,12 +16,13 @@ logger = logging.getLogger(__name__)
 logging.basicConfig(level=logging.INFO)
 
 
-class ProductPublisher:
+class DatasetPublisher:
+    """Publishes products to a GitHub repository.
+
+    Args:
+        git_config_path: Path to the YAML file containing GitHub credentials.
+    """
     def __init__(self, git_config_path: str):
-        """
-        Initialize the ProductPublisher class.
-        :param git_config_path: Path to the YAML file containing GitHub credentials
-        """
         with fsspec.open(git_config_path, "r") as file:
             git_config = yaml.safe_load(file) or {}
 
@@ -35,12 +36,11 @@ class ProductPublisher:
             self.github_username, self.github_token, OSC_REPO_OWNER, OSC_REPO_NAME
         )
 
-    def publish_product(self, dataset_config_path: str):
-        """
-        Publish a product collection to the specified GitHub repository.
+    def publish_dataset(self, dataset_config_path: str):
+        """Publish a product collection to the specified GitHub repository.
 
-        :param dataset_config_path: Path to the YAML file containing dataset
-        configuration
+        Args:
+             dataset_config_path: Path to the YAML file containing dataset config
         """
         with fsspec.open(dataset_config_path, "r") as file:
             dataset_config = yaml.safe_load(file)

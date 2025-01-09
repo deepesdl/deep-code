@@ -1,10 +1,10 @@
 import pytest
 from unittest.mock import patch, MagicMock, mock_open
 
-from deep_code.api.publish import ProductPublisher
+from deep_code.api.publish import DatasetPublisher
 
 
-class TestProductPublisher:
+class TestDatasetPublisher:
     @patch("deep_code.api.publish.fsspec.open")
     def test_init_missing_credentials(self, mock_fsspec_open):
         mock_fsspec_open.return_value.__enter__.return_value = mock_open(
@@ -14,10 +14,10 @@ class TestProductPublisher:
         with pytest.raises(
             ValueError, match="GitHub credentials are missing in the git.yaml file."
         ):
-            ProductPublisher("/path/to/git.yaml")
+            DatasetPublisher("/path/to/git.yaml")
 
     @patch("deep_code.api.publish.fsspec.open")
-    def test_publish_product_missing_ids(self, mock_fsspec_open):
+    def test_publish_dataset_missing_ids(self, mock_fsspec_open):
         git_yaml_content = """
         github-username: test-user
         github-token: test-token
@@ -30,14 +30,14 @@ class TestProductPublisher:
             mock_open(read_data=dataset_yaml_content)(),
         ]
 
-        publisher = ProductPublisher("/path/to/git.yaml")
+        publisher = DatasetPublisher("/path/to/git.yaml")
 
         with pytest.raises(
             ValueError,
             match="Dataset ID or Collection ID is missing in the "
             "dataset-config.yaml file.",
         ):
-            publisher.publish_product("/path/to/dataset-config.yaml")
+            publisher.publish_dataset("/path/to/dataset-config.yaml")
 
     @patch("deep_code.utils.github_automation.os.chdir")
     @patch("deep_code.utils.github_automation.subprocess.run")
@@ -45,7 +45,7 @@ class TestProductPublisher:
     @patch("requests.post")
     @patch("deep_code.utils.github_automation.GitHubAutomation")
     @patch("deep_code.api.publish.fsspec.open")
-    def test_publish_product_success(
+    def test_publish_dataset_success(
         self,
         mock_fsspec_open,
         mock_github_automation,
@@ -108,8 +108,8 @@ class TestProductPublisher:
             )
 
             # Instantiate & publish
-            publisher = ProductPublisher("/fake/path/to/git.yaml")
-            publisher.publish_product("/fake/path/to/dataset-config.yaml")
+            publisher = DatasetPublisher("/fake/path/to/git.yaml")
+            publisher.publish_dataset("/fake/path/to/dataset-config.yaml")
 
         # 6Assert that we called git clone with /tmp/temp_repo
         # Because expanduser("~") is now patched to /tmp, the actual path is /tmp/temp_repo

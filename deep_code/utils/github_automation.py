@@ -13,15 +13,15 @@ from pathlib import Path
 
 
 class GitHubAutomation:
-    def __init__(self, username: str, token: str, repo_owner: str, repo_name: str):
-        """
-        Initialize the GitHubAutomation class.
+    """Automates GitHub operations needed to create a Pull Request.
 
-        :param username: Your GitHub username
-        :param token: Your GitHub personal access token
-        :param repo_owner: Owner of the repository to fork
-        :param repo_name: Name of the repository to fork
+        Args:
+            username: GitHub username.
+            token: Personal access token for GitHub.
+            repo_owner: Owner of the repository to fork.
+            repo_name: Name of the repository to fork.
         """
+    def __init__(self, username: str, token: str, repo_owner: str, repo_name: str):
         self.username = username
         self.token = token
         self.repo_owner = repo_owner
