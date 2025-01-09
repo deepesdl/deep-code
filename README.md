@@ -63,7 +63,7 @@ open-science catalog.
  ```
 
 ```
-Usage: deep-code publish-product [OPTIONS]
+Usage: deep-code publish-dataset [OPTIONS]
 
   Command-line interface for the ProductPublisher API.
 
