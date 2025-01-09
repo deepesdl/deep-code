@@ -6,7 +6,7 @@
 
 import click
 
-from deep_code.api.publish import DatasetPublisher
+from deep_code.tools.publish import DatasetPublisher
 
 
 @click.command(name="publish-dataset")

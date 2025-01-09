@@ -1,11 +1,11 @@
 import pytest
 from unittest.mock import patch, MagicMock, mock_open
 
-from deep_code.api.publish import DatasetPublisher
+from deep_code.tools.publish import DatasetPublisher
 
 
 class TestDatasetPublisher:
-    @patch("deep_code.api.publish.fsspec.open")
+    @patch("deep_code.tools.publish.fsspec.open")
     def test_init_missing_credentials(self, mock_fsspec_open):
         mock_fsspec_open.return_value.__enter__.return_value = mock_open(
             read_data="{}"
@@ -16,7 +16,7 @@ class TestDatasetPublisher:
         ):
             DatasetPublisher("/path/to/git.yaml")
 
-    @patch("deep_code.api.publish.fsspec.open")
+    @patch("deep_code.tools.publish.fsspec.open")
     def test_publish_dataset_missing_ids(self, mock_fsspec_open):
         git_yaml_content = """
         github-username: test-user
@@ -44,7 +44,7 @@ class TestDatasetPublisher:
     @patch("deep_code.utils.github_automation.os.path.expanduser", return_value="/tmp")
     @patch("requests.post")
     @patch("deep_code.utils.github_automation.GitHubAutomation")
-    @patch("deep_code.api.publish.fsspec.open")
+    @patch("deep_code.tools.publish.fsspec.open")
     def test_publish_dataset_success(
         self,
         mock_fsspec_open,
@@ -102,7 +102,7 @@ class TestDatasetPublisher:
             "links": [],
             "stac_version": "1.0.0",
         }
-        with patch("deep_code.api.publish.OSCProductSTACGenerator") as mock_generator:
+        with patch("deep_code.tools.publish.OSCProductSTACGenerator") as mock_generator:
             mock_generator.return_value.build_stac_collection.return_value = (
                 mock_collection
             )
