@@ -12,9 +12,9 @@ class TestDatasetPublisher:
         )()
 
         with pytest.raises(
-            ValueError, match="GitHub credentials are missing in the git.yaml file."
+            ValueError, match="GitHub credentials are missing in the `.gitaccess` file."
         ):
-            DatasetPublisher("/path/to/git.yaml")
+            DatasetPublisher()
 
     @patch("deep_code.tools.publish.fsspec.open")
     def test_publish_dataset_missing_ids(self, mock_fsspec_open):
@@ -30,7 +30,7 @@ class TestDatasetPublisher:
             mock_open(read_data=dataset_yaml_content)(),
         ]
 
-        publisher = DatasetPublisher("/path/to/git.yaml")
+        publisher = DatasetPublisher()
 
         with pytest.raises(
             ValueError,
@@ -108,7 +108,7 @@ class TestDatasetPublisher:
             )
 
             # Instantiate & publish
-            publisher = DatasetPublisher("/fake/path/to/git.yaml")
+            publisher = DatasetPublisher()
             publisher.publish_dataset("/fake/path/to/dataset-config.yaml")
 
         # 6Assert that we called git clone with /tmp/temp_repo

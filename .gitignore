@@ -163,5 +163,4 @@ cython_debug/
 
 # Exclude sensitive configuration files from version control
 .gitaccess
-git.yaml
 dataset-config.yaml

@@ -11,19 +11,13 @@ from deep_code.tools.publish import DatasetPublisher
 
 @click.command(name="publish-dataset")
 @click.option(
-    "--git-config",
-    required=True,
-    type=click.Path(exists=True),
-    help="Path to the git.yaml file with GitHub credentials.",
-)
-@click.option(
     "--dataset-config",
     required=True,
     type=click.Path(exists=True),
     help="Path to the dataset-config.yaml file with dataset information.",
 )
-def publish_dataset(git_config, dataset_config):
+def publish_dataset(dataset_config):
     """Request publishing a dataset to the open science catalogue.
     """
-    publisher = DatasetPublisher(git_config_path=git_config)
+    publisher = DatasetPublisher()
     publisher.publish_dataset(dataset_config_path=dataset_config)

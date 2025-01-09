@@ -17,21 +17,25 @@ logging.basicConfig(level=logging.INFO)
 
 
 class DatasetPublisher:
-    """Publishes products to the OSC GitHub repository.
+    """
+    Publishes products to the OSC GitHub repository.
 
-    Args:
-        git_config_path: Path to the YAML file containing GitHub credentials.
+    Credentials must be provided via a hidden file named `.gitaccess`, located in
+    the root of the repository. This file is expected to contain YAML of the form:
+
+        github-username: "YOUR_GITHUB_USERNAME"
+        github-token: "YOUR_GITHUB_PERSONAL_ACCESS_TOKEN"
     """
 
-    def __init__(self, git_config_path: str):
-        with fsspec.open(git_config_path, "r") as file:
+    def __init__(self):
+        with fsspec.open(".gitaccess", "r") as file:
             git_config = yaml.safe_load(file) or {}
 
         self.github_username = git_config.get("github-username")
         self.github_token = git_config.get("github-token")
 
         if not self.github_username or not self.github_token:
-            raise ValueError("GitHub credentials are missing in the git.yaml file.")
+            raise ValueError("GitHub credentials are missing in the `.gitaccess` file.")
 
         self.github_automation = GitHubAutomation(
             self.github_username, self.github_token, OSC_REPO_OWNER, OSC_REPO_NAME
