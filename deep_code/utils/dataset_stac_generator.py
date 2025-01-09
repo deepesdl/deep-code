@@ -113,11 +113,6 @@ class OSCProductSTACGenerator:
             f"Tried configurations: {', '.join(tried_configurations)}. "
             f"Last error: {last_exception}"
         )
-        raise ValueError(
-            f"Failed to open Zarr dataset with ID {self.dataset_id}. "
-            f"Tried configurations: {', '.join(tried_configurations)}. "
-            f"Last error: {last_exception}"
-        )
 
     def _get_spatial_extent(self) -> SpatialExtent:
         """Extract spatial extent from the dataset."""
@@ -263,7 +258,7 @@ class OSCProductSTACGenerator:
         if self.cf_params:
             osc_extension.cf_parameter = self.cf_params
         else:
-            osc_extension.cf_parameter = [{"Name": self.collection_id}]
+            osc_extension.cf_parameter = [{"name": self.collection_id}]
 
         # Add creation and update timestamps for the collection
         now_iso = datetime.now(timezone.utc).isoformat()
