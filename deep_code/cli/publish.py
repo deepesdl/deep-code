@@ -23,8 +23,7 @@ from deep_code.api.publish import DatasetPublisher
     help="Path to the dataset-config.yaml file with dataset information.",
 )
 def publish_dataset(git_config, dataset_config):
-    """
-    Command-line interface for the ProductPublisher API.
+    """Command-line interface for the ProductPublisher API.
     """
     publisher = DatasetPublisher(git_config_path=git_config)
     publisher.publish_dataset(dataset_config_path=dataset_config)
