@@ -218,11 +218,7 @@ class OSCProductSTACGenerator:
 
         description = var_data.attrs.get("description", "No variable description")
 
-        return {
-            "id": var_name,
-            "title": normalized_title,
-            "description": description
-        }
+        return {"id": var_name, "title": normalized_title, "description": description}
 
     def build_stac_collection(self) -> Collection:
         """

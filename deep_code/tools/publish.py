@@ -22,6 +22,7 @@ class DatasetPublisher:
     Args:
         git_config_path: Path to the YAML file containing GitHub credentials.
     """
+
     def __init__(self, git_config_path: str):
         with fsspec.open(git_config_path, "r") as file:
             git_config = yaml.safe_load(file) or {}

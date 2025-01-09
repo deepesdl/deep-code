@@ -21,6 +21,7 @@ class OscExtension(
     Args:
         obj: The STAC Item or Collection to which the OSC extension is applied.
     """
+
     name: Literal["osc"] = "osc"
 
     def __init__(self, obj: pystac.Item | pystac.Collection):
