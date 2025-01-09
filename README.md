@@ -6,15 +6,18 @@
 [![License](https://img.shields.io/github/license/dcs4cop/xcube-smos)](https://github.com/deepesdl/deep-code/blob/main/LICENSE)
 
 `deep-code` is a lightweight python tool that comprises a command line interface(CLI) 
-and Python API that implements utilities that aid integration of DeepESDL datasets, 
+and Python API providing utilities that aid integration of DeepESDL datasets, 
 experiments with EarthCODE.
 
 ## Setup
 
-## Installing from the repository
+## Install
+`deep-code` will be available in PyPI and conda-forge. Till the stable release,
+developers/contributors can follow the below steps to install deep-code.
 
-To install deep-code directly from the git repository, clone the repository, and 
-execute the steps below:
+## Installing from the repository for Developer
+
+To install deep-code directly from the git repository, clone the repository, and execute the steps below:
 
 ```commandline
 conda env create -f environment.yml
