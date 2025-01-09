@@ -161,6 +161,7 @@ cython_debug/
 #  option (not recommended) you can uncomment the following to ignore the entire idea folder.
 #.idea/
 
-# Ignore git.yaml and dataset-config.yaml
+# Exclude sensitive configuration files from version control
+.gitaccess
 git.yaml
 dataset-config.yaml

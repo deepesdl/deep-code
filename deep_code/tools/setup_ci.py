@@ -1,1 +1,1 @@
-# Logic for setting up build pipelines
+"""Logic for setting up build pipelines"""
