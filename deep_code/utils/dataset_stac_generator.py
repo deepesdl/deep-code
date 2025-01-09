@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 
-# Copyright (c) 2024 by Brockmann Consult GmbH
+# Copyright (c) 2025 by Brockmann Consult GmbH
 # Permissions are hereby granted under the terms of the MIT License:
 # https://opensource.org/licenses/MIT.
 
@@ -203,6 +203,30 @@ class OSCProductSTACGenerator:
             "description": self.dataset.attrs.get(
                 "description", "No description available."
             )
+        }
+
+    def _get_variable_metadata(self, var_name, var_data) -> dict:
+        """Extract metadata from a single variable's attributes.
+
+        Args:
+            var_name: The raw variable name in the dataset.
+            var_data: An xarray DataArray containing variable data and attrs.
+
+        Returns:
+            A dict with 'id', 'title', and 'description'.
+        """
+        long_name = var_data.attrs.get("long_name")
+        standard_name = var_data.attrs.get("standard_name")
+        title = long_name or standard_name or var_name
+
+        normalized_title = self._normalize_name(title)
+
+        description = var_data.attrs.get("description", "No variable description")
+
+        return {
+            "id": var_name,
+            "title": normalized_title,
+            "description": description
         }
 
     def build_stac_collection(self) -> Collection:
