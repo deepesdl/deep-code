@@ -59,13 +59,13 @@ Publish a dataset which is a result of a experiment to the EarthCODE
 open-science catalog.
 
 ```commandline
- deep-code publish-product --help
+ deep-code publish-dataset --help
  ```
 
 ```
 Usage: deep-code publish-dataset [OPTIONS]
 
-  Command-line interface for the ProductPublisher API.
+  Request publishing a dataset to the open science catalogue.
 
 Options:
   --git-config PATH      Path to the git.yaml file with GitHub credentials.

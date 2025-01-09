@@ -17,7 +17,7 @@ logging.basicConfig(level=logging.INFO)
 
 
 class DatasetPublisher:
-    """Publishes products to a GitHub repository.
+    """Publishes products to the OSC GitHub repository.
 
     Args:
         git_config_path: Path to the YAML file containing GitHub credentials.

@@ -23,7 +23,7 @@ from deep_code.tools.publish import DatasetPublisher
     help="Path to the dataset-config.yaml file with dataset information.",
 )
 def publish_dataset(git_config, dataset_config):
-    """Command-line interface for the ProductPublisher API.
+    """Request publishing a dataset to the open science catalogue.
     """
     publisher = DatasetPublisher(git_config_path=git_config)
     publisher.publish_dataset(dataset_config_path=dataset_config)
