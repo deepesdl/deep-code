@@ -203,4 +203,3 @@ class TestOpenDataset(unittest.TestCase):
         )
         self.assertIn("Public store, Authenticated store", str(context.exception))
         self.assertEqual(mock_new_data_store.call_count, 2)
-        mock_logger().critical.assert_called_once()

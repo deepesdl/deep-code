@@ -108,7 +108,7 @@ class OSCProductSTACGenerator:
                 )
                 last_exception = e
 
-        self.logger.critical(
+        raise ValueError(
             f"Failed to open Zarr dataset with ID {self.dataset_id}. "
             f"Tried configurations: {', '.join(tried_configurations)}. "
             f"Last error: {last_exception}"
