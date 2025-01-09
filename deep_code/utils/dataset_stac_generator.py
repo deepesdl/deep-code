@@ -124,7 +124,7 @@ class OSCProductSTACGenerator:
 
     def _get_spatial_extent(self) -> SpatialExtent:
         """Extract spatial extent from the dataset."""
-        if "lon" in self.dataset.coords and "lat" in self.dataset.coords:
+        if {"lon", "lat"}.issubset(self.dataset.coords):
             # For regular gridding
             lon_min, lon_max = (
                 float(self.dataset.lon.min()),
@@ -135,7 +135,18 @@ class OSCProductSTACGenerator:
                 float(self.dataset.lat.max()),
             )
             return SpatialExtent([[lon_min, lat_min, lon_max, lat_max]])
-        elif "x" in self.dataset.coords and "y" in self.dataset.coords:
+        elif {"longitude", "latitude"}.issubset(self.dataset.coords):
+            # For regular gridding with 'longitude' and 'latitude'
+            lon_min, lon_max = (
+                float(self.dataset.longitude.min()),
+                float(self.dataset.longitude.max()),
+            )
+            lat_min, lat_max = (
+                float(self.dataset.latitude.min()),
+                float(self.dataset.latitude.max()),
+            )
+            return SpatialExtent([[lon_min, lat_min, lon_max, lat_max]])
+        elif {"x", "y"}.issubset(self.dataset.coords):
             # For irregular gridding
             x_min, x_max = (float(self.dataset.x.min()), float(self.dataset.x.max()))
             y_min, y_max = (float(self.dataset.y.min()), float(self.dataset.y.max()))
