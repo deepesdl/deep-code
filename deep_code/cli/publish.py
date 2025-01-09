@@ -10,11 +10,9 @@ from deep_code.tools.publish import DatasetPublisher
 
 
 @click.command(name="publish-dataset")
-@click.option(
-    "--dataset-config",
-    required=True,
-    type=click.Path(exists=True),
-    help="Path to the dataset-config.yaml file with dataset information.",
+@click.argument(
+    "dataset_config",
+    type=click.Path(exists=True)
 )
 def publish_dataset(dataset_config):
     """Request publishing a dataset to the open science catalogue.

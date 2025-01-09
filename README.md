@@ -55,28 +55,14 @@ Use the --help option with these subcommands to get more details on usage.
 
 ###  deep-code publish-product
 
-Publish a dataset which is a result of a experiment to the EarthCODE 
+Publish a dataset which is a result of an experiment to the EarthCODE 
 open-science catalog.
 
 ```commandline
- deep-code publish-dataset --help
+ deep-code publish-dataset /path/to/dataset-config.yaml
  ```
 
-```
-Usage: deep-code publish-dataset [OPTIONS]
-
-  Request publishing a dataset to the open science catalogue.
-
-Options:
-  --git-config PATH      Path to the git.yaml file with GitHub credentials.
-                         [required]
-  --product-config PATH  Path to the dataset-config.yaml file with dataset
-                         information.  [required]
-  --help                 Show this message and exit.
-
-```
-
-#### git.yaml example
+#### .gitaccess example
 
 ```
 github-username: your-git-user
