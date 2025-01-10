@@ -66,7 +66,7 @@ class TestOSCProductSTACGenerator(unittest.TestCase):
 
     def test_get_variables(self):
         """Test variable extraction."""
-        variables = self.generator._get_variables()
+        variables = self.generator._get_variable_ids()
         self.assertEqual(variables, ["var1", "var2"])
 
     def test_get_general_metadata(self):

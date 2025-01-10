@@ -9,7 +9,7 @@ import logging
 from datetime import datetime, timezone
 
 import pandas as pd
-from pystac import Collection, Extent, Link, SpatialExtent, TemporalExtent
+from pystac import Collection, Extent, Link, SpatialExtent, TemporalExtent, Catalog
 from xcube.core.store import new_data_store
 
 from deep_code.utils.osc_extension import OscExtension
@@ -170,29 +170,6 @@ class OSCProductSTACGenerator:
     def _normalize_name(name: str | None) -> str | None:
         return name.replace(" ", "-").lower() if name else None
 
-    def _get_variables(self) -> list[str]:
-        """Extracts variable names or descriptions from the dataset.
-
-        Variables are prioritized based on their `long_name` or `standard_name`
-        attributes. If neither is available, the variable's key from
-        `dataset.data_vars.keys()` is used.
-
-        Returns:
-            A list of variable names or descriptions.
-        """
-        variables = []
-        for var_name, variable in self.dataset.data_vars.items():
-            long_name = self._normalize_name(variable.attrs.get("long_name"))
-            standard_name = self._normalize_name(variable.attrs.get("standard_name"))
-            if not long_name and not standard_name:
-                self.logger.error(
-                    f"Metadata missing for variable '{var_name}': 'long_name' and "
-                    f"'standard_name' attributes are not available."
-                )
-            # Prioritize 'long_name', fallback to 'standard_name', then use variable key
-            variables.append(long_name or standard_name or var_name)
-        return variables
-
     def _get_general_metadata(self) -> dict:
         return {
             "description": self.dataset.attrs.get(
@@ -200,36 +177,108 @@ class OSCProductSTACGenerator:
             )
         }
 
-    def _get_variable_metadata(self, var_name, var_data) -> dict:
-        """Extract metadata from a single variable's attributes.
+    def _extract_variable_metadata(self, variable_data) -> dict:
+        """Extract metadata for a single variable."""
+        long_name = variable_data.attrs.get("long_name")
+        standard_name = variable_data.attrs.get("standard_name")
+        title = long_name or standard_name or variable_data.name
+        description = variable_data.attrs.get("description", "No variable description")
+        return {"variable_id": self._normalize_name(title), "description": description}
 
-        Args:
-            var_name: The raw variable name in the dataset.
-            var_data: An xarray DataArray containing variable data and attrs.
+    def _get_variable_ids(self) -> list[str]:
+        """Extract variable IDs for each variable in the dataset."""
+        return [
+            self._extract_variable_metadata(variable)["variable_id"]
+            for variable in self.dataset.data_vars.values()
+        ]
+
+    def get_variables_and_build_catalog(self) -> dict[str, Catalog]:
+        """Extract metadata and STAC catalog for each variable in the dataset."""
+        var_catalogs = {}
+        for var_name, variable in self.dataset.data_vars.items():
+            var_metadata = self._extract_variable_metadata(variable)
+            var_catalog = self.build_variable_catalog(var_metadata)
+            var_catalogs[var_name] = var_catalog
+        return var_catalogs
+
+    def build_variable_catalog(self, var_metadata) -> Catalog:
+        """Build an OSC STAC Catalog for the variables in the dataset.
 
         Returns:
-            A dict with 'id', 'title', and 'description'.
+            A pystac.Catalog object.
         """
-        long_name = var_data.attrs.get("long_name")
-        standard_name = var_data.attrs.get("standard_name")
-        title = long_name or standard_name or var_name
+        var_id = var_metadata.get("variable_id")
+        # Set 'themes' to an empty list if none given
+        themes = self.osc_themes or []
 
-        normalized_title = self._normalize_name(title)
+        now_iso = datetime.now(timezone.utc).isoformat()
 
-        description = var_data.attrs.get("description", "No variable description")
+        # Create a PySTAC Catalog object
+        var_catalog = Catalog(
+            id=var_id,
+            description=var_metadata.get("description"),
+            stac_extensions=[
+                "https://stac-extensions.github.io/themes/v1.0.0/schema.json"
+            ],
+        )
 
-        return {"id": var_name, "title": normalized_title, "description": description}
+        var_catalog.stac_version = "1.0.0"
+        var_catalog.extra_fields["updated"] = now_iso
+        var_catalog.keywords = []
+
+        # Add the 'themes' block (from your example JSON)
+        var_catalog.extra_fields["themes"] = themes
+
+        var_catalog.remove_links("root")
+        # Add relevant links
+        var_catalog.add_link(
+            Link(
+                rel="root",
+                target="../../catalog.json",
+                media_type="application/json",
+                title="Open Science Catalog",
+            )
+        )
+
+        # 'child' link: points to the product (or one of its collections) using this variable
+        var_catalog.add_link(
+            Link(
+                rel="child",
+                target=f"../../products/{self.collection_id}/collection.json",
+                media_type="application/json",
+                title=self.collection_id,
+            )
+        )
+
+        # 'parent' link: back up to the variables overview
+        var_catalog.add_link(
+            Link(
+                rel="parent",
+                target="../catalog.json",
+                media_type="application/json",
+                title="Variables",
+            )
+        )
+
+        self_href = (
+            f"https://esa-earthcode.github.io/open-science-catalog-metadata/variables"
+            f"/{var_id}/catalog.json"
+        )
+        # 'self' link: the direct URL where this JSON is hosted
+        var_catalog.set_self_href(self_href)
+
+        return var_catalog
 
     def build_stac_collection(self) -> Collection:
-        """
-        Build an OSC STAC Collection for the dataset.
+        """Build an OSC STAC Collection for the dataset.
 
-        :return: A pystac.Collection object.
+        Returns:
+            A pystac.Collection object.
         """
         try:
             spatial_extent = self._get_spatial_extent()
             temporal_extent = self._get_temporal_extent()
-            variables = self._get_variables()
+            variables = self._get_variable_ids()
             general_metadata = self._get_general_metadata()
         except ValueError as e:
             raise ValueError(f"Metadata extraction failed: {e}")

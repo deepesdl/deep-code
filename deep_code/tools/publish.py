@@ -77,21 +77,26 @@ class DatasetPublisher:
                 osc_themes=dataset_theme,
                 cf_params=cf_params,
             )
-            collection = generator.build_stac_collection()
+            var_catalogs = generator.get_variables_and_build_catalog()
+            ds_collection = generator.build_stac_collection()
 
             file_path = f"products/{collection_id}/collection.json"
             logger.info("Automating GitHub tasks...")
+
             self.github_automation.fork_repository()
             self.github_automation.clone_repository()
             OSC_NEW_BRANCH_NAME = OSC_BRANCH_NAME + "-" + collection_id
             self.github_automation.create_branch(OSC_NEW_BRANCH_NAME)
-            self.github_automation.add_file(file_path, collection.to_dict())
+            self.github_automation.add_file(file_path, ds_collection.to_dict())
+            for var_id, var_catalog in var_catalogs.items():
+                var_file_path = f"variables/{var_id}/catalog.json"
+                self.github_automation.add_file(var_file_path, var_catalog.to_dict())
             self.github_automation.commit_and_push(
                 OSC_NEW_BRANCH_NAME, f"Add new collection:{collection_id}"
             )
             pr_url = self.github_automation.create_pull_request(
                 OSC_NEW_BRANCH_NAME,
-                f"Add new collection",
+                f"Add new dataset collection",
                 "This PR adds a new collection to the repository.",
             )
 
