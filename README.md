@@ -20,7 +20,7 @@ developers/contributors can follow the below steps to install deep-code.
 To install deep-code directly from the git repository, clone the repository, and execute the steps below:
 
 ```commandline
-conda env create -f environment.yml
+conda env create
 conda activate deep-code
 pip install -e .
 ```
