@@ -3,8 +3,17 @@ channels:
   - conda-forge
 dependencies:
   # Required
-  - pystac
-  - jsonschema
+  - python >=3.10
   - click
-  - pyyaml
+  - fsspec
+  - jsonschema
   - requests
+  - pandas
+  - pystac
+  - pyyaml
+  - xcube
+  - zarr >=2.11,<3
+  # test dependencies
+  - numpy
+  - pytest
+  - pytest-cov
