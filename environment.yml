@@ -12,6 +12,7 @@ dependencies:
   - pystac
   - pyyaml
   - xcube
+  - zarr <=3
   # test dependencies
   - numpy
   - pytest
