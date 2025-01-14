@@ -9,6 +9,9 @@
 and Python API providing utilities that aid integration of DeepESDL datasets, 
 experiments with EarthCODE.
 
+The first release will focus on implementing the publish feature of DeepESDL 
+experiments/workflow as OGC API record and Datasets as an OSC stac collection.
+
 ## Setup
 
 ## Install
