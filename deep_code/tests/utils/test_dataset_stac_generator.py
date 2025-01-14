@@ -7,7 +7,7 @@ import unittest
 from unittest.mock import patch, MagicMock
 from xarray import Dataset
 
-from deep_code.utils.dataset_stac_generator import OSCProductSTACGenerator
+from deep_code.utils.dataset_stac_generator import OSCDatasetSTACGenerator
 
 
 class TestOSCProductSTACGenerator(unittest.TestCase):
@@ -36,7 +36,7 @@ class TestOSCProductSTACGenerator(unittest.TestCase):
         mock_store.open_data.return_value = self.mock_dataset
         mock_data_store.return_value = mock_store
 
-        self.generator = OSCProductSTACGenerator(
+        self.generator = OSCDatasetSTACGenerator(
             dataset_id="mock-dataset-id",
             collection_id="mock-collection-id",
             access_link="s3://mock-bucket/mock-dataset",
@@ -78,7 +78,7 @@ class TestOSCProductSTACGenerator(unittest.TestCase):
     @patch("pystac.Collection.set_self_href")
     def test_build_stac_collection(self, mock_set_self_href, mock_add_link):
         """Test STAC collection creation."""
-        collection = self.generator.build_stac_collection()
+        collection = self.generator.build_dataset_stac_collection()
         self.assertIsInstance(collection, Collection)
         self.assertEqual(collection.id, "mock-collection-id")
         self.assertEqual(collection.description, "Mock dataset for testing.")
@@ -116,7 +116,7 @@ class TestOpenDataset(unittest.TestCase):
         mock_store.open_data.return_value = "mock_dataset"
 
         # Instantiate the generator (this will implicitly call _open_dataset)
-        generator = OSCProductSTACGenerator("mock-dataset-id", "mock-collection-id")
+        generator = OSCDatasetSTACGenerator("mock-dataset-id", "mock-collection-id")
 
         # Validate that the dataset is assigned correctly
         self.assertEqual(generator.dataset, "mock_dataset")
@@ -157,7 +157,7 @@ class TestOpenDataset(unittest.TestCase):
         os.environ["S3_USER_STORAGE_KEY"] = "mock-key"
         os.environ["S3_USER_STORAGE_SECRET"] = "mock-secret"
 
-        generator = OSCProductSTACGenerator("mock-dataset-id", "mock-collection-id")
+        generator = OSCDatasetSTACGenerator("mock-dataset-id", "mock-collection-id")
 
         # Validate that the dataset was successfully opened with the authenticated store
         self.assertEqual(generator.dataset, "mock_dataset")
@@ -195,7 +195,7 @@ class TestOpenDataset(unittest.TestCase):
         os.environ["S3_USER_STORAGE_SECRET"] = "mock-secret"
 
         with self.assertRaises(ValueError) as context:
-            OSCProductSTACGenerator("mock-dataset-id", "mock-collection-id")
+            OSCDatasetSTACGenerator("mock-dataset-id", "mock-collection-id")
 
         self.assertIn(
             "Failed to open Zarr dataset with ID mock-dataset-id",

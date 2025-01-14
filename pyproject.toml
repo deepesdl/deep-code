@@ -26,6 +26,7 @@ dependencies = [
     "pandas",
     "pystac",
     "pyyaml",
+    "urllib",
     "xcube-core"
 ]
 

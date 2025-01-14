@@ -9,13 +9,15 @@ import logging
 from datetime import datetime, timezone
 
 import pandas as pd
+import requests
 from pystac import Collection, Extent, Link, SpatialExtent, TemporalExtent, Catalog
+from urllib.parse import quote_plus
 from xcube.core.store import new_data_store
 
 from deep_code.utils.osc_extension import OscExtension
 
 
-class OSCProductSTACGenerator:
+class OSCDatasetSTACGenerator:
     """Generates OSC STAC Collections for a product from Zarr datasets.
 
     Args:
@@ -183,7 +185,12 @@ class OSCProductSTACGenerator:
         standard_name = variable_data.attrs.get("standard_name")
         title = long_name or standard_name or variable_data.name
         description = variable_data.attrs.get("description", "No variable description")
-        return {"variable_id": self._normalize_name(title), "description": description}
+        gcmd_keyword = variable_data.attrs.get("gcmd_keyword")
+        return {
+            "variable_id": self._normalize_name(title),
+            "description": description,
+            "gcmd_keyword": gcmd_keyword,
+        }
 
     def _get_variable_ids(self) -> list[str]:
         """Extract variable IDs for each variable in the dataset."""
@@ -198,8 +205,99 @@ class OSCProductSTACGenerator:
         for var_name, variable in self.dataset.data_vars.items():
             var_metadata = self._extract_variable_metadata(variable)
             var_catalog = self.build_variable_catalog(var_metadata)
-            var_catalogs[var_name] = var_catalog
+            var_catalogs[var_metadata.get("variable_id")] = var_catalog
         return var_catalogs
+
+    @staticmethod
+    def _get_gcmd_scheme_uuid(keyword: str) -> str | None:
+        """Query NASA's GCMD KMS concepts for a given keyword, and return the first matching UUID.
+
+        Args:
+            keyword: The GCMD keyword to look up (e.g., "EVAPORATION").
+
+        Returns:
+            The UUID string if found, otherwise None.
+        """
+        url = "https://api.gcmd.earthdata.nasa.gov/kms/concepts/concepts"
+        params = {"keyword": keyword, "format": "json"}
+
+        resp = requests.get(url, params=params)
+        if resp.status_code != 200:
+            # Request failed
+            return None
+
+        data = resp.json()
+        concepts = data.get("concepts", [])
+        # Loop through concepts and find the one that matches our keyword in short_name (case-insensitive).
+        for concept in concepts:
+            if concept.get("short_name", "").upper() == keyword.upper():
+                return concept.get("uuid")
+
+        return None
+
+    @staticmethod
+    def _build_gcmd_viewer_url(
+        keyword: str, scheme_uuid: str, scheme: str = "Earth Science"
+    ) -> str:
+        """Builds the GCMD Keyword Viewer URL for a given keyword and UUID.
+
+        Args:
+            keyword: GCMD keyword (e.g., "EVAPORATION").
+            scheme_uuid: The UUID for this keyword (e.g., "b68ab978-6db6-49ee-84e2-5f37b461a998").
+            scheme: The GCMD scheme, default is "Earth Science".
+
+        Returns:
+            The fully qualified GCMD viewer URL, e.g.:
+            https://gcmd.earthdata.nasa.gov/KeywordViewer/scheme/Earth%20Science/...
+        """
+        # URL-encode the scheme and keyword
+        url_scheme = quote_plus(scheme)
+        url_keyword = quote_plus(keyword)
+
+        # Construct the GCMD viewer URL
+        gcmd_url = (
+            f"https://gcmd.earthdata.nasa.gov/KeywordViewer/scheme/{url_scheme}/{scheme_uuid}"
+            f"?gtm_keyword={url_keyword}&gtm_scheme={url_scheme}"
+        )
+
+        return gcmd_url
+
+    def _add_gcmd_link_to_var_catalog(
+        self, var_catalog: Catalog, var_metadata: dict
+    ) -> None:
+        """
+        Checks for a GCMD keyword in var_metadata, retrieves its scheme UUID,
+        and if found, adds a 'via' link to the catalog pointing to the GCMD Keyword Viewer.
+
+        Args:
+            var_catalog: The PySTAC Catalog to which we want to add the link.
+            var_metadata: Dictionary containing metadata about the variable,
+                          including 'gcmd_keyword'.
+        """
+        gcmd_keyword = var_metadata.get("gcmd_keyword")
+        if not gcmd_keyword:
+            self.logger.debug("No `gcmd_keyword` in var_metadata. Skipping GCMD link.")
+            return
+
+        # Retrieve scheme UUID from the NASA KMS API
+        scheme_uuid = self._get_gcmd_scheme_uuid(gcmd_keyword)
+        if not scheme_uuid:
+            self.logger.debug(
+                f"No GCMD UUID found for keyword '{gcmd_keyword}'. Skipping GCMD link."
+            )
+            return
+
+        gcmd_url = self._build_gcmd_viewer_url(gcmd_keyword, scheme_uuid)
+
+        # Add `rel="via"` link for the GCMD viewer
+        var_catalog.add_link(
+            Link(
+                rel="via", target=gcmd_url, title="Description", media_type="text/html"
+            )
+        )
+        self.logger.info(
+            f"Added GCMD link for keyword '{gcmd_keyword}' (UUID: {scheme_uuid})."
+        )
 
     def build_variable_catalog(self, var_metadata) -> Catalog:
         """Build an OSC STAC Catalog for the variables in the dataset.
@@ -208,8 +306,14 @@ class OSCProductSTACGenerator:
             A pystac.Catalog object.
         """
         var_id = var_metadata.get("variable_id")
-        # Set 'themes' to an empty list if none given
-        themes = self.osc_themes or []
+        concepts = [{"id": theme} for theme in self.osc_themes]
+
+        themes = [
+            {
+                "scheme": "https://github.com/stac-extensions/osc#theme",
+                "concepts": concepts,
+            }
+        ]
 
         now_iso = datetime.now(timezone.utc).isoformat()
 
@@ -217,6 +321,7 @@ class OSCProductSTACGenerator:
         var_catalog = Catalog(
             id=var_id,
             description=var_metadata.get("description"),
+            title=var_id,
             stac_extensions=[
                 "https://stac-extensions.github.io/themes/v1.0.0/schema.json"
             ],
@@ -259,6 +364,8 @@ class OSCProductSTACGenerator:
                 title="Variables",
             )
         )
+        # Add gcmd link for the variable definition
+        self._add_gcmd_link_to_var_catalog(var_catalog, var_metadata)
 
         self_href = (
             f"https://esa-earthcode.github.io/open-science-catalog-metadata/variables"
@@ -269,7 +376,30 @@ class OSCProductSTACGenerator:
 
         return var_catalog
 
-    def build_stac_collection(self) -> Collection:
+    def update_existing_variable_catalog(self, var_file_path, var_id) -> Catalog:
+        existing_catalog = Catalog.from_file(var_file_path)
+        now_iso = datetime.now(timezone.utc).isoformat()
+        existing_catalog.extra_fields["updated"] = now_iso
+
+        # add 'child' link as the product
+        existing_catalog.add_link(
+            Link(
+                rel="child",
+                target=f"../../products/{self.collection_id}/collection.json",
+                media_type="application/json",
+                title=self.collection_id,
+            )
+        )
+        self_href = (
+            f"https://esa-earthcode.github.io/open-science-catalog-metadata/variables"
+            f"/{var_id}/catalog.json"
+        )
+        # 'self' link: the direct URL where this JSON is hosted
+        existing_catalog.set_self_href(self_href)
+
+        return existing_catalog
+
+    def build_dataset_stac_collection(self) -> Collection:
         """Build an OSC STAC Collection for the dataset.
 
         Returns:
@@ -309,6 +439,7 @@ class OSCProductSTACGenerator:
         now_iso = datetime.now(timezone.utc).isoformat()
         collection.extra_fields["created"] = now_iso
         collection.extra_fields["updated"] = now_iso
+        collection.title = self.collection_id
 
         # Remove any existing root link and re-add it properly
         collection.remove_links("root")
@@ -333,6 +464,16 @@ class OSCProductSTACGenerator:
                 title="Products",
             )
         )
+        # Add variables ref
+        for var in variables:
+            collection.add_link(
+                Link(
+                    rel="related",
+                    target=f"../../varibales/{var}/catalog.json",
+                    media_type="application/json",
+                    title="Variable: " + var,
+                )
+            )
 
         self_href = (
             "https://esa-earthcode.github.io/"

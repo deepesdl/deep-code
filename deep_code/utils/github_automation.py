@@ -113,3 +113,9 @@ class GitHubAutomation:
             subprocess.run(["rm", "-rf", self.local_clone_dir])
         except subprocess.CalledProcessError as e:
             raise RuntimeError(f"Failed to clean-up local repository: {e}")
+
+    def file_exists(self, file_path) -> bool:
+        full_path = Path(self.local_clone_dir) / file_path
+        exists = os.path.isfile(full_path)
+        logging.debug(f"Checking existence of {full_path}: {exists}")
+        return exists
