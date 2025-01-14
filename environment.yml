@@ -11,7 +11,7 @@ dependencies:
   - pandas
   - pystac
   - pyyaml
-  - urllib
+  - urllib3
   - xcube
   - zarr >=2.11,<3
   # test dependencies
