@@ -28,8 +28,24 @@ class TestOSCProductSTACGenerator(unittest.TestCase):
             },
             attrs={"description": "Mock dataset for testing.", "title": "Mock Dataset"},
             data_vars={
-                "var1": (("time", "lat", "lon"), np.random.rand(2, 5, 10)),
-                "var2": (("time", "lat", "lon"), np.random.rand(2, 5, 10)),
+                "var1": (
+                    ("time", "lat", "lon"),
+                    np.random.rand(2, 5, 10),
+                    {
+                        "description": "dummy",
+                        "standard_name": "var1",
+                        "gcmd_keyword_url": "https://dummy",
+                    },
+                ),
+                "var2": (
+                    ("time", "lat", "lon"),
+                    np.random.rand(2, 5, 10),
+                    {
+                        "description": "dummy",
+                        "standard_name": "var2",
+                        "gcmd_keyword_url": "https://dummy",
+                    },
+                ),
             },
         )
         mock_store = MagicMock()
@@ -66,7 +82,7 @@ class TestOSCProductSTACGenerator(unittest.TestCase):
 
     def test_get_variables(self):
         """Test variable extraction."""
-        variables = self.generator._get_variable_ids()
+        variables = self.generator.get_variable_ids()
         self.assertEqual(variables, ["var1", "var2"])
 
     def test_get_general_metadata(self):
@@ -104,8 +120,6 @@ class TestOSCProductSTACGenerator(unittest.TestCase):
         with self.assertRaises(ValueError):
             self.generator._get_temporal_extent()
 
-
-class TestOpenDataset(unittest.TestCase):
     @patch("deep_code.utils.dataset_stac_generator.new_data_store")
     @patch("deep_code.utils.dataset_stac_generator.logging.getLogger")
     def test_open_dataset_success_public_store(self, mock_logger, mock_new_data_store):
@@ -113,7 +127,7 @@ class TestOpenDataset(unittest.TestCase):
         # Create a mock store and mock its `open_data` method
         mock_store = MagicMock()
         mock_new_data_store.return_value = mock_store
-        mock_store.open_data.return_value = "mock_dataset"
+        mock_store.open_data.return_value = self.mock_dataset
 
         # Instantiate the generator (this will implicitly call _open_dataset)
         generator = OSCDatasetSTACGenerator("mock-dataset-id", "mock-collection-id")
@@ -151,7 +165,7 @@ class TestOpenDataset(unittest.TestCase):
             mock_store,
             # Second call (authenticated store) returns a mock store
         ]
-        mock_store.open_data.return_value = "mock_dataset"
+        mock_store.open_data.return_value = self.mock_dataset
 
         os.environ["S3_USER_STORAGE_BUCKET"] = "mock-bucket"
         os.environ["S3_USER_STORAGE_KEY"] = "mock-key"

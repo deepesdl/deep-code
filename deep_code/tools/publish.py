@@ -78,23 +78,26 @@ class DatasetPublisher:
                 osc_themes=osc_themes,
                 cf_params=cf_params,
             )
-            var_catalogs = generator.get_variables_and_build_catalog()
+            # get variables from the datasets
+            variable_ids = generator.get_variable_ids()
+            # build STAC collection for the dataset
             ds_collection = generator.build_dataset_stac_collection()
 
             file_path = f"products/{collection_id}/collection.json"
             logger.info("Automating GitHub tasks...")
-
             self.github_automation.fork_repository()
             self.github_automation.clone_repository()
             OSC_NEW_BRANCH_NAME = OSC_BRANCH_NAME + "-" + collection_id
             self.github_automation.create_branch(OSC_NEW_BRANCH_NAME)
 
-            for var_id, var_catalog in var_catalogs.items():
+            for var_id in variable_ids:
                 var_file_path = f"variables/{var_id}/catalog.json"
                 if not self.github_automation.file_exists(var_file_path):
                     logger.info(
                         f"Variable catalog for {var_id} does not exist. Creating..."
                     )
+                    var_metadata = generator.variables_metadata.get(var_id)
+                    var_catalog = generator.build_variable_catalog(var_metadata)
                     self.github_automation.add_file(
                         var_file_path, var_catalog.to_dict()
                     )

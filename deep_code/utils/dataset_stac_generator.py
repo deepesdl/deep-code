@@ -55,6 +55,7 @@ class OSCDatasetSTACGenerator:
         self.cf_params = cf_params or {}
         self.logger = logging.getLogger(__name__)
         self.dataset = self._open_dataset()
+        self.variables_metadata = self.get_variables_metadata()
 
     def _open_dataset(self):
         """Open the dataset using a S3 store as a xarray Dataset."""
@@ -179,124 +180,61 @@ class OSCDatasetSTACGenerator:
             )
         }
 
-    def _extract_variable_metadata(self, variable_data) -> dict:
+    def extract_metadata_for_variable(self, variable_data) -> dict:
         """Extract metadata for a single variable."""
         long_name = variable_data.attrs.get("long_name")
         standard_name = variable_data.attrs.get("standard_name")
         title = long_name or standard_name or variable_data.name
         description = variable_data.attrs.get("description", "No variable description")
-        gcmd_keyword = variable_data.attrs.get("gcmd_keyword")
+        gcmd_keyword_url = variable_data.attrs.get("gcmd_keyword_url")
         return {
             "variable_id": self._normalize_name(title),
             "description": description,
-            "gcmd_keyword": gcmd_keyword,
+            "gcmd_keyword_url": gcmd_keyword_url,
         }
 
-    def _get_variable_ids(self) -> list[str]:
-        """Extract variable IDs for each variable in the dataset."""
-        return [
-            self._extract_variable_metadata(variable)["variable_id"]
-            for variable in self.dataset.data_vars.values()
-        ]
+    def get_variable_ids(self) -> list[str]:
+        """Get variable IDs for all variables in the dataset."""
+        return list(self.variables_metadata.keys())
 
-    def get_variables_and_build_catalog(self) -> dict[str, Catalog]:
-        """Extract metadata and STAC catalog for each variable in the dataset."""
-        var_catalogs = {}
+    def get_variables_metadata(self) -> dict[str, dict]:
+        """Extract metadata for all variables in the dataset."""
+        variables_metadata = {}
         for var_name, variable in self.dataset.data_vars.items():
-            var_metadata = self._extract_variable_metadata(variable)
-            var_catalog = self.build_variable_catalog(var_metadata)
-            var_catalogs[var_metadata.get("variable_id")] = var_catalog
-        return var_catalogs
-
-    @staticmethod
-    def _get_gcmd_scheme_uuid(keyword: str) -> str | None:
-        """Query NASA's GCMD KMS concepts for a given keyword, and return the first matching UUID.
-
-        Args:
-            keyword: The GCMD keyword to look up (e.g., "EVAPORATION").
-
-        Returns:
-            The UUID string if found, otherwise None.
-        """
-        url = "https://api.gcmd.earthdata.nasa.gov/kms/concepts/concepts"
-        params = {"keyword": keyword, "format": "json"}
-
-        resp = requests.get(url, params=params)
-        if resp.status_code != 200:
-            # Request failed
-            return None
-
-        data = resp.json()
-        concepts = data.get("concepts", [])
-        # Loop through concepts and find the one that matches our keyword in short_name (case-insensitive).
-        for concept in concepts:
-            if concept.get("short_name", "").upper() == keyword.upper():
-                return concept.get("uuid")
-
-        return None
-
-    @staticmethod
-    def _build_gcmd_viewer_url(
-        keyword: str, scheme_uuid: str, scheme: str = "Earth Science"
-    ) -> str:
-        """Builds the GCMD Keyword Viewer URL for a given keyword and UUID.
-
-        Args:
-            keyword: GCMD keyword (e.g., "EVAPORATION").
-            scheme_uuid: The UUID for this keyword (e.g., "b68ab978-6db6-49ee-84e2-5f37b461a998").
-            scheme: The GCMD scheme, default is "Earth Science".
-
-        Returns:
-            The fully qualified GCMD viewer URL, e.g.:
-            https://gcmd.earthdata.nasa.gov/KeywordViewer/scheme/Earth%20Science/...
-        """
-        # URL-encode the scheme and keyword
-        url_scheme = quote_plus(scheme)
-        url_keyword = quote_plus(keyword)
-
-        # Construct the GCMD viewer URL
-        gcmd_url = (
-            f"https://gcmd.earthdata.nasa.gov/KeywordViewer/scheme/{url_scheme}/{scheme_uuid}"
-            f"?gtm_keyword={url_keyword}&gtm_scheme={url_scheme}"
-        )
-
-        return gcmd_url
+            var_metadata = self.extract_metadata_for_variable(variable)
+            variables_metadata[var_metadata.get("variable_id")] = var_metadata
+        return variables_metadata
 
     def _add_gcmd_link_to_var_catalog(
         self, var_catalog: Catalog, var_metadata: dict
     ) -> None:
         """
-        Checks for a GCMD keyword in var_metadata, retrieves its scheme UUID,
-        and if found, adds a 'via' link to the catalog pointing to the GCMD Keyword Viewer.
+        Checks for a GCMD keyword URL in var_metadata, adds a 'via' link to the catalog
+        pointing to the GCMD Keyword Viewer.
 
         Args:
             var_catalog: The PySTAC Catalog to which we want to add the link.
             var_metadata: Dictionary containing metadata about the variable,
-                          including 'gcmd_keyword'.
+                          including 'gcmd_keyword_url'.
         """
-        gcmd_keyword = var_metadata.get("gcmd_keyword")
-        if not gcmd_keyword:
-            self.logger.debug("No `gcmd_keyword` in var_metadata. Skipping GCMD link.")
-            return
-
-        # Retrieve scheme UUID from the NASA KMS API
-        scheme_uuid = self._get_gcmd_scheme_uuid(gcmd_keyword)
-        if not scheme_uuid:
+        gcmd_keyword_url = var_metadata.get("gcmd_keyword_url")
+        if not gcmd_keyword_url:
             self.logger.debug(
-                f"No GCMD UUID found for keyword '{gcmd_keyword}'. Skipping GCMD link."
+                f"No gcmd_keyword_url in var_metadata. Skipping adding GCMD link in "
+                f'the {var_metadata.get("variable_id")} catalog'
             )
             return
-
-        gcmd_url = self._build_gcmd_viewer_url(gcmd_keyword, scheme_uuid)
-
-        # Add `rel="via"` link for the GCMD viewer
         var_catalog.add_link(
             Link(
-                rel="via", target=gcmd_url, title="Description", media_type="text/html"
+                rel="via",
+                target=gcmd_keyword_url,
+                title="Description",
+                media_type="text/html",
             )
         )
         self.logger.info(
-            f"Added GCMD link for keyword '{gcmd_keyword}' (UUID: {scheme_uuid})."
+            f'Added GCMD link for {var_metadata.get("variable_id")} '
+            f"catalog {gcmd_keyword_url}."
         )
 
     def build_variable_catalog(self, var_metadata) -> Catalog:
@@ -408,7 +346,7 @@ class OSCDatasetSTACGenerator:
         try:
             spatial_extent = self._get_spatial_extent()
             temporal_extent = self._get_temporal_extent()
-            variables = self._get_variable_ids()
+            variables = self.get_variable_ids()
             general_metadata = self._get_general_metadata()
         except ValueError as e:
             raise ValueError(f"Metadata extraction failed: {e}")
