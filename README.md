@@ -75,16 +75,18 @@ github-token: personal access token
 #### dataset-config.yaml example
 
 ```
-dataset-id: hydrology-1D-0.009deg-100x60x60-3.0.2.zarr 
-collection-id: hydrology
-
-#non-mandatory
-documentation-link: https://deepesdl.readthedocs.io/en/latest/datasets/hydrology-1D-0-009deg-100x60x60-3-0-2-zarr/
-access-link: s3://test
-dataset-status: completed
-dataset-region: global
-dataset-theme: ["ocean", "environment"]
-cf-parameter: [{"Name" : "hydrology"}]
+dataset_id: hydrology-1D-0.009deg-100x60x60-3.0.2.zarr
+collection_id: hydrology
+osc_themes:
+  - Land
+  - Oceans
+# non-mandatory
+documentation_link: https://deepesdl.readthedocs.io/en/latest/datasets/hydrology-1D-0.009deg-100x60x60-3.0.2.zarr/
+access_link: s3://test
+dataset_status: completed
+osc_region: global
+cf_parameter:
+  - name: hydrology
 ```
 
 dataset-id has to be a valid dataset-id from `deep-esdl-public` s3 or your team bucket.
