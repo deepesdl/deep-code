@@ -1,6 +1,7 @@
 from typing import Any, Optional
 
-from xrlint.util.codec import JsonSerializable, MappingConstructible
+from xrlint.util.constructible import MappingConstructible
+from xrlint.util.serializable import JsonSerializable
 
 from deep_code.constants import OGC_API_RECORD_SPEC
 
