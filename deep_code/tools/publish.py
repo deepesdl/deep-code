@@ -9,7 +9,8 @@ import logging
 import fsspec
 import yaml
 
-from deep_code.constants import OSC_BRANCH_NAME, OSC_REPO_NAME, OSC_REPO_OWNER
+from deep_code.constants import OSC_BRANCH_NAME, OSC_REPO_NAME, OSC_REPO_OWNER, \
+    WF_BRANCH_NAME
 from deep_code.utils.dataset_stac_generator import OSCProductSTACGenerator
 from deep_code.utils.github_automation import GitHubAutomation
 from deep_code.utils.ogc_record_generator import OSCWorkflowOGCApiRecordGenerator
@@ -156,14 +157,15 @@ class WorkflowPublisher:
             logger.info("Automating GitHub tasks...")
             self.github_automation.fork_repository()
             self.github_automation.clone_repository()
-            OSC_NEW_BRANCH_NAME = OSC_BRANCH_NAME + "-" + workflow_id
-            self.github_automation.create_branch(OSC_NEW_BRANCH_NAME)
+            # WF_NEW_BRANCH_NAME = WF_BRANCH_NAME + "-" + workflow_id
+            WF_NEW_BRANCH_NAME = WF_BRANCH_NAME
+            self.github_automation.create_branch(WF_NEW_BRANCH_NAME)
             self.github_automation.add_file(file_path, ogc_record.to_dict())
             self.github_automation.commit_and_push(
-                OSC_NEW_BRANCH_NAME, f"Add new collection:{workflow_id}"
+                WF_NEW_BRANCH_NAME, f"Add new workflow:{workflow_id}"
             )
             pr_url = self.github_automation.create_pull_request(
-                OSC_NEW_BRANCH_NAME,
+                WF_NEW_BRANCH_NAME,
                 f"Add new collection",
                 "This PR adds a new workflow to the OSC repository.",
             )
@@ -171,3 +173,8 @@ class WorkflowPublisher:
 
         finally:
             self.github_automation.clean_up()
+
+if __name__ == '__main__':
+    wp = WorkflowPublisher()
+    wp.publish_workflow("/home/tejas/bc/projects/deepesdl/deep-code/workflow-config"
+                        ".yaml")
