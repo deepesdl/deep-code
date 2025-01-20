@@ -7,9 +7,10 @@
 import json
 import logging
 import os
-import requests
 import subprocess
 from pathlib import Path
+
+import requests
 
 
 class GitHubAutomation:

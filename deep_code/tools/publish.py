@@ -4,11 +4,12 @@
 # Permissions are hereby granted under the terms of the MIT License:
 # https://opensource.org/licenses/MIT.
 
-import fsspec
 import logging
+
+import fsspec
 import yaml
 
-from deep_code.constants import OSC_REPO_OWNER, OSC_REPO_NAME, OSC_BRANCH_NAME
+from deep_code.constants import OSC_BRANCH_NAME, OSC_REPO_NAME, OSC_REPO_OWNER
 from deep_code.utils.dataset_stac_generator import OSCProductSTACGenerator
 from deep_code.utils.github_automation import GitHubAutomation
 
