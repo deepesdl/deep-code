@@ -133,6 +133,10 @@ class WorkflowPublisher:
             self.github_username, self.github_token, OSC_REPO_OWNER, OSC_REPO_NAME
         )
 
+    @staticmethod
+    def _normalize_name(name: str | None) -> str | None:
+        return name.replace(" ", "-").lower() if name else None
+
     def publish_workflow(self, workflow_config_path: str):
 
         with fsspec.open(workflow_config_path, "r") as file:
@@ -140,7 +144,7 @@ class WorkflowPublisher:
 
         try:
             logger.info("Generating OGC API Record for the workflow...")
-            workflow_id = workflow_config.get("workflow_id")
+            workflow_id = self._normalize_name(workflow_config.get("workflow_id"))
             properties_list = workflow_config.get("properties", [])
 
             contacts = workflow_config.get("contact", [])
@@ -160,8 +164,7 @@ class WorkflowPublisher:
             logger.info("Automating GitHub tasks...")
             self.github_automation.fork_repository()
             self.github_automation.clone_repository()
-            # WF_NEW_BRANCH_NAME = WF_BRANCH_NAME + "-" + workflow_id
-            WF_NEW_BRANCH_NAME = WF_BRANCH_NAME
+            WF_NEW_BRANCH_NAME = WF_BRANCH_NAME + "-" + workflow_id
             self.github_automation.create_branch(WF_NEW_BRANCH_NAME)
             self.github_automation.add_file(file_path, ogc_record.to_dict())
             self.github_automation.commit_and_push(
