@@ -8,14 +8,17 @@ import logging
 
 import fsspec
 import yaml
-from utils.ogc_api_record import OgcRecord
 
-from deep_code.constants import (OSC_BRANCH_NAME, OSC_REPO_NAME,
-                                 OSC_REPO_OWNER, WF_BRANCH_NAME)
+from deep_code.constants import (
+    OSC_BRANCH_NAME,
+    OSC_REPO_NAME,
+    OSC_REPO_OWNER,
+    WF_BRANCH_NAME,
+)
 from deep_code.utils.dataset_stac_generator import OSCProductSTACGenerator
 from deep_code.utils.github_automation import GitHubAutomation
-from deep_code.utils.ogc_record_generator import \
-    OSCWorkflowOGCApiRecordGenerator
+from deep_code.utils.ogc_api_record import OgcRecord
+from deep_code.utils.ogc_record_generator import OSCWorkflowOGCApiRecordGenerator
 
 logger = logging.getLogger(__name__)
 logging.basicConfig(level=logging.INFO)
@@ -140,7 +143,6 @@ class WorkflowPublisher:
             workflow_id = workflow_config.get("workflow_id")
             properties_list = workflow_config.get("properties", [])
 
-
             contacts = workflow_config.get("contact", [])
             rg = OSCWorkflowOGCApiRecordGenerator()
             wf_record_properties = rg.build_record_properties(properties_list, contacts)
@@ -174,4 +176,3 @@ class WorkflowPublisher:
 
         finally:
             self.github_automation.clean_up()
-

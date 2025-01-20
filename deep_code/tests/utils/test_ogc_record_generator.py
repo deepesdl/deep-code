@@ -6,11 +6,10 @@ from deep_code.utils.ogc_record_generator import OSCWorkflowOGCApiRecordGenerato
 
 
 class TestOSCWorkflowOGCApiRecordGenerator(unittest.TestCase):
-
     def test_build_contact_objects(self):
         contacts_list = [
             {"name": "Alice", "organization": "Org A", "position": "Researcher"},
-            {"name": "Bob", "organization": "Org B", "position": "Developer"}
+            {"name": "Bob", "organization": "Org B", "position": "Developer"},
         ]
 
         result = OSCWorkflowOGCApiRecordGenerator.build_contact_objects(contacts_list)
@@ -42,8 +41,8 @@ class TestOSCWorkflowOGCApiRecordGenerator(unittest.TestCase):
             "jupyter_kernel_info": {
                 "name": "deepesdl-xcube-1.7.1",
                 "python_version": 3.11,
-                "env_file": "https://git/env.yml"
-            }
+                "env_file": "https://git/env.yml",
+            },
         }
         contacts = [
             {"name": "Alice", "organization": "Org A", "position": "Researcher"}
@@ -62,4 +61,3 @@ class TestOSCWorkflowOGCApiRecordGenerator(unittest.TestCase):
         self.assertEqual(record_properties.type, "workflow")
         self.assertTrue("created" in record_properties.__dict__)
         self.assertTrue("updated" in record_properties.__dict__)
-

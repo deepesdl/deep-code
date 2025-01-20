@@ -6,15 +6,19 @@
 
 from datetime import datetime, timezone
 
-from constants import DEFAULT_THEME_SCHEME
-
-from deep_code.utils.ogc_api_record import (Contact, RecordProperties, Theme,
-                                            ThemeConcept)
+from deep_code.constants import DEFAULT_THEME_SCHEME
+from deep_code.utils.ogc_api_record import (
+    Contact,
+    RecordProperties,
+    Theme,
+    ThemeConcept,
+)
 
 
 class OSCWorkflowOGCApiRecordGenerator:
     """Generates OGC API record for a workflow
     """
+
     @staticmethod
     def build_contact_objects(contacts_list: list[dict]) -> list[Contact]:
         """Build a list of Contact objects from a list of contact dictionaries.
