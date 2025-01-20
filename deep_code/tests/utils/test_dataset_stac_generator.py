@@ -1,10 +1,10 @@
 import os
+import unittest
 from datetime import datetime
+from unittest.mock import MagicMock, patch
 
 import numpy as np
 from pystac import Collection
-import unittest
-from unittest.mock import patch, MagicMock
 from xarray import Dataset
 
 from deep_code.utils.dataset_stac_generator import OSCProductSTACGenerator
