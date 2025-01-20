@@ -7,12 +7,9 @@
 from datetime import datetime, timezone
 
 from constants import DEFAULT_THEME_SCHEME
-from deep_code.utils.ogc_api_record import (
-    Contact,
-    RecordProperties,
-    Theme,
-    ThemeConcept,
-)
+
+from deep_code.utils.ogc_api_record import (Contact, RecordProperties, Theme,
+                                            ThemeConcept)
 
 
 class OSCWorkflowOGCApiRecordGenerator:

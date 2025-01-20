@@ -8,13 +8,14 @@ import logging
 
 import fsspec
 import yaml
+from utils.ogc_api_record import OgcRecord
 
-from deep_code.constants import OSC_BRANCH_NAME, OSC_REPO_NAME, OSC_REPO_OWNER, \
-    WF_BRANCH_NAME
+from deep_code.constants import (OSC_BRANCH_NAME, OSC_REPO_NAME,
+                                 OSC_REPO_OWNER, WF_BRANCH_NAME)
 from deep_code.utils.dataset_stac_generator import OSCProductSTACGenerator
 from deep_code.utils.github_automation import GitHubAutomation
-from deep_code.utils.ogc_record_generator import OSCWorkflowOGCApiRecordGenerator
-from utils.ogc_api_record import OgcRecord
+from deep_code.utils.ogc_record_generator import \
+    OSCWorkflowOGCApiRecordGenerator
 
 logger = logging.getLogger(__name__)
 logging.basicConfig(level=logging.INFO)
@@ -174,7 +175,3 @@ class WorkflowPublisher:
         finally:
             self.github_automation.clean_up()
 
-if __name__ == '__main__':
-    wp = WorkflowPublisher()
-    wp.publish_workflow("/home/tejas/bc/projects/deepesdl/deep-code/workflow-config"
-                        ".yaml")

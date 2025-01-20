@@ -8,7 +8,8 @@ from typing import Literal
 
 import pystac
 from pystac import Extent, SpatialExtent, TemporalExtent
-from pystac.extensions.base import ExtensionManagementMixin, PropertiesExtension
+from pystac.extensions.base import (ExtensionManagementMixin,
+                                    PropertiesExtension)
 
 from deep_code.constants import CF_SCHEMA_URI, OSC_SCHEMA_URI
 
