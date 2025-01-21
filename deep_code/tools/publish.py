@@ -5,6 +5,7 @@
 # https://opensource.org/licenses/MIT.
 
 import logging
+from pathlib import Path
 
 import fsspec
 import yaml
@@ -15,13 +16,83 @@ from deep_code.constants import (
     OSC_REPO_OWNER,
     WF_BRANCH_NAME,
 )
-from deep_code.utils.dataset_stac_generator import OSCProductSTACGenerator
+from deep_code.utils.dataset_stac_generator import OSCDatasetSTACGenerator
 from deep_code.utils.github_automation import GitHubAutomation
 from deep_code.utils.ogc_api_record import OgcRecord
 from deep_code.utils.ogc_record_generator import OSCWorkflowOGCApiRecordGenerator
 
 logger = logging.getLogger(__name__)
 logging.basicConfig(level=logging.INFO)
+
+
+class BasePublisher:
+    """
+    Base class providing common GitHub automation steps:
+      - Reading credentials from `.gitaccess`
+      - Setting up GitHubAutomation
+      - Forking, cloning, creating a branch
+      - Adding files, committing, pushing
+      - Creating a pull request
+    """
+
+    def __init__(self):
+        with fsspec.open(".gitaccess", "r") as file:
+            git_config = yaml.safe_load(file) or {}
+
+        self.github_username = git_config.get("github-username")
+        self.github_token = git_config.get("github-token")
+        if not self.github_username or not self.github_token:
+            raise ValueError("GitHub credentials are missing in `.gitaccess` file.")
+
+        self.github_automation = GitHubAutomation(
+            self.github_username, self.github_token, OSC_REPO_OWNER, OSC_REPO_NAME
+        )
+
+    def publish_file(
+        self,
+        branch_name: str,
+        file_path: str,
+        file_content: dict,
+        commit_message: str,
+        pr_title: str,
+        pr_body: str,
+    ) -> str:
+        """
+        Publish a single file to GitHub in a new branch and open a PR.
+
+        Args:
+            branch_name: Name of the branch to create (e.g. 'osc-branch-collectionid').
+            file_path: File path in the repo (e.g. 'products/.../collection.json').
+            file_content: The JSON/dict content to commit.
+            commit_message: Commit message.
+            pr_title: Title for the pull request.
+            pr_body: Body of the pull request.
+
+        Returns:
+            str: The URL of the created pull request.
+        """
+        try:
+            logger.info("Starting GitHub automation...")
+            self.github_automation.fork_repository()
+            self.github_automation.clone_repository()
+            self.github_automation.create_branch(branch_name)
+
+            # Add the file
+            self.github_automation.add_file(file_path, file_content)
+
+            # Commit and push
+            self.github_automation.commit_and_push(branch_name, commit_message)
+
+            # Create pull request
+            pr_url = self.github_automation.create_pull_request(
+                branch_name, pr_title, pr_body
+            )
+            logger.info(f"Pull request created at: {pr_url}")
+            return pr_url
+
+        finally:
+            # Always clean up local clone
+            self.github_automation.clean_up()
 
 
 class DatasetPublisher:
@@ -58,14 +129,14 @@ class DatasetPublisher:
         with fsspec.open(dataset_config_path, "r") as file:
             dataset_config = yaml.safe_load(file)
 
-        dataset_id = dataset_config.get("dataset-id")
-        collection_id = dataset_config.get("collection-id")
-        documentation_link = dataset_config.get("documentation-link")
-        access_link = dataset_config.get("access-link")
-        dataset_status = dataset_config.get("dataset-status")
-        osc_region = dataset_config.get("dataset-region")
-        dataset_theme = dataset_config.get("dataset-theme")
-        cf_params = dataset_config.get("cf-parameter")
+        dataset_id = dataset_config.get("dataset_id")
+        collection_id = dataset_config.get("collection_id")
+        documentation_link = dataset_config.get("documentation_link")
+        access_link = dataset_config.get("access_link")
+        dataset_status = dataset_config.get("dataset_status")
+        osc_region = dataset_config.get("osc_region")
+        osc_themes = dataset_config.get("osc_themes")
+        cf_params = dataset_config.get("cf_parameter")
 
         if not dataset_id or not collection_id:
             raise ValueError(
@@ -75,17 +146,20 @@ class DatasetPublisher:
 
         try:
             logger.info("Generating STAC collection...")
-            generator = OSCProductSTACGenerator(
+            generator = OSCDatasetSTACGenerator(
                 dataset_id=dataset_id,
                 collection_id=collection_id,
                 documentation_link=documentation_link,
                 access_link=access_link,
                 osc_status=dataset_status,
                 osc_region=osc_region,
-                osc_themes=dataset_theme,
+                osc_themes=osc_themes,
                 cf_params=cf_params,
             )
-            collection = generator.build_stac_collection()
+            # get variables from the datasets
+            variable_ids = generator.get_variable_ids()
+            # build STAC collection for the dataset
+            ds_collection = generator.build_dataset_stac_collection()
 
             file_path = f"products/{collection_id}/collection.json"
             logger.info("Automating GitHub tasks...")
@@ -93,13 +167,41 @@ class DatasetPublisher:
             self.github_automation.clone_repository()
             OSC_NEW_BRANCH_NAME = OSC_BRANCH_NAME + "-" + collection_id
             self.github_automation.create_branch(OSC_NEW_BRANCH_NAME)
-            self.github_automation.add_file(file_path, collection.to_dict())
+
+            for var_id in variable_ids:
+                var_file_path = f"variables/{var_id}/catalog.json"
+                if not self.github_automation.file_exists(var_file_path):
+                    logger.info(
+                        f"Variable catalog for {var_id} does not exist. Creating..."
+                    )
+                    var_metadata = generator.variables_metadata.get(var_id)
+                    var_catalog = generator.build_variable_catalog(var_metadata)
+                    self.github_automation.add_file(
+                        var_file_path, var_catalog.to_dict()
+                    )
+                else:
+                    logger.info(
+                        f"Variable catalog already exists for {var_id}. so add the "
+                        f"product as child link..."
+                    )
+                    full_path = (
+                        Path(self.github_automation.local_clone_dir) / var_file_path
+                    )
+                    self.github_automation.add_file(
+                        var_file_path,
+                        generator.update_existing_variable_catalog(
+                            full_path, var_id
+                        ).to_dict(),
+                    )
+
+            self.github_automation.add_file(file_path, ds_collection.to_dict())
+
             self.github_automation.commit_and_push(
                 OSC_NEW_BRANCH_NAME, f"Add new collection:{collection_id}"
             )
             pr_url = self.github_automation.create_pull_request(
                 OSC_NEW_BRANCH_NAME,
-                f"Add new collection",
+                f"Add new dataset collection",
                 "This PR adds a new collection to the repository.",
             )
 
