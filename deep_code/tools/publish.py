@@ -38,7 +38,7 @@ class BasePublisher:
         self.github_username = git_config.get("github-username")
         self.github_token = git_config.get("github-token")
         if not self.github_username or not self.github_token:
-            raise ValueError("GitHub credentials are missing in `.gitaccess` file.")
+            raise ValueError("GitHub credentials are missing in the `.gitaccess` file.")
 
         self.github_automation = GitHubAutomation(
             self.github_username, self.github_token, OSC_REPO_OWNER, OSC_REPO_NAME
@@ -110,7 +110,7 @@ class DatasetPublisher(BasePublisher):
         cf_params = dataset_config.get("cf_parameter")
 
         if not dataset_id or not collection_id:
-            raise ValueError("Dataset ID or Collection ID missing in config.")
+            raise ValueError("Dataset ID or Collection ID missing in the config.")
 
         logger.info("Generating STAC collection...")
 

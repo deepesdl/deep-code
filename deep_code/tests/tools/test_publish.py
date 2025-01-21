@@ -13,7 +13,7 @@ class TestDatasetPublisher:
         )()
 
         with pytest.raises(
-            ValueError, match="GitHub credentials are missing in `.gitaccess` file."
+            ValueError, match="GitHub credentials are missing in the `.gitaccess` file."
         ):
             DatasetPublisher()
 
@@ -34,7 +34,7 @@ class TestDatasetPublisher:
         publisher = DatasetPublisher()
 
         with pytest.raises(
-            ValueError, match="Dataset ID or Collection ID missing in config."
+            ValueError, match="Dataset ID or Collection ID missing in the config."
         ):
             publisher.publish_dataset("/path/to/dataset-config.yaml")
 
