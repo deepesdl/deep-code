@@ -90,3 +90,46 @@ cf_parameter:
 ```
 
 dataset-id has to be a valid dataset-id from `deep-esdl-public` s3 or your team bucket.
+
+### deep-code publish-workflow
+
+Publish a workflow/experiment to the EarthCODE open-science catalog.
+
+```commandline
+deep-code publish-workflow /path/to/workflow-config.yaml
+ ```
+#### workflow-config.yaml example
+
+```
+workflow_id: "4D Med hydrology cube generation"
+properties:
+  title: "Hydrology cube generation recipe"
+  description: "4D Med cube generation"
+  keywords:
+    - Earth Science
+  themes:
+      - Atmosphere
+      - Ocean
+      - Evaporation
+  license: proprietary
+  jupyter_kernel_info:
+    name: deepesdl-xcube-1.7.1
+    python_version: 3.11
+    env_file: https://git/env.yml
+links:
+  - rel: "documentation"
+    type: "application/json"
+    title: "4DMed Hydrology Cube Generation Recipe"
+    href: "https://github.com/deepesdl/cube-gen/tree/main/hydrology/README.md"
+  - rel: "jupyter-notebook"
+    type: "application/json"
+    title: "Workflow Jupyter Notebook"
+    href: "https://github.com/deepesdl/cube-gen/blob/main/hydrology/notebooks/reading_hydrology.ipynb"
+contact:
+  - name: Tejas Morbagal Harish
+    organization: Brockmann Consult GmbH
+    links:
+      - rel: "about"
+        type: "text/html"
+        href: "https://www.brockmann-consult.de/"
+```
