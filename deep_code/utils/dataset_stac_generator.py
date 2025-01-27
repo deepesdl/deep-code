@@ -182,11 +182,11 @@ class OscDatasetStacGenerator:
         """Extract metadata for a single variable."""
         long_name = variable_data.attrs.get("long_name")
         standard_name = variable_data.attrs.get("standard_name")
-        title = long_name or standard_name or variable_data.name
-        description = variable_data.attrs.get("description", "No variable description")
+        variable_id = standard_name or variable_data.name
+        description = variable_data.attrs.get("description", long_name)
         gcmd_keyword_url = variable_data.attrs.get("gcmd_keyword_url")
         return {
-            "variable_id": self._normalize_name(title),
+            "variable_id": self._normalize_name(variable_id),
             "description": description,
             "gcmd_keyword_url": gcmd_keyword_url,
         }
