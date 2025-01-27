@@ -7,7 +7,7 @@ import numpy as np
 from pystac import Collection
 from xarray import Dataset
 
-from deep_code.utils.dataset_stac_generator import OSCDatasetSTACGenerator
+from deep_code.utils.dataset_stac_generator import OscDatasetStacGenerator
 
 
 class TestOSCProductSTACGenerator(unittest.TestCase):
