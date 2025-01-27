@@ -15,7 +15,7 @@ from xcube.core.store import new_data_store
 from deep_code.utils.osc_extension import OscExtension
 
 
-class OSCDatasetSTACGenerator:
+class OscDatasetStacGenerator:
     """Generates OSC STAC Collections for a product from Zarr datasets.
 
     Args:
