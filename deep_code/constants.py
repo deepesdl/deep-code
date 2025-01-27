@@ -13,4 +13,4 @@ DEFAULT_THEME_SCHEME = (
     "https://gcmd.earthdata.nasa.gov/kms/concepts/concept_scheme/sciencekeywords"
 )
 OGC_API_RECORD_SPEC = "http://www.opengis.net/spec/ogcapi-records-1/1.0/req/record-core"
-WF_BRANCH_NAME = "add-new-workflow"
+WF_BRANCH_NAME = "add-new-workflow-from-deepesdl"
