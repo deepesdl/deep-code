@@ -25,7 +25,7 @@ logger = logging.getLogger(__name__)
 logging.basicConfig(level=logging.INFO)
 
 
-class BasePublisher:
+class GitHubPublisher:
     """
     Base class providing:
       - Reading .gitaccess for credentials
@@ -90,10 +90,14 @@ class BasePublisher:
             self.github_automation.clean_up()
 
 
-class DatasetPublisher(BasePublisher):
+class DatasetPublisher:
     """Publishes products (datasets) to the OSC GitHub repository.
     Inherits from BasePublisher for GitHub publishing logic.
     """
+
+    def __init__(self):
+        # Composition
+        self.gh_publisher = GitHubPublisher()
 
     def publish_dataset(self, dataset_config_path: str):
         """Publish a product collection to the specified GitHub repository."""
@@ -136,7 +140,7 @@ class DatasetPublisher(BasePublisher):
         # Add or update variable files
         for var_id in variable_ids:
             var_file_path = f"variables/{var_id}/catalog.json"
-            if not self.github_automation.file_exists(var_file_path):
+            if not self.gh_publisher.github_automation.file_exists(var_file_path):
                 logger.info(
                     f"Variable catalog for {var_id} does not exist. Creating..."
                 )
@@ -147,7 +151,10 @@ class DatasetPublisher(BasePublisher):
                 logger.info(
                     f"Variable catalog already exists for {var_id}, adding product link."
                 )
-                full_path = Path(self.github_automation.local_clone_dir) / var_file_path
+                full_path = (
+                    Path(self.gh_publisher.github_automation.local_clone_dir)
+                    / var_file_path
+                )
                 updated_catalog = generator.update_existing_variable_catalog(
                     full_path, var_id
                 )
@@ -160,7 +167,7 @@ class DatasetPublisher(BasePublisher):
         pr_body = "This PR adds a new dataset collection to the repository."
 
         # Publish all files in one go
-        pr_url = self.publish_files(
+        pr_url = self.gh_publisher.publish_files(
             branch_name=branch_name,
             file_dict=file_dict,
             commit_message=commit_message,
@@ -171,8 +178,11 @@ class DatasetPublisher(BasePublisher):
         logger.info(f"Pull request created: {pr_url}")
 
 
-class WorkflowPublisher(BasePublisher):
+class WorkflowPublisher:
     """Publishes workflows to the OSC GitHub repository."""
+
+    def __init__(self):
+        self.gh_publisher = GitHubPublisher()
 
     @staticmethod
     def _normalize_name(name: str | None) -> str | None:
@@ -212,7 +222,7 @@ class WorkflowPublisher(BasePublisher):
         pr_title = "Add new workflow"
         pr_body = "This PR adds a new workflow to the OSC repository."
 
-        pr_url = self.publish_files(
+        pr_url = self.gh_publisher.publish_files(
             branch_name=branch_name,
             file_dict=file_dict,
             commit_message=commit_message,
