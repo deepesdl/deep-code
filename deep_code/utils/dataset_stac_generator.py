@@ -4,18 +4,18 @@
 # Permissions are hereby granted under the terms of the MIT License:
 # https://opensource.org/licenses/MIT.
 
-import os
 import logging
+import os
 from datetime import datetime, timezone
 
 import pandas as pd
-from pystac import Collection, Extent, Link, SpatialExtent, TemporalExtent
+from pystac import Catalog, Collection, Extent, Link, SpatialExtent, TemporalExtent
 from xcube.core.store import new_data_store
 
 from deep_code.utils.osc_extension import OscExtension
 
 
-class OSCProductSTACGenerator:
+class OscDatasetStacGenerator:
     """Generates OSC STAC Collections for a product from Zarr datasets.
 
     Args:
@@ -53,6 +53,7 @@ class OSCProductSTACGenerator:
         self.cf_params = cf_params or {}
         self.logger = logging.getLogger(__name__)
         self.dataset = self._open_dataset()
+        self.variables_metadata = self.get_variables_metadata()
 
     def _open_dataset(self):
         """Open the dataset using a S3 store as a xarray Dataset."""
@@ -170,29 +171,6 @@ class OSCProductSTACGenerator:
     def _normalize_name(name: str | None) -> str | None:
         return name.replace(" ", "-").lower() if name else None
 
-    def _get_variables(self) -> list[str]:
-        """Extracts variable names or descriptions from the dataset.
-
-        Variables are prioritized based on their `long_name` or `standard_name`
-        attributes. If neither is available, the variable's key from
-        `dataset.data_vars.keys()` is used.
-
-        Returns:
-            A list of variable names or descriptions.
-        """
-        variables = []
-        for var_name, variable in self.dataset.data_vars.items():
-            long_name = self._normalize_name(variable.attrs.get("long_name"))
-            standard_name = self._normalize_name(variable.attrs.get("standard_name"))
-            if not long_name and not standard_name:
-                self.logger.error(
-                    f"Metadata missing for variable '{var_name}': 'long_name' and "
-                    f"'standard_name' attributes are not available."
-                )
-            # Prioritize 'long_name', fallback to 'standard_name', then use variable key
-            variables.append(long_name or standard_name or var_name)
-        return variables
-
     def _get_general_metadata(self) -> dict:
         return {
             "description": self.dataset.attrs.get(
@@ -200,36 +178,173 @@ class OSCProductSTACGenerator:
             )
         }
 
-    def _get_variable_metadata(self, var_name, var_data) -> dict:
-        """Extract metadata from a single variable's attributes.
+    def extract_metadata_for_variable(self, variable_data) -> dict:
+        """Extract metadata for a single variable."""
+        long_name = variable_data.attrs.get("long_name")
+        standard_name = variable_data.attrs.get("standard_name")
+        variable_id = standard_name or variable_data.name
+        description = variable_data.attrs.get("description", long_name)
+        gcmd_keyword_url = variable_data.attrs.get("gcmd_keyword_url")
+        return {
+            "variable_id": self._normalize_name(variable_id),
+            "description": description,
+            "gcmd_keyword_url": gcmd_keyword_url,
+        }
+
+    def get_variable_ids(self) -> list[str]:
+        """Get variable IDs for all variables in the dataset."""
+        return list(self.variables_metadata.keys())
+
+    def get_variables_metadata(self) -> dict[str, dict]:
+        """Extract metadata for all variables in the dataset."""
+        variables_metadata = {}
+        for var_name, variable in self.dataset.data_vars.items():
+            var_metadata = self.extract_metadata_for_variable(variable)
+            variables_metadata[var_metadata.get("variable_id")] = var_metadata
+        return variables_metadata
+
+    def _add_gcmd_link_to_var_catalog(
+        self, var_catalog: Catalog, var_metadata: dict
+    ) -> None:
+        """
+        Checks for a GCMD keyword URL in var_metadata, adds a 'via' link to the catalog
+        pointing to the GCMD Keyword Viewer.
 
         Args:
-            var_name: The raw variable name in the dataset.
-            var_data: An xarray DataArray containing variable data and attrs.
+            var_catalog: The PySTAC Catalog to which we want to add the link.
+            var_metadata: Dictionary containing metadata about the variable,
+                          including 'gcmd_keyword_url'.
+        """
+        gcmd_keyword_url = var_metadata.get("gcmd_keyword_url")
+        if not gcmd_keyword_url:
+            self.logger.debug(
+                f"No gcmd_keyword_url in var_metadata. Skipping adding GCMD link in "
+                f'the {var_metadata.get("variable_id")} catalog'
+            )
+            return
+        var_catalog.add_link(
+            Link(
+                rel="via",
+                target=gcmd_keyword_url,
+                title="Description",
+                media_type="text/html",
+            )
+        )
+        self.logger.info(
+            f'Added GCMD link for {var_metadata.get("variable_id")} '
+            f"catalog {gcmd_keyword_url}."
+        )
+
+    def build_variable_catalog(self, var_metadata) -> Catalog:
+        """Build an OSC STAC Catalog for the variables in the dataset.
 
         Returns:
-            A dict with 'id', 'title', and 'description'.
+            A pystac.Catalog object.
         """
-        long_name = var_data.attrs.get("long_name")
-        standard_name = var_data.attrs.get("standard_name")
-        title = long_name or standard_name or var_name
+        var_id = var_metadata.get("variable_id")
+        concepts = [{"id": theme} for theme in self.osc_themes]
 
-        normalized_title = self._normalize_name(title)
+        themes = [
+            {
+                "scheme": "https://github.com/stac-extensions/osc#theme",
+                "concepts": concepts,
+            }
+        ]
 
-        description = var_data.attrs.get("description", "No variable description")
+        now_iso = datetime.now(timezone.utc).isoformat()
 
-        return {"id": var_name, "title": normalized_title, "description": description}
+        # Create a PySTAC Catalog object
+        var_catalog = Catalog(
+            id=var_id,
+            description=var_metadata.get("description"),
+            title=var_id,
+            stac_extensions=[
+                "https://stac-extensions.github.io/themes/v1.0.0/schema.json"
+            ],
+        )
 
-    def build_stac_collection(self) -> Collection:
-        """
-        Build an OSC STAC Collection for the dataset.
+        var_catalog.stac_version = "1.0.0"
+        var_catalog.extra_fields["updated"] = now_iso
+        var_catalog.keywords = []
 
-        :return: A pystac.Collection object.
+        # Add the 'themes' block (from your example JSON)
+        var_catalog.extra_fields["themes"] = themes
+
+        var_catalog.remove_links("root")
+        # Add relevant links
+        var_catalog.add_link(
+            Link(
+                rel="root",
+                target="../../catalog.json",
+                media_type="application/json",
+                title="Open Science Catalog",
+            )
+        )
+
+        # 'child' link: points to the product (or one of its collections) using this variable
+        var_catalog.add_link(
+            Link(
+                rel="child",
+                target=f"../../products/{self.collection_id}/collection.json",
+                media_type="application/json",
+                title=self.collection_id,
+            )
+        )
+
+        # 'parent' link: back up to the variables overview
+        var_catalog.add_link(
+            Link(
+                rel="parent",
+                target="../catalog.json",
+                media_type="application/json",
+                title="Variables",
+            )
+        )
+        # Add gcmd link for the variable definition
+        self._add_gcmd_link_to_var_catalog(var_catalog, var_metadata)
+
+        self_href = (
+            f"https://esa-earthcode.github.io/open-science-catalog-metadata/variables"
+            f"/{var_id}/catalog.json"
+        )
+        # 'self' link: the direct URL where this JSON is hosted
+        var_catalog.set_self_href(self_href)
+
+        return var_catalog
+
+    def update_existing_variable_catalog(self, var_file_path, var_id) -> Catalog:
+        existing_catalog = Catalog.from_file(var_file_path)
+        now_iso = datetime.now(timezone.utc).isoformat()
+        existing_catalog.extra_fields["updated"] = now_iso
+
+        # add 'child' link as the product
+        existing_catalog.add_link(
+            Link(
+                rel="child",
+                target=f"../../products/{self.collection_id}/collection.json",
+                media_type="application/json",
+                title=self.collection_id,
+            )
+        )
+        self_href = (
+            f"https://esa-earthcode.github.io/open-science-catalog-metadata/variables"
+            f"/{var_id}/catalog.json"
+        )
+        # 'self' link: the direct URL where this JSON is hosted
+        existing_catalog.set_self_href(self_href)
+
+        return existing_catalog
+
+    def build_dataset_stac_collection(self) -> Collection:
+        """Build an OSC STAC Collection for the dataset.
+
+        Returns:
+            A pystac.Collection object.
         """
         try:
             spatial_extent = self._get_spatial_extent()
             temporal_extent = self._get_temporal_extent()
-            variables = self._get_variables()
+            variables = self.get_variable_ids()
             general_metadata = self._get_general_metadata()
         except ValueError as e:
             raise ValueError(f"Metadata extraction failed: {e}")
@@ -260,6 +375,7 @@ class OSCProductSTACGenerator:
         now_iso = datetime.now(timezone.utc).isoformat()
         collection.extra_fields["created"] = now_iso
         collection.extra_fields["updated"] = now_iso
+        collection.title = self.collection_id
 
         # Remove any existing root link and re-add it properly
         collection.remove_links("root")
@@ -284,6 +400,16 @@ class OSCProductSTACGenerator:
                 title="Products",
             )
         )
+        # Add variables ref
+        for var in variables:
+            collection.add_link(
+                Link(
+                    rel="related",
+                    target=f"../../varibales/{var}/catalog.json",
+                    media_type="application/json",
+                    title="Variable: " + var,
+                )
+            )
 
         self_href = (
             "https://esa-earthcode.github.io/"

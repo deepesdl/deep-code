@@ -26,7 +26,8 @@ dependencies = [
     "pandas",
     "pystac",
     "pyyaml",
-    "xcube-core"
+    "xcube-core",
+    "xrlint",
 ]
 
 [tool.setuptools.dynamic]

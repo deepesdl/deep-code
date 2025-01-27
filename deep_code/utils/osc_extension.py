@@ -7,10 +7,10 @@
 from typing import Literal
 
 import pystac
-from pystac import SpatialExtent, TemporalExtent, Extent
-from pystac.extensions.base import PropertiesExtension, ExtensionManagementMixin
+from pystac import Extent, SpatialExtent, TemporalExtent
+from pystac.extensions.base import ExtensionManagementMixin, PropertiesExtension
 
-from deep_code.constants import OSC_SCHEMA_URI, CF_SCHEMA_URI
+from deep_code.constants import CF_SCHEMA_URI, OSC_SCHEMA_URI
 
 
 class OscExtension(

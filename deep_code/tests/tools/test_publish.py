@@ -1,5 +1,6 @@
+from unittest.mock import MagicMock, mock_open, patch
+
 import pytest
-from unittest.mock import patch, MagicMock, mock_open
 
 from deep_code.tools.publish import DatasetPublisher
 
@@ -33,9 +34,7 @@ class TestDatasetPublisher:
         publisher = DatasetPublisher()
 
         with pytest.raises(
-            ValueError,
-            match="Dataset ID or Collection ID is missing in the "
-            "dataset-config.yaml file.",
+            ValueError, match="Dataset ID or Collection ID missing in the config."
         ):
             publisher.publish_dataset("/path/to/dataset-config.yaml")
 
@@ -54,22 +53,21 @@ class TestDatasetPublisher:
         mock_subprocess_run,
         mock_chdir,
     ):
-
         #  Mock the YAML reads
         git_yaml_content = """
-          github-username: test-user
-          github-token: test-token
-          """
+             github-username: test-user
+             github-token: test-token
+             """
         dataset_yaml_content = """
-          dataset-id: test-dataset
-          collection-id: test-collection
-          documentation-link: http://example.com/doc
-          access-link: http://example.com/access
-          dataset-status: ongoing
-          dataset-region: Global
-          dataset-theme: ["climate"]
-          cf-parameter: []
-          """
+             dataset_id: test-dataset
+             collection_id: test-collection
+             documentation_link: http://example.com/doc
+             access_link: http://example.com/access
+             dataset_status: ongoing
+             dataset_region: Global
+             osc_theme: ["climate"]
+             cf_parameter: []
+             """
         mock_fsspec_open.side_effect = [
             mock_open(read_data=git_yaml_content)(),
             mock_open(read_data=dataset_yaml_content)(),
@@ -102,8 +100,8 @@ class TestDatasetPublisher:
             "links": [],
             "stac_version": "1.0.0",
         }
-        with patch("deep_code.tools.publish.OSCProductSTACGenerator") as mock_generator:
-            mock_generator.return_value.build_stac_collection.return_value = (
+        with patch("deep_code.tools.publish.OscDatasetStacGenerator") as mock_generator:
+            mock_generator.return_value.build_dataset_stac_collection.return_value = (
                 mock_collection
             )
 
@@ -111,7 +109,7 @@ class TestDatasetPublisher:
             publisher = DatasetPublisher()
             publisher.publish_dataset("/fake/path/to/dataset-config.yaml")
 
-        # 6Assert that we called git clone with /tmp/temp_repo
+        # Assert that we called git clone with /tmp/temp_repo
         # Because expanduser("~") is now patched to /tmp, the actual path is /tmp/temp_repo
         auth_url = "https://test-user:test-token@github.com/test-user/open-science-catalog-metadata-testing.git"
         mock_subprocess_run.assert_any_call(

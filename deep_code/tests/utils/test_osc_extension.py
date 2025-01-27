@@ -1,5 +1,7 @@
 import unittest
+
 from pystac import Collection, Extent, SpatialExtent, TemporalExtent
+
 from deep_code.utils.osc_extension import OscExtension
 
 
