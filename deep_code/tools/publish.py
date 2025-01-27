@@ -16,7 +16,7 @@ from deep_code.constants import (
     OSC_REPO_OWNER,
     WF_BRANCH_NAME,
 )
-from deep_code.utils.dataset_stac_generator import OSCDatasetSTACGenerator
+from deep_code.utils.dataset_stac_generator import OscDatasetStacGenerator
 from deep_code.utils.github_automation import GitHubAutomation
 from deep_code.utils.ogc_api_record import OgcRecord
 from deep_code.utils.ogc_record_generator import OSCWorkflowOGCApiRecordGenerator
@@ -114,7 +114,7 @@ class DatasetPublisher(BasePublisher):
 
         logger.info("Generating STAC collection...")
 
-        generator = OSCDatasetSTACGenerator(
+        generator = OscDatasetStacGenerator(
             dataset_id=dataset_id,
             collection_id=collection_id,
             documentation_link=documentation_link,

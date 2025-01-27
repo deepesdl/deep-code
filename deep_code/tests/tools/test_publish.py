@@ -100,7 +100,7 @@ class TestDatasetPublisher:
             "links": [],
             "stac_version": "1.0.0",
         }
-        with patch("deep_code.tools.publish.OSCDatasetSTACGenerator") as mock_generator:
+        with patch("deep_code.tools.publish.OscDatasetStacGenerator") as mock_generator:
             mock_generator.return_value.build_dataset_stac_collection.return_value = (
                 mock_collection
             )
