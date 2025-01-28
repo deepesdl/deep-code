@@ -10,11 +10,13 @@ import pystac
 from pystac import Extent, SpatialExtent, TemporalExtent
 from pystac.extensions.base import ExtensionManagementMixin, PropertiesExtension
 
-from deep_code.constants import CF_SCHEMA_URI, OSC_SCHEMA_URI
+from deep_code.constants import CF_SCHEMA_URI, OSC_SCHEMA_URI, OGC_API_RECORD_SPEC
+from deep_code.utils.ogc_api_record import OgcRecord
 
 
 class OscExtension(
-    PropertiesExtension, ExtensionManagementMixin[pystac.Item | pystac.Collection]
+    PropertiesExtension, ExtensionManagementMixin[pystac.Item | pystac.Collection],
+    OgcRecord
 ):
     """Handles the OSC extension for STAC Items and Collections.
 
@@ -24,7 +26,7 @@ class OscExtension(
 
     name: Literal["osc"] = "osc"
 
-    def __init__(self, obj: pystac.Item | pystac.Collection):
+    def __init__(self, obj: pystac.Item | pystac.Collection | OgcRecord):
         if isinstance(obj, pystac.Collection):
             self.properties = obj.extra_fields
         else:
@@ -150,7 +152,7 @@ class OscExtension(
 
     @classmethod
     def get_schema_uri(cls) -> list[str]:
-        return [OSC_SCHEMA_URI, CF_SCHEMA_URI]
+        return [OSC_SCHEMA_URI, CF_SCHEMA_URI, OGC_API_RECORD_SPEC ]
 
     @classmethod
     def ext(
@@ -177,7 +179,7 @@ class OscExtension(
             return schema_uris in obj.stac_extensions
 
     @classmethod
-    def add_to(cls, obj: pystac.Item | pystac.Collection) -> "OscExtension":
+    def add_to(cls, obj: pystac.Item | pystac.Collection | OgcRecord) -> "OscExtension":
         """Adds the OSC and CF extensions to the object's extensions."""
         schema_uris = cls.get_schema_uri()
         if isinstance(schema_uris, list):  # Handle list of URIs

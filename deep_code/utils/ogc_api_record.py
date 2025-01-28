@@ -80,7 +80,7 @@ class OgcRecord(MappingConstructible["OgcRecord"], JsonSerializable):
         links: list[dict],
         linkTemplates: list = [],
         conformsTo: list[str] = None,
-        geometry: Optional[Any] = None,
+        geometry: Optional[Any] = None
     ):
         if conformsTo is None:
             conformsTo = [OGC_API_RECORD_SPEC]
@@ -92,3 +92,5 @@ class OgcRecord(MappingConstructible["OgcRecord"], JsonSerializable):
         self.properties = properties
         self.linkTemplates = linkTemplates
         self.links = links
+
+

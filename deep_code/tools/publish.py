@@ -20,6 +20,7 @@ from deep_code.utils.dataset_stac_generator import OscDatasetStacGenerator
 from deep_code.utils.github_automation import GitHubAutomation
 from deep_code.utils.ogc_api_record import OgcRecord
 from deep_code.utils.ogc_record_generator import OSCWorkflowOGCApiRecordGenerator
+from deep_code.utils.osc_extension import OscExtension
 
 logger = logging.getLogger(__name__)
 logging.basicConfig(level=logging.INFO)
@@ -212,15 +213,24 @@ class WorkflowPublisher:
             links=links,
         )
 
-        file_path = f"workflow/{workflow_id}/collection.json"
+        # Add OSC extension metadata
+        osc_extension = OscExtension.add_to(ogc_record)
+        osc_extension.osc_project = "deep-earth-system-data-lab"
+        osc_extension.osc_type = "workflow"
+        osc_extension.osc_status = workflow_config.get("osc_status", "ongoing")
+        osc_extension.osc_region = workflow_config.get("osc_region", "")
+        osc_extension.osc_themes = workflow_config.get("osc_themes", [])
+        osc_extension.osc_variables = workflow_config.get("osc_variables", [])
+
+        file_path = f"processes/{workflow_id}/item.json"
 
         # Prepare the single file dict
         file_dict = {file_path: ogc_record.to_dict()}
 
         branch_name = f"{WF_BRANCH_NAME}-{workflow_id}"
         commit_message = f"Add new workflow: {workflow_id}"
-        pr_title = "Add new workflow"
-        pr_body = "This PR adds a new workflow to the OSC repository."
+        pr_title = f"Add new workflow: {workflow_id}"
+        pr_body = f"This PR adds a new workflow {workflow_id} to the OSC repository."
 
         pr_url = self.gh_publisher.publish_files(
             branch_name=branch_name,
