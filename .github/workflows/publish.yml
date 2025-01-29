@@ -38,7 +38,7 @@ jobs:
   PyPi-Deploy:
     name: Publish Python Package to PyPI
     runs-on: ubuntu-latest
-    needs: python-tests
+    needs: unittest
 
     steps:
     - uses: actions/checkout@v4
