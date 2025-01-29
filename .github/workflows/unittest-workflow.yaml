@@ -6,21 +6,24 @@ on:
     types: [published]
 
 jobs:
-  unittest:
+  unit-tests:
     runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        python-version: [ "3.10", "3.11", "3.12", "3.13" ]
+
     steps:
-      - name: checkout deep-code
-        uses: actions/checkout@v4
+      - uses: actions/checkout@v3
 
-      - name: Set up MicroMamba
-        uses: mamba-org/setup-micromamba@v1
+      - name: Set up Python ${{ matrix.python-version }}
+        uses: actions/setup-python@v3
         with:
-          environment-file: environment.yml
+          python-version: ${{ matrix.python-version }}
 
-      - name: Install deep-code in editable mode
-        shell: bash -l {0}
+      - name: Install dependencies
         run: |
-          cd /home/runner/work/deep-code/deep-code
+          python -m pip install --upgrade pip
           pip install .[dev]
 
       - name: Lint with ruff
@@ -30,11 +33,13 @@ jobs:
       - name: Run unit tests
         shell: bash -l {0}
         run: |
-          cd /home/runner/work/deep-code/deep-code
           pytest --cov=deep_code --cov-report=xml
 
       - name: Upload coverage reports to Codecov
         uses: codecov/codecov-action@v5
         with:
+          fail_ci_if_error: true
+          verbose: true
           token: ${{ secrets.CODECOV_TOKEN }}
           slug: deepesdl/deep-code
+
