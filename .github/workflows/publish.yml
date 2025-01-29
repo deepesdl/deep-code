@@ -21,7 +21,7 @@ jobs:
         shell: bash -l {0}
         run: |
           cd /home/runner/work/deep-code/deep-code
-          pip install .[dev]
+          pip install .
 
       - name: Lint with ruff
         run: |
