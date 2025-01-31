@@ -56,6 +56,9 @@ pytest --cov-report html --cov=deep-code
 providing different utility functions.
 Use the --help option with these subcommands to get more details on usage.
 
+The CLI retrieves the Git username and personal access token from a hidden file named .gitaccess. Ensure this file is located in the same directory where you execute the CLI
+command.
+
 ###  deep-code publish-product
 
 Publish a dataset which is a result of an experiment to the EarthCODE 
