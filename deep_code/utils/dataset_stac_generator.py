@@ -360,7 +360,7 @@ class OscDatasetStacGenerator:
             var_catalog.add_link(
                 Link(
                     rel="related",
-                    target="../../themes/oceans/catalog.json",
+                    target=f"../../themes/{theme}/catalog.json",
                     media_type="application/json",
                     title=f"Theme: {self.format_string(theme)}",
                 )
@@ -376,6 +376,16 @@ class OscDatasetStacGenerator:
                 title=self.collection_id,
             )
         )
+        # add themes to deepesdl
+        for theme in self.osc_themes:
+            deepesdl_collection.add_link(
+                Link(
+                    rel="related",
+                    target=f"../../themes/cryosphere/catalog.json",
+                    media_type="application/json",
+                    title=f"Theme: {self.format_string(theme)}"
+                )
+            )
         deepesdl_collection.set_self_href(DEEPESDL_COLLECTION_SELF_HREF)
         return deepesdl_collection
 
