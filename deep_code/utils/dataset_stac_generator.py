@@ -12,7 +12,8 @@ import pandas as pd
 from pystac import Catalog, Collection, Extent, Link, SpatialExtent, TemporalExtent
 from xcube.core.store import new_data_store
 
-from deep_code.constants import OSC_THEME_SCHEME
+from deep_code.constants import OSC_THEME_SCHEME, VARIABLE_BASE_CATALOG_SELF_HREF, \
+    PRODUCT_BASE_CATALOG_SELF_HREF
 from deep_code.utils.osc_extension import OscExtension
 from deep_code.utils.ogc_api_record import Theme, ThemeConcept
 
@@ -195,7 +196,9 @@ class OscDatasetStacGenerator:
 
     def get_variable_ids(self) -> list[str]:
         """Get variable IDs for all variables in the dataset."""
-        return list(self.variables_metadata.keys())
+        variable_ids = list(self.variables_metadata.keys())
+        #  Remove 'crs' and 'spatial_ref' from the list if they exist
+        return [var_id for var_id in variable_ids if var_id not in ["crs", "spatial_ref"]]
 
     def get_variables_metadata(self) -> dict[str, dict]:
         """Extract metadata for all variables in the dataset."""
@@ -327,6 +330,8 @@ class OscDatasetStacGenerator:
                 title=self.collection_id,
             )
         )
+        # 'self' link: the direct URL where this JSON is hosted
+        product_base_catalog.set_self_href(PRODUCT_BASE_CATALOG_SELF_HREF)
         return product_base_catalog
 
     def update_variable_base_catalog(self, variable_base_catalog_path, var_id) -> (
@@ -336,11 +341,13 @@ class OscDatasetStacGenerator:
         variable_base_catalog.add_link(
             Link(
                 rel="child",
-                target=f"./{var_id}/collection.json",
+                target=f"./{var_id}/catalog.json",
                 media_type="application/json",
                 title=self.collection_id,
             )
         )
+        # 'self' link: the direct URL where this JSON is hosted
+        variable_base_catalog.set_self_href(VARIABLE_BASE_CATALOG_SELF_HREF)
         return variable_base_catalog
 
     def update_deepesdl_collection(self, deepesdl_collection_full_path):
