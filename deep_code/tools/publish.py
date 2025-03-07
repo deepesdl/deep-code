@@ -144,9 +144,9 @@ class DatasetPublisher:
         )
         # Add or update variable files
         for var_id in variable_ids:
-            if var_id in ["crs", "spatial_ref"]:
-                logger.info(f"Skipping CRS variable: {var_id}")
-                continue
+            # if var_id in ["crs", "spatial_ref"]:
+            #     logger.info(f"Skipping CRS variable: {var_id}")
+            #     continue
             var_file_path = f"variables/{var_id}/catalog.json"
             if not self.gh_publisher.github_automation.file_exists(var_file_path):
                 logger.info(
@@ -155,13 +155,6 @@ class DatasetPublisher:
                 var_metadata = generator.variables_metadata.get(var_id)
                 var_catalog = generator.build_variable_catalog(var_metadata)
                 file_dict[var_file_path] = var_catalog.to_dict()
-                logger.info(
-                    f"Add {var_id} child link to variable base catalog"
-                )
-                updated_var_base_catalog = generator.update_variable_base_catalog(
-                    variable_catalog_full_path, var_id
-                )
-                file_dict[variable_base_catalog_path] = updated_var_base_catalog.to_dict()
             else:
                 logger.info(
                     f"Variable catalog already exists for {var_id}, adding product link."
@@ -174,7 +167,17 @@ class DatasetPublisher:
                     full_path, var_id
                 )
                 file_dict[var_file_path] = updated_catalog.to_dict()
+                # logger.info(
+                #     f"Add {var_id} child link to variable base catalog"
+                # )
+                # file_dict[
+                #     variable_base_catalog_path] = generator.update_variable_base_catalog(
+                #     variable_catalog_full_path, var_id).to_dict()
 
+
+        file_dict[variable_base_catalog_path] = generator.update_variable_base_catalog(
+            variable_catalog_full_path, variable_ids
+        ).to_dict()
         """Link product to base product catalog"""
         product_catalog_path = f"products/catalog.json"
         full_path = (
@@ -267,7 +270,3 @@ class WorkflowPublisher:
 
         logger.info(f"Pull request created: {pr_url}")
 
-if __name__ == '__main__':
-    ds_p = DatasetPublisher()
-    ds_p.publish_dataset("/home/tejas/bc/projects/deepesdl/deep-code/dataset-config"
-                         ".yaml")

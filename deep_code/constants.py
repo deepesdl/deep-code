@@ -17,4 +17,6 @@ DEFAULT_THEME_SCHEME = (
 OGC_API_RECORD_SPEC = "http://www.opengis.net/spec/ogcapi-records-1/1.0/req/record-core"
 WF_BRANCH_NAME = "add-new-workflow-from-deepesdl"
 VARIABLE_BASE_CATALOG_SELF_HREF = "https://esa-earthcode.github.io/open-science-catalog-metadata/variables/catalog.json"
-PRODUCT_BASE_CATALOG_SELF_HREF = ("https://esa-earthcode.github.io/open-science-catalog-metadata/products/catalog.json")
+PRODUCT_BASE_CATALOG_SELF_HREF = "https://esa-earthcode.github.io/open-science-catalog-metadata/products/catalog.json"
+DEEPESDL_COLLECTION_SELF_HREF = ("https://esa-earthcode.github.io/open-science-catalog"
+                          "-metadatprojects/deepesdl/collection.json")
