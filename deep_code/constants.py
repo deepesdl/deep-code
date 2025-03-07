@@ -4,8 +4,10 @@
 # Permissions are hereby granted under the terms of the MIT License:
 # https://opensource.org/licenses/MIT.
 
-OSC_SCHEMA_URI = "https://stac-extensions.github.io/osc/v1.0.0-rc.3/schema.json"
+OSC_SCHEMA_URI = "https://stac-extensions.github.io/osc/v1.0.0/schema.json"
 CF_SCHEMA_URI = "https://stac-extensions.github.io/cf/v0.2.0/schema.json"
+THEMES_SCHEMA_URI = "https://stac-extensions.github.io/themes/v1.0.0/schema.json"
+OSC_THEME_SCHEME = "https://github.com/stac-extensions/osc#theme"
 OSC_REPO_OWNER = "ESA-EarthCODE"
 OSC_REPO_NAME = "open-science-catalog-metadata-testing"
 OSC_BRANCH_NAME = "add-new-collection"

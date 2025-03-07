@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-
+import json
 # Copyright (c) 2025 by Brockmann Consult GmbH
 # Permissions are hereby granted under the terms of the MIT License:
 # https://opensource.org/licenses/MIT.
@@ -12,7 +12,9 @@ import pandas as pd
 from pystac import Catalog, Collection, Extent, Link, SpatialExtent, TemporalExtent
 from xcube.core.store import new_data_store
 
+from deep_code.constants import OSC_THEME_SCHEME
 from deep_code.utils.osc_extension import OscExtension
+from deep_code.utils.ogc_api_record import Theme, ThemeConcept
 
 
 class OscDatasetStacGenerator:
@@ -218,10 +220,12 @@ class OscDatasetStacGenerator:
         gcmd_keyword_url = var_metadata.get("gcmd_keyword_url")
         if not gcmd_keyword_url:
             self.logger.debug(
-                f"No gcmd_keyword_url in var_metadata. Skipping adding GCMD link in "
-                f'the {var_metadata.get("variable_id")} catalog'
+                f"No gcmd_keyword_url in var_metadata. Please input GCMD link "
+                f"for the {var_metadata.get("variable_id")} catalog"
             )
-            return
+            gcmd_keyword_url = input(
+                f"Enter GCMD keyword URL or a similar url for"
+                f" {var_metadata.get("variable_id")}: ").strip()
         var_catalog.add_link(
             Link(
                 rel="via",
@@ -312,6 +316,45 @@ class OscDatasetStacGenerator:
 
         return var_catalog
 
+    def update_product_base_catalog(self, product_catalog_path) -> Catalog:
+        """Link product to base product catalog"""
+        product_base_catalog = Catalog.from_file(product_catalog_path)
+        product_base_catalog.add_link(
+            Link(
+                rel="child",
+                target=f"./{self.collection_id}/collection.json",
+                media_type="application/json",
+                title=self.collection_id,
+            )
+        )
+        return product_base_catalog
+
+    def update_variable_base_catalog(self, variable_base_catalog_path, var_id) -> (
+            Catalog):
+        """Link product to base product catalog"""
+        variable_base_catalog = Catalog.from_file(variable_base_catalog_path)
+        variable_base_catalog.add_link(
+            Link(
+                rel="child",
+                target=f"./{var_id}/collection.json",
+                media_type="application/json",
+                title=self.collection_id,
+            )
+        )
+        return variable_base_catalog
+
+    def update_deepesdl_collection(self, deepesdl_collection_full_path):
+        deepesdl_collection = Collection.from_file(deepesdl_collection_full_path)
+        deepesdl_collection.add_link(
+            Link(
+                rel="child",
+                target=f"../../products/{self.collection_id}/collection.json",
+                media_type="application/json",
+                title=self.collection_id,
+            )
+        )
+        return deepesdl_collection
+
     def update_existing_variable_catalog(self, var_file_path, var_id) -> Catalog:
         existing_catalog = Catalog.from_file(var_file_path)
         now_iso = datetime.now(timezone.utc).isoformat()
@@ -334,6 +377,25 @@ class OscDatasetStacGenerator:
         existing_catalog.set_self_href(self_href)
 
         return existing_catalog
+
+    @staticmethod
+    def format_string(s):
+        return s.capitalize()
+
+    @staticmethod
+    def build_theme(osc_themes: list[str]) -> Theme:
+        """Convert each string into a ThemeConcept
+        """
+        concepts = [ThemeConcept(id=theme_str) for theme_str in osc_themes]
+        return Theme(concepts=concepts, scheme=OSC_THEME_SCHEME)
+
+    def build_theme_links(self) -> Link:
+        return Link(
+            rel="related",
+            target="../../themes/catalog.json",
+            media_type="application/json",
+            title="Theme: Land"
+        )
 
     def build_dataset_stac_collection(self) -> Collection:
         """Build an OSC STAC Collection for the dataset.
@@ -363,7 +425,6 @@ class OscDatasetStacGenerator:
         osc_extension.osc_type = "product"
         osc_extension.osc_status = self.osc_status
         osc_extension.osc_region = self.osc_region
-        osc_extension.osc_themes = self.osc_themes
         osc_extension.osc_variables = variables
         osc_extension.osc_missions = self.osc_missions
         if self.cf_params:
@@ -400,12 +461,13 @@ class OscDatasetStacGenerator:
                 title="Products",
             )
         )
+
         # Add variables ref
         for var in variables:
             collection.add_link(
                 Link(
                     rel="related",
-                    target=f"../../varibales/{var}/catalog.json",
+                    target=f"../../variables/{var}/catalog.json",
                     media_type="application/json",
                     title="Variable: " + var,
                 )
@@ -416,6 +478,31 @@ class OscDatasetStacGenerator:
             "open-science-catalog-metadata/products/deepesdl/collection.json"
         )
         collection.set_self_href(self_href)
+
+        # align with themes instead of osc:themes
+        if self.osc_themes:
+            theme_obj = self.build_theme(self.osc_themes)
+            collection.extra_fields["themes"] = [theme_obj]
+
+            for theme in self.osc_themes:
+                formated_theme = self.format_string(theme)
+                collection.add_link(
+                    Link(
+                        rel="related",
+                        target=f"../../themes/{theme}/catalog.json",
+                        media_type="application/json",
+                        title=f"Theme: {formated_theme}",
+                    )
+                )
+
+        collection.add_link(
+            Link(
+                rel="related",
+                target=f"../../projects/deep-earth-system-data-lab/collection.json",
+                media_type="application/json",
+                title=f"Project: DeepESDL"
+            )
+        )
 
         # Validate OSC extension fields
         try:
