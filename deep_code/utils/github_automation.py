@@ -50,15 +50,15 @@ class GitHubAutomation:
             subprocess.run(
                 ["git", "clone", self.fork_repo_url, self.local_clone_dir], check=True
             )
-            os.chdir(self.local_clone_dir)
+            # os.chdir(self.local_clone_dir)
         except subprocess.CalledProcessError as e:
             raise RuntimeError(f"Failed to clone repository: {e}")
 
-    @staticmethod
-    def create_branch(branch_name: str):
+    def create_branch(self, branch_name: str):
         """Create a new branch in the local repository."""
         logging.info(f"Creating new branch: {branch_name}...")
         try:
+            os.chdir(self.local_clone_dir)
             subprocess.run(["git", "checkout", "-b", branch_name], check=True)
         except subprocess.CalledProcessError as e:
             raise RuntimeError(f"Failed Creating branch: '{branch_name}': {e}")
@@ -66,22 +66,35 @@ class GitHubAutomation:
     def add_file(self, file_path: str, content):
         """Add a new file to the local repository."""
         logging.info(f"Adding new file: {file_path}...")
+        os.chdir(self.local_clone_dir) # Ensure we are in the Git repository
         full_path = Path(self.local_clone_dir) / file_path
         full_path.parent.mkdir(parents=True, exist_ok=True)
+
+        # Ensure content is serializable
+        if hasattr(content, "to_dict"):
+            content = content.to_dict()
+        if not isinstance(content, (dict, list, str, int, float, bool, type(None))):
+            raise TypeError(f"Cannot serialize content of type {type(content)}")
+
+        # Serialize to JSON
+        try:
+            json_content = json.dumps(content, indent=2, default=self.serialize)
+        except TypeError as e:
+            raise RuntimeError(f"JSON serialization failed: {e}")
+
         with open(full_path, "w") as f:
-            # Convert content to dictionary if it's a PySTAC object
-            if hasattr(content, "to_dict"):
-                content = content.to_dict()
-            f.write(json.dumps(content, indent=2))
+            f.write(json_content)
+
+        # Git add the file
         try:
             subprocess.run(["git", "add", str(full_path)], check=True)
         except subprocess.CalledProcessError as e:
             raise RuntimeError(f"Failed to add file '{file_path}': {e}")
 
-    @staticmethod
-    def commit_and_push(branch_name: str, commit_message: str):
+    def commit_and_push(self, branch_name: str, commit_message: str):
         """Commit changes and push to the forked repository."""
         logging.info("Committing and pushing changes...")
+        os.chdir(self.local_clone_dir)
         try:
             subprocess.run(["git", "commit", "-m", commit_message], check=True)
             subprocess.run(["git", "push", "-u", "origin", branch_name], check=True)
@@ -93,6 +106,7 @@ class GitHubAutomation:
     ):
         """Create a pull request from the forked repository to the base repository."""
         logging.info("Creating a pull request...")
+        os.chdir(self.local_clone_dir)
         url = f"https://api.github.com/repos/{self.repo_owner}/{self.repo_name}/pulls"
         headers = {"Authorization": f"token {self.token}"}
         data = {
@@ -120,3 +134,12 @@ class GitHubAutomation:
         exists = os.path.isfile(full_path)
         logging.debug(f"Checking existence of {full_path}: {exists}")
         return exists
+
+    # Check and convert any non-serializable objects
+    def serialize(self, obj):
+        if isinstance(obj, set):
+            return list(obj)  # Convert sets to lists
+        if hasattr(obj, "__dict__"):
+            return obj.__dict__  # Convert objects with attributes to dicts
+        raise TypeError(
+            f"Object of type {type(obj).__name__} is not JSON serializable")
