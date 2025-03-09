@@ -10,6 +10,7 @@ from datetime import datetime
 
 import fsspec
 import yaml
+from pystac import Catalog
 
 from deep_code.constants import (
     OSC_BRANCH_NAME,
@@ -99,6 +100,36 @@ class DatasetPublisher:
         # Composition
         self.gh_publisher = GitHubPublisher()
 
+    @staticmethod
+    def clean_title(title: str) -> str:
+        """Clean up titles by replacing Unicode escape sequences with standard characters."""
+        title = title.replace('\u00a0',
+                              ' ')  # Replace non-breaking space with normal space
+        title = title.replace('\u00b0',
+                              '°')  # Replace unicode degree symbol with actual degree symbol
+        return title
+
+    def clean_catalog_titles(self, catalog: Catalog):
+        """Recursively clean all titles in the catalog."""
+        # Clean title for the catalog itself
+        if isinstance(catalog.title, str):
+            catalog.title = self.clean_title(catalog.title)
+
+        # Clean titles in all links of the catalog
+        for link in catalog.links:
+            if isinstance(link.title, str):
+                link.title = self.clean_title(link.title)
+
+        for link in catalog.links:
+            if link.rel == 'child':
+                try:
+                    # If the link points to another catalog or collection, clean it recursively
+                    child_catalog = Catalog.from_file(link.href)
+                    self.clean_catalog_titles(child_catalog)
+                except Exception as e:
+                    # If the link doesn't point to a valid catalog file, skip it
+                    pass
+
     def publish_dataset(self, dataset_config_path: str):
         """Publish a product collection to the specified GitHub repository."""
         with fsspec.open(dataset_config_path, "r") as file:
@@ -185,6 +216,8 @@ class DatasetPublisher:
                 / product_catalog_path
         )
         updated_product_base_catalog = generator.update_product_base_catalog(full_path)
+        # clean special characters
+        self.clean_catalog_titles(updated_product_base_catalog)
         file_dict[product_catalog_path] = updated_product_base_catalog.to_dict()
 
         #Link product to project catalog

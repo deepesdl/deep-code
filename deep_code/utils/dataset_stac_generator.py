@@ -322,21 +322,22 @@ class OscDatasetStacGenerator:
         return var_catalog
 
     def update_product_base_catalog(self, product_catalog_path) -> Catalog:
-        """Link product to base product catalog"""
-        product_base_catalog = Catalog.from_file(product_catalog_path)
-        product_base_catalog.add_link(
-            Link(
-                rel="child",
-                target=f"./{self.collection_id}/collection.json",
-                media_type="application/json",
-                title=self.collection_id,
+            """Link product to base product catalog"""
+            product_base_catalog = Catalog.from_file(product_catalog_path)
+            product_base_catalog.add_link(
+                Link(
+                    rel="child",
+                    target=f"./{self.collection_id}/collection.json",
+                    media_type="application/json",
+                    title=self.collection_id,
+                )
             )
-        )
-        # 'self' link: the direct URL where this JSON is hosted
-        product_base_catalog.set_self_href(PRODUCT_BASE_CATALOG_SELF_HREF)
-        return product_base_catalog
+            # 'self' link: the direct URL where this JSON is hosted
+            product_base_catalog.set_self_href(PRODUCT_BASE_CATALOG_SELF_HREF)
+            return product_base_catalog
 
-    def update_variable_base_catalog(self, variable_base_catalog_path, variable_ids) \
+    @staticmethod
+    def update_variable_base_catalog(variable_base_catalog_path, variable_ids) \
             -> (
             Catalog):
         """Link product to base product catalog"""
