@@ -6,12 +6,12 @@
 
 from datetime import datetime, timezone
 
-from deep_code.constants import DEFAULT_THEME_SCHEME
+from deep_code.constants import DEFAULT_THEME_SCHEME, OSC_THEME_SCHEME
 from deep_code.utils.ogc_api_record import (
     Contact,
     RecordProperties,
     Theme,
-    ThemeConcept,
+    ThemeConcept
 )
 
 
@@ -37,9 +37,9 @@ class OSCWorkflowOGCApiRecordGenerator:
         """Convert each string into a ThemeConcept
         """
         concepts = [ThemeConcept(id=theme_str) for theme_str in osc_themes]
-        return Theme(concepts=concepts, scheme=DEFAULT_THEME_SCHEME)
+        return Theme(concepts=concepts, scheme=OSC_THEME_SCHEME)
 
-    def build_record_properties(self, properties, contacts) -> RecordProperties:
+    def build_record_properties(self, properties, contacts, caller: type) -> RecordProperties:
         """Build a RecordProperties object from a list of single-key property dicts
         """
         now_iso = datetime.now(timezone.utc).isoformat()

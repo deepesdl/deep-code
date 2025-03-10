@@ -425,13 +425,13 @@ class OscDatasetStacGenerator:
         concepts = [ThemeConcept(id=theme_str) for theme_str in osc_themes]
         return Theme(concepts=concepts, scheme=OSC_THEME_SCHEME)
 
-    def build_theme_links(self) -> Link:
-        return Link(
-            rel="related",
-            target="../../themes/catalog.json",
-            media_type="application/json",
-            title="Theme: Land"
-        )
+    # def build_theme_links(self) -> Link:
+    #     return Link(
+    #         rel="related",
+    #         target="../../themes/catalog.json",
+    #         media_type="application/json",
+    #         title="Theme: Land"
+    #     )
 
     def build_dataset_stac_collection(self) -> Collection:
         """Build an OSC STAC Collection for the dataset.

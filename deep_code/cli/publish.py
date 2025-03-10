@@ -23,4 +23,5 @@ def publish_dataset(dataset_config):
 def publish_workflow(workflow_metadata):
 
     workflow_publisher = WorkflowPublisher()
-    workflow_publisher.publish_workflow(workflow_config_path=workflow_metadata)
+    workflow_publisher.publish_workflow_experiment(
+        workflow_config_path=workflow_metadata)
