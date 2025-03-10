@@ -49,6 +49,7 @@ class RecordProperties(MappingConstructible["RecordProperties"], JsonSerializabl
         title: str,
         description: str,
         jupyter_kernel_info: JupyterKernelInfo,
+        osc_workflow: str = None,
         updated: str = None,
         contacts: list[Contact] = None,
         themes: list[Theme] = None,
@@ -62,81 +63,53 @@ class RecordProperties(MappingConstructible["RecordProperties"], JsonSerializabl
         self.title = title
         self.description = description
         self.jupyter_kernel_info = jupyter_kernel_info
+        self.osc_workflow = osc_workflow
         self.keywords = keywords or []
         self.contacts = contacts
         self.themes = themes
         self.formats = formats or []
         self.license = license
 
+    def to_dict(self, value_name: str | None = None) -> dict[str, JsonValue]:
+        """Convert this object into a JSON-serializable dictionary."""
+        data = super().to_dict(value_name)
+        if self.osc_workflow is not None:
+            data["osc:workflow"] = self.osc_workflow
+            del data["osc_workflow"]  # Remove the original key
+        return data
 
-class ExperimentAsOgcRecord(MappingConstructible["OgcRecord"], JsonSerializable):
-    def __init__(
-        self,
-        id: str,
-        type: str,
-        jupyter_notebook_url: str,
-        properties: RecordProperties,
-        links: list[dict],
-        linkTemplates: list = [],
-        conformsTo: list[str] = None,
-        geometry: Optional[Any] = None
+class LinksBuilder:
+    def __init__(self,
+                 themes: list[str],
     ):
-        if conformsTo is None:
-            conformsTo = [OGC_API_RECORD_SPEC]
-        self.id = id
-        self.type = type
-        self.conformsTo = conformsTo
-        self.jupyter_notebook_url = jupyter_notebook_url
-        self.geometry = geometry
-        self.properties = properties
-        self.linkTemplates = linkTemplates
-        self.links = self._generate_static_links() + links
+        self.themes = themes
+        self.theme_links = []
 
-    def _generate_static_links(self):
-        """Generates static links (root and parent) for the record."""
-        return [
-            {
-                "rel": "root",
-                "href": "../../catalog.json",
-                "type": "application/json",
-                "title": "Open Science Catalog"
-            },
-            {
-                "rel": "parent",
-                "href": "../catalog.json",
-                "type": "application/json",
-                "title": "Experiments"
-            },
-            {
+    @staticmethod
+    def format_string(s):
+        return s.capitalize()
+
+    def build_them_links_for_records(self):
+        for theme in self.themes:
+            formated_theme = self.format_string(theme)
+            link = {
                 "rel": "related",
-                "href": f"../../workflows/{self.id}/record.json",
+                "href": f"../../themes/{theme}/catalog.json",
                 "type": "application/json",
-                "title": "Workflow: POLARIS"
-            },
-            {
-                "rel": "related",
-                "href": "../../projects/deepesdl/collection.json",
-                "type": "application/json",
-                "title": "Project: DeepESDL"
-            },
-            {
-                "rel": "input",
-                "href": "./input.yaml",
-                "type": "application/yaml",
-                "title": "Input parameters"
-            },
-            {
-                "rel": "environment",
-                "href": "./environment.yaml",
-                "type": "application/yaml",
-                "title": "Execution environment"
-            },
-            {
-                "rel": "self",
-                "href": f"{BASE_URL_OSC}/experiments/{self.id}/record.json",
-                "type": "application/json"
+                "title": f"Theme: {formated_theme}"
             }
-        ]
+            self.theme_links.append(link)
+        return self.theme_links
+
+    @staticmethod
+    def build_link_to_dataset(collection_id):
+        return  [{
+              "rel": "child",
+              "href": f"../../products/{collection_id}/collection.json",
+              "type": "application/json",
+              "title": f"{collection_id}"
+            }]
+
 
 class WorkflowAsOgcRecord(MappingConstructible["OgcRecord"], JsonSerializable):
     def __init__(
@@ -148,17 +121,19 @@ class WorkflowAsOgcRecord(MappingConstructible["OgcRecord"], JsonSerializable):
         links: list[dict],
         linkTemplates: list = [],
         conformsTo: list[str] = None,
-        geometry: Optional[Any] = None
+        geometry: Optional[Any] = None,
+        themes: Optional[Any] = None
     ):
         if conformsTo is None:
             conformsTo = [OGC_API_RECORD_SPEC]
         self.id = id
         self.type = type
-        self.conformsTo = conformsTo
         self.jupyter_notebook_url = jupyter_notebook_url
         self.geometry = geometry
         self.properties = properties
         self.linkTemplates = linkTemplates
+        self.conformsTo = conformsTo
+        self.themes = themes
         self.links = self._generate_static_links() + links
 
     def _generate_static_links(self):
@@ -195,3 +170,94 @@ class WorkflowAsOgcRecord(MappingConstructible["OgcRecord"], JsonSerializable):
                 "type": "application/json"
             }
         ]
+
+    # def _assemble_all_links(self):
+    #     static_links = self._generate_static_links()
+    #     link_builder = LinksBuilder(self.themes)
+    #     theme_links = link_builder.build_them_links_for_records()
+    #     return static_links + theme_links
+
+class ExperimentAsOgcRecord(MappingConstructible["OgcRecord"], JsonSerializable):
+    def __init__(
+        self,
+        id: str,
+        type: str,
+        jupyter_notebook_url: str,
+        collection_id: str,
+        properties: RecordProperties,
+        links: list[dict],
+        linkTemplates=None,
+        conformsTo: list[str] = None,
+        geometry: Optional[Any] = None
+    ):
+        if linkTemplates is None:
+            linkTemplates = []
+        if conformsTo is None:
+            conformsTo = [OGC_API_RECORD_SPEC]
+        self.id = id
+        self.type = type
+        self.conformsTo = conformsTo
+        self.jupyter_notebook_url = jupyter_notebook_url
+        self.collection_id = collection_id
+        self.geometry = geometry
+        self.properties = properties
+        self.linkTemplates = linkTemplates
+        self.links = self._generate_static_links() + links
+
+    def _generate_static_links(self):
+        """Generates static links (root and parent) for the record."""
+        return [
+            {
+                "rel": "root",
+                "href": "../../catalog.json",
+                "type": "application/json",
+                "title": "Open Science Catalog"
+            },
+            {
+                "rel": "parent",
+                "href": "../catalog.json",
+                "type": "application/json",
+                "title": "Experiments"
+            },
+            {
+                "rel": "related",
+                "href": f"../../workflows/{self.id}/record.json",
+                "type": "application/json",
+                "title": "Workflow: POLARIS"
+            },
+            {
+                "rel": "child",
+                "href": f"../../products/{self.collection_id}/collection.json",
+                "type": "application/json",
+                "title": f"{self.collection_id}"
+            },
+            {
+                "rel": "related",
+                "href": "../../projects/deepesdl/collection.json",
+                "type": "application/json",
+                "title": "Project: DeepESDL"
+            },
+            {
+                "rel": "input",
+                "href": "./input.yaml",
+                "type": "application/yaml",
+                "title": "Input parameters"
+            },
+            {
+                "rel": "environment",
+                "href": "./environment.yaml",
+                "type": "application/yaml",
+                "title": "Execution environment"
+            },
+            {
+                "rel": "self",
+                "href": f"{BASE_URL_OSC}/experiments/{self.id}/record.json",
+                "type": "application/json"
+            }
+        ]
+
+    # def _assemble_all_links(self):
+    #     static_links = self._generate_static_links()
+    #     link_builder = LinksBuilder(self.themes)
+    #     theme_links = link_builder.build_them_links_for_records()
+    #     return static_links + theme_links

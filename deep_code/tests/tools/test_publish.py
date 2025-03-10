@@ -2,7 +2,7 @@ from unittest.mock import MagicMock, mock_open, patch
 
 import pytest
 
-from deep_code.tools.publish import DatasetPublisher
+from deep_code.tools.publish import Publisher
 
 
 class TestDatasetPublisher:
@@ -15,7 +15,7 @@ class TestDatasetPublisher:
         with pytest.raises(
             ValueError, match="GitHub credentials are missing in the `.gitaccess` file."
         ):
-            DatasetPublisher()
+            Publisher()
 
     @patch("deep_code.tools.publish.fsspec.open")
     def test_publish_dataset_missing_ids(self, mock_fsspec_open):
@@ -31,7 +31,7 @@ class TestDatasetPublisher:
             mock_open(read_data=dataset_yaml_content)(),
         ]
 
-        publisher = DatasetPublisher()
+        publisher = Publisher()
 
         with pytest.raises(
             ValueError, match="Dataset ID or Collection ID missing in the config."
@@ -106,7 +106,7 @@ class TestDatasetPublisher:
             )
 
             # Instantiate & publish
-            publisher = DatasetPublisher()
+            publisher = Publisher()
             publisher.publish_dataset("/fake/path/to/dataset-config.yaml")
 
         # Assert that we called git clone with /tmp/temp_repo
