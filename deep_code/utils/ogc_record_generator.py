@@ -6,7 +6,7 @@
 
 from datetime import datetime, timezone
 
-from deep_code.constants import DEFAULT_THEME_SCHEME, OSC_THEME_SCHEME
+from deep_code.constants import OSC_THEME_SCHEME
 from deep_code.utils.ogc_api_record import (
     Contact,
     RecordProperties,
@@ -39,16 +39,33 @@ class OSCWorkflowOGCApiRecordGenerator:
         concepts = [ThemeConcept(id=theme_str) for theme_str in osc_themes]
         return Theme(concepts=concepts, scheme=OSC_THEME_SCHEME)
 
-    def build_record_properties(self, properties, contacts, caller: type) -> RecordProperties:
-        """Build a RecordProperties object from a list of single-key property dicts
+    def build_record_properties(self, properties: dict, contacts: list) -> RecordProperties:
+        """Build a RecordProperties object from a properties dictionary.
+
+        Args:
+            properties: A dictionary containing properties (e.g., title, description, themes).
+            contacts: A list of contact dictionaries.
+            caller: The caller type ("WorkflowAsOgcRecord" or "ExperimentAsOgcRecord").
+
+        Returns:
+            A RecordProperties object.
         """
         now_iso = datetime.now(timezone.utc).isoformat()
         properties.update({"created": now_iso})
         properties.update({"updated": now_iso})
+
+        # Extract themes from the properties dictionary
         themes_list = properties.get("themes", [])
+
+        # Build contact objects
         properties.update({"contacts": self.build_contact_objects(contacts)})
+
+        # Build theme object if themes are present
         if themes_list:
             theme_obj = self.build_theme(themes_list)
-            properties.update({"themes": [theme_obj]})
+            properties.update(
+                {"themes": [theme_obj]})  # Wrap the Theme object in a list
+
         properties.setdefault("type", "workflow")
+
         return RecordProperties.from_value(properties)

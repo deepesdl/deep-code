@@ -22,7 +22,7 @@ from deep_code.constants import (
 from deep_code.utils.dataset_stac_generator import OscDatasetStacGenerator
 from deep_code.utils.github_automation import GitHubAutomation
 from deep_code.utils.ogc_api_record import WorkflowAsOgcRecord, \
-    ExperimentAsOgcRecord
+    ExperimentAsOgcRecord, LinksBuilder
 from deep_code.utils.ogc_record_generator import OSCWorkflowOGCApiRecordGenerator
 
 logger = logging.getLogger(__name__)
@@ -93,67 +93,84 @@ class GitHubPublisher:
             self.github_automation.clean_up()
 
 
-class DatasetPublisher:
+class Publisher:
     """Publishes products (datasets) to the OSC GitHub repository.
     Inherits from BasePublisher for GitHub publishing logic.
     """
 
-    def __init__(self):
+    def __init__(self, dataset_config_path: str, workflow_config_path: str):
         # Composition
         self.gh_publisher = GitHubPublisher()
+        self.collection_id = ""
 
-    @staticmethod
-    def clean_title(title: str) -> str:
-        """Clean up titles by replacing Unicode escape sequences with standard characters."""
-        title = title.replace('\u00a0',
-                              ' ')  # Replace non-breaking space with normal space
-        title = title.replace('\u00b0',
-                              '°')  # Replace unicode degree symbol with actual degree symbol
-        return title
+        # Paths to configuration files
+        self.dataset_config_path = dataset_config_path
+        self.workflow_config_path = workflow_config_path
 
-    def clean_catalog_titles(self, catalog: Catalog):
-        """Recursively clean all titles in the catalog."""
-        # Clean title for the catalog itself
-        if isinstance(catalog.title, str):
-            catalog.title = self.clean_title(catalog.title)
+        # Load configuration files
+        self._read_config_files()
+        self.collection_id = self.dataset_config.get("collection_id")
 
-        # Clean titles in all links of the catalog
-        for link in catalog.links:
-            if isinstance(link.title, str):
-                link.title = self.clean_title(link.title)
+        # Ensure collection_id is set
+        if not self.collection_id:
+            raise ValueError("collection_id is missing in dataset config.")
 
-        for link in catalog.links:
-            if link.rel == 'child':
-                try:
-                    # If the link points to another catalog or collection, clean it recursively
-                    child_catalog = Catalog.from_file(link.href)
-                    self.clean_catalog_titles(child_catalog)
-                except Exception as e:
-                    # If the link doesn't point to a valid catalog file, skip it
-                    pass
+    # @staticmethod
+    # def clean_title(title: str) -> str:
+    #     """Clean up titles by replacing Unicode escape sequences with standard characters."""
+    #     title = title.replace('\u00a0',
+    #                           ' ')  # Replace non-breaking space with normal space
+    #     title = title.replace('\u00b0',
+    #                           '°')  # Replace unicode degree symbol with actual degree symbol
+    #     return title
 
-    def publish_dataset(self, dataset_config_path: str):
+    # def clean_catalog_titles(self, catalog: Catalog):
+    #     """Recursively clean all titles in the catalog."""
+    #     # Clean title for the catalog itself
+    #     if isinstance(catalog.title, str):
+    #         catalog.title = self.clean_title(catalog.title)
+    #
+    #     # Clean titles in all links of the catalog
+    #     for link in catalog.links:
+    #         if isinstance(link.title, str):
+    #             link.title = self.clean_title(link.title)
+    #
+    #     for link in catalog.links:
+    #         if link.rel == 'child':
+    #             try:
+    #                 # If the link points to another catalog or collection, clean it recursively
+    #                 child_catalog = Catalog.from_file(link.href)
+    #                 self.clean_catalog_titles(child_catalog)
+    #             except Exception as e:
+    #                 # If the link doesn't point to a valid catalog file, skip it
+    #                 pass
+
+    def _read_config_files(self) -> None:
+        with fsspec.open(self.dataset_config_path, "r") as file:
+            self.dataset_config = yaml.safe_load(file) or {}
+        with fsspec.open(self.workflow_config_path, "r") as file:
+            self.workflow_config = yaml.safe_load(file) or {}
+
+    def publish_dataset(self):
         """Publish a product collection to the specified GitHub repository."""
-        with fsspec.open(dataset_config_path, "r") as file:
-            dataset_config = yaml.safe_load(file) or {}
 
-        dataset_id = dataset_config.get("dataset_id")
-        collection_id = dataset_config.get("collection_id")
-        documentation_link = dataset_config.get("documentation_link")
-        access_link = dataset_config.get("access_link")
-        dataset_status = dataset_config.get("dataset_status")
-        osc_region = dataset_config.get("osc_region")
-        osc_themes = dataset_config.get("osc_themes")
-        cf_params = dataset_config.get("cf_parameter")
+        dataset_id = self.dataset_config.get("dataset_id")
+        self.collection_id = self.dataset_config.get("collection_id")
+        documentation_link = self.dataset_config.get("documentation_link")
+        access_link = self.dataset_config.get("access_link")
+        dataset_status = self.dataset_config.get("dataset_status")
+        osc_region = self.dataset_config.get("osc_region")
+        osc_themes = self.dataset_config.get("osc_themes")
+        cf_params = self.dataset_config.get("cf_parameter")
 
-        if not dataset_id or not collection_id:
+        if not dataset_id or not self.collection_id:
             raise ValueError("Dataset ID or Collection ID missing in the config.")
 
         logger.info("Generating STAC collection...")
 
         generator = OscDatasetStacGenerator(
             dataset_id=dataset_id,
-            collection_id=collection_id,
+            collection_id=self.collection_id,
             documentation_link=documentation_link,
             access_link=access_link,
             osc_status=dataset_status,
@@ -167,7 +184,7 @@ class DatasetPublisher:
 
         # Prepare a dictionary of file paths and content
         file_dict = {}
-        product_path = f"products/{collection_id}/collection.json"
+        product_path = f"products/{self.collection_id}/collection.json"
         file_dict[product_path] = ds_collection.to_dict()
 
         variable_base_catalog_path = f"variables/catalog.json"
@@ -177,9 +194,6 @@ class DatasetPublisher:
         )
         # Add or update variable files
         for var_id in variable_ids:
-            # if var_id in ["crs", "spatial_ref"]:
-            #     logger.info(f"Skipping CRS variable: {var_id}")
-            #     continue
             var_file_path = f"variables/{var_id}/catalog.json"
             if not self.gh_publisher.github_automation.file_exists(var_file_path):
                 logger.info(
@@ -219,7 +233,7 @@ class DatasetPublisher:
         )
         updated_product_base_catalog = generator.update_product_base_catalog(full_path)
         # clean special characters
-        self.clean_catalog_titles(updated_product_base_catalog)
+        # self.clean_catalog_titles(updated_product_base_catalog)
         file_dict[product_catalog_path] = updated_product_base_catalog.to_dict()
 
         #Link product to project catalog
@@ -233,10 +247,12 @@ class DatasetPublisher:
         file_dict[deepesdl_collection_path] = updated_deepesdl_collection.to_dict()
 
         # Create branch name, commit message, PR info
-        branch_name = f"{OSC_BRANCH_NAME}-{collection_id}-{datetime.now().strftime('%Y%m%d%H%M%S')}"
-        commit_message = f"Add new dataset collection: {collection_id}"
-        pr_title = f"Add new dataset collection: {collection_id}"
-        pr_body = (f"This PR adds a new dataset collection: {collection_id} and it's "
+        branch_name = (f"{OSC_BRANCH_NAME}-{self.collection_id}"
+                       f"-{datetime.now().strftime('%Y%m%d%H%M%S')}")
+        commit_message = f"Add new dataset collection: {self.collection_id}"
+        pr_title = f"Add new dataset collection: {self.collection_id}"
+        pr_body = (f"This PR adds a new dataset collection: {self.collection_id} and "
+                   f"it's "
                    f"corresponding variable catalogs to the repository.")
 
         # Publish all files in one go
@@ -250,12 +266,6 @@ class DatasetPublisher:
 
         logger.info(f"Pull request created: {pr_url}")
 
-
-class WorkflowPublisher:
-    """Publishes workflows to the OSC GitHub repository."""
-
-    def __init__(self):
-        self.gh_publisher = GitHubPublisher()
 
     @staticmethod
     def _normalize_name(name: str | None) -> str | None:
@@ -277,60 +287,65 @@ class WorkflowPublisher:
             json.dump(data, file, indent=4)
         logger.info(f"File written to {file_path}")
 
-    def publish_workflow_experiment(self, workflow_config_path: str, write_to_file: bool = False):
-        with fsspec.open(workflow_config_path, "r") as file:
-            workflow_config = yaml.safe_load(file) or {}
-
-        workflow_id = self._normalize_name(workflow_config.get("workflow_id"))
+    def publish_workflow_experiment(self, write_to_file: bool = False):
+        workflow_id = self._normalize_name(self.workflow_config.get("workflow_id"))
         if not workflow_id:
             raise ValueError("workflow_id is missing in workflow config.")
 
-        properties_list = workflow_config.get("properties", [])
-        contacts = workflow_config.get("contact", [])
-        links = workflow_config.get("links", [])
-        jupyter_notebook_url = workflow_config.get("jupyter_notebook_url")
+        properties_list = self.workflow_config.get("properties", {})
+        osc_themes = properties_list.get("themes")
+        contacts = self.workflow_config.get("contact", [])
+        links = self.workflow_config.get("links", [])
+        jupyter_notebook_url = self.workflow_config.get("jupyter_notebook_url")
 
         logger.info("Generating OGC API Record for the workflow...")
         rg = OSCWorkflowOGCApiRecordGenerator()
-        wf_record_properties = rg.build_record_properties(properties_list, contacts,
-                                                          caller="WorkflowAsOgcRecord")
+        wf_record_properties = rg.build_record_properties(properties_list, contacts)
+
+        link_builder = LinksBuilder(osc_themes)
+        theme_links = link_builder.build_them_links_for_records()
+
         workflow_record = WorkflowAsOgcRecord(
             id=workflow_id,
             type="Feature",
             properties=wf_record_properties,
-            links=links,
-            jupyter_notebook_url=jupyter_notebook_url
+            links=links + theme_links,
+            jupyter_notebook_url=jupyter_notebook_url,
+            themes=osc_themes
         )
         # Convert to dictionary and remove jupyter_notebook_url
         workflow_dict = workflow_record.to_dict()
         if "jupyter_notebook_url" in workflow_dict:
             del workflow_dict["jupyter_notebook_url"]
-
         wf_file_path = f"workflow/{workflow_id}/record.json"
         file_dict = {wf_file_path: workflow_dict}
 
         # Build properties for the experiment record
         exp_record_properties = copy.deepcopy(wf_record_properties)
         exp_record_properties.type = "experiment"
+        exp_record_properties.osc_workflow = workflow_id
 
         experiment_record = ExperimentAsOgcRecord(
             id=workflow_id,
             type="Feature",
+            jupyter_notebook_url=jupyter_notebook_url,
+            collection_id=self.collection_id,
             properties=exp_record_properties,
-            links=links,
-            jupyter_notebook_url=jupyter_notebook_url
+            links=links + theme_links
         )
         # Convert to dictionary and remove jupyter_notebook_url
         experiment_dict = experiment_record.to_dict()
         if "jupyter_notebook_url" in experiment_dict:
             del experiment_dict["jupyter_notebook_url"]
+        if "collection_id" in experiment_dict:
+            del experiment_dict["collection_id"]
         exp_file_path = f"experiments/{workflow_id}/record.json"
         file_dict[exp_file_path] = experiment_dict
 
         # Write to files if testing
         if write_to_file:
-            self._write_to_file(wf_file_path, workflow_record.to_dict())
-            self._write_to_file(exp_file_path, experiment_record.to_dict())
+            self._write_to_file(wf_file_path, workflow_dict)
+            self._write_to_file(exp_file_path, experiment_dict)
 
         # Publish to GitHub if not testing
         if not write_to_file:
@@ -351,9 +366,8 @@ class WorkflowPublisher:
 
 if __name__ == '__main__':
     # Example usage for testing
-    publisher = WorkflowPublisher()
-    publisher.publish_workflow_experiment(
-        workflow_config_path="/home/tejas/bc/projects/deepesdl/deep-code/workflow"
-                             "-config.yaml",
-        write_to_file=True
-    )
+    publisher = Publisher(dataset_config_path="/home/tejas/bc/projects/deepesdl/deep"
+                                              "-code/dataset-config.yaml",
+                          workflow_config_path="/home/tejas/bc/projects/deepesdl/deep-code/workflow"
+                             "-config.yaml")
+    publisher.publish_workflow_experiment(write_to_file=True)
