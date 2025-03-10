@@ -1,5 +1,6 @@
 #!/usr/bin/env python3
-
+import copy
+import json
 # Copyright (c) 2025 by Brockmann Consult GmbH
 # Permissions are hereby granted under the terms of the MIT License:
 # https://opensource.org/licenses/MIT.
@@ -20,7 +21,8 @@ from deep_code.constants import (
 )
 from deep_code.utils.dataset_stac_generator import OscDatasetStacGenerator
 from deep_code.utils.github_automation import GitHubAutomation
-from deep_code.utils.ogc_api_record import OgcRecord
+from deep_code.utils.ogc_api_record import WorkflowAsOgcRecord, \
+    ExperimentAsOgcRecord
 from deep_code.utils.ogc_record_generator import OSCWorkflowOGCApiRecordGenerator
 
 logger = logging.getLogger(__name__)
@@ -259,7 +261,23 @@ class WorkflowPublisher:
     def _normalize_name(name: str | None) -> str | None:
         return name.replace(" ", "-").lower() if name else None
 
-    def publish_workflow(self, workflow_config_path: str):
+    @staticmethod
+    def _write_to_file(file_path: str, data: dict):
+        """Write a dictionary to a JSON file.
+
+        Args:
+            file_path (str): The path to the file.
+            data (dict): The data to write.
+        """
+        # Create the directory if it doesn't exist
+        Path(file_path).parent.mkdir(parents=True, exist_ok=True)
+
+        # Write the data to the file
+        with open(file_path, "w") as file:
+            json.dump(data, file, indent=4)
+        logger.info(f"File written to {file_path}")
+
+    def publish_workflow_experiment(self, workflow_config_path: str, write_to_file: bool = False):
         with fsspec.open(workflow_config_path, "r") as file:
             workflow_config = yaml.safe_load(file) or {}
 
@@ -270,36 +288,72 @@ class WorkflowPublisher:
         properties_list = workflow_config.get("properties", [])
         contacts = workflow_config.get("contact", [])
         links = workflow_config.get("links", [])
+        jupyter_notebook_url = workflow_config.get("jupyter_notebook_url")
 
         logger.info("Generating OGC API Record for the workflow...")
         rg = OSCWorkflowOGCApiRecordGenerator()
-        wf_record_properties = rg.build_record_properties(properties_list, contacts)
-
-        ogc_record = OgcRecord(
+        wf_record_properties = rg.build_record_properties(properties_list, contacts,
+                                                          caller="WorkflowAsOgcRecord")
+        workflow_record = WorkflowAsOgcRecord(
             id=workflow_id,
             type="Feature",
-            time={},
             properties=wf_record_properties,
             links=links,
+            jupyter_notebook_url=jupyter_notebook_url
         )
+        # Convert to dictionary and remove jupyter_notebook_url
+        workflow_dict = workflow_record.to_dict()
+        if "jupyter_notebook_url" in workflow_dict:
+            del workflow_dict["jupyter_notebook_url"]
 
-        file_path = f"workflow/{workflow_id}/collection.json"
+        wf_file_path = f"workflow/{workflow_id}/record.json"
+        file_dict = {wf_file_path: workflow_dict}
 
-        # Prepare the single file dict
-        file_dict = {file_path: ogc_record.to_dict()}
+        # Build properties for the experiment record
+        exp_record_properties = copy.deepcopy(wf_record_properties)
+        exp_record_properties.type = "experiment"
 
-        branch_name = f"{WF_BRANCH_NAME}-{workflow_id}"
-        commit_message = f"Add new workflow: {workflow_id}"
-        pr_title = "Add new workflow"
-        pr_body = "This PR adds a new workflow to the OSC repository."
-
-        pr_url = self.gh_publisher.publish_files(
-            branch_name=branch_name,
-            file_dict=file_dict,
-            commit_message=commit_message,
-            pr_title=pr_title,
-            pr_body=pr_body,
+        experiment_record = ExperimentAsOgcRecord(
+            id=workflow_id,
+            type="Feature",
+            properties=exp_record_properties,
+            links=links,
+            jupyter_notebook_url=jupyter_notebook_url
         )
+        # Convert to dictionary and remove jupyter_notebook_url
+        experiment_dict = experiment_record.to_dict()
+        if "jupyter_notebook_url" in experiment_dict:
+            del experiment_dict["jupyter_notebook_url"]
+        exp_file_path = f"experiments/{workflow_id}/record.json"
+        file_dict[exp_file_path] = experiment_dict
 
-        logger.info(f"Pull request created: {pr_url}")
+        # Write to files if testing
+        if write_to_file:
+            self._write_to_file(wf_file_path, workflow_record.to_dict())
+            self._write_to_file(exp_file_path, experiment_record.to_dict())
 
+        # Publish to GitHub if not testing
+        if not write_to_file:
+            branch_name = f"{WF_BRANCH_NAME}-{workflow_id}"
+            commit_message = f"Adding workflow from DeepESDL: {workflow_id}"
+            pr_title = f"Add workflow and Experiment from DeepESDL: {workflow_id}"
+            pr_body = "This PR adds a new workflow/experiment to the OSC repository."
+
+            pr_url = self.gh_publisher.publish_files(
+                branch_name=branch_name,
+                file_dict=file_dict,
+                commit_message=commit_message,
+                pr_title=pr_title,
+                pr_body=pr_body,
+            )
+
+            logger.info(f"Pull request created: {pr_url}")
+
+if __name__ == '__main__':
+    # Example usage for testing
+    publisher = WorkflowPublisher()
+    publisher.publish_workflow_experiment(
+        workflow_config_path="/home/tejas/bc/projects/deepesdl/deep-code/workflow"
+                             "-config.yaml",
+        write_to_file=True
+    )

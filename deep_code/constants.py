@@ -21,3 +21,4 @@ PRODUCT_BASE_CATALOG_SELF_HREF = "https://esa-earthcode.github.io/open-science-c
 DEEPESDL_COLLECTION_SELF_HREF = (
     "https://esa-earthcode.github.io/open-science-catalog-metadata/projects/deepesdl"
     "/collection.json")
+BASE_URL_OSC = "https://esa-earthcode.github.io/open-science-catalog-metadata"
