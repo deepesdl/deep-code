@@ -24,6 +24,7 @@ from deep_code.utils.github_automation import GitHubAutomation
 from deep_code.utils.ogc_api_record import WorkflowAsOgcRecord, \
     ExperimentAsOgcRecord, LinksBuilder
 from deep_code.utils.ogc_record_generator import OSCWorkflowOGCApiRecordGenerator
+from deep_code.utils.helper import serialize
 
 logger = logging.getLogger(__name__)
 logging.basicConfig(level=logging.INFO)
@@ -151,7 +152,25 @@ class Publisher:
         with fsspec.open(self.workflow_config_path, "r") as file:
             self.workflow_config = yaml.safe_load(file) or {}
 
-    def publish_dataset(self):
+    @staticmethod
+    def _write_to_file(file_path: str, data: dict):
+        """Write a dictionary to a JSON file.
+
+        Args:
+            file_path (str): The path to the file.
+            data (dict): The data to write.
+        """
+        # Create the directory if it doesn't exist
+        Path(file_path).parent.mkdir(parents=True, exist_ok=True)
+        try:
+            json_content = json.dumps(data, indent=2, default=serialize)
+        except TypeError as e:
+            raise RuntimeError(f"JSON serialization failed: {e}")
+
+        with open(file_path, "w") as f:
+            f.write(json_content)
+
+    def publish_dataset(self, write_to_file: bool = False):
         """Publish a product collection to the specified GitHub repository."""
 
         dataset_id = self.dataset_config.get("dataset_id")
@@ -214,18 +233,12 @@ class Publisher:
                     full_path, var_id
                 )
                 file_dict[var_file_path] = updated_catalog.to_dict()
-                # logger.info(
-                #     f"Add {var_id} child link to variable base catalog"
-                # )
-                # file_dict[
-                #     variable_base_catalog_path] = generator.update_variable_base_catalog(
-                #     variable_catalog_full_path, var_id).to_dict()
-
 
         file_dict[variable_base_catalog_path] = generator.update_variable_base_catalog(
             variable_catalog_full_path, variable_ids
         ).to_dict()
-        """Link product to base product catalog"""
+
+        # Link product to base product catalog
         product_catalog_path = f"products/catalog.json"
         full_path = (
                 Path(self.gh_publisher.github_automation.local_clone_dir)
@@ -246,46 +259,36 @@ class Publisher:
         updated_deepesdl_collection = generator.update_deepesdl_collection(deepesdl_collection_full_path)
         file_dict[deepesdl_collection_path] = updated_deepesdl_collection.to_dict()
 
-        # Create branch name, commit message, PR info
-        branch_name = (f"{OSC_BRANCH_NAME}-{self.collection_id}"
-                       f"-{datetime.now().strftime('%Y%m%d%H%M%S')}")
-        commit_message = f"Add new dataset collection: {self.collection_id}"
-        pr_title = f"Add new dataset collection: {self.collection_id}"
-        pr_body = (f"This PR adds a new dataset collection: {self.collection_id} and "
-                   f"it's "
-                   f"corresponding variable catalogs to the repository.")
+        # Write to files if testing
+        if write_to_file:
+            for file_path, data in file_dict.items():
+                self._write_to_file(file_path, data)  # Pass file_path and data
+        else:
+            # Create branch name, commit message, PR info
+            branch_name = (f"{OSC_BRANCH_NAME}-{self.collection_id}"
+                           f"-{datetime.now().strftime('%Y%m%d%H%M%S')}")
+            commit_message = f"Add new dataset collection: {self.collection_id}"
+            pr_title = f"Add new dataset collection: {self.collection_id}"
+            pr_body = (f"This PR adds a new dataset collection: {self.collection_id} and "
+                       f"it's "
+                       f"corresponding variable catalogs to the repository.")
 
-        # Publish all files in one go
-        pr_url = self.gh_publisher.publish_files(
-            branch_name=branch_name,
-            file_dict=file_dict,
-            commit_message=commit_message,
-            pr_title=pr_title,
-            pr_body=pr_body,
-        )
+            # Publish all files in one go
+            pr_url = self.gh_publisher.publish_files(
+                branch_name=branch_name,
+                file_dict=file_dict,
+                commit_message=commit_message,
+                pr_title=pr_title,
+                pr_body=pr_body,
+            )
 
-        logger.info(f"Pull request created: {pr_url}")
+            logger.info(f"Pull request created: {pr_url}")
 
 
     @staticmethod
     def _normalize_name(name: str | None) -> str | None:
         return name.replace(" ", "-").lower() if name else None
 
-    @staticmethod
-    def _write_to_file(file_path: str, data: dict):
-        """Write a dictionary to a JSON file.
-
-        Args:
-            file_path (str): The path to the file.
-            data (dict): The data to write.
-        """
-        # Create the directory if it doesn't exist
-        Path(file_path).parent.mkdir(parents=True, exist_ok=True)
-
-        # Write the data to the file
-        with open(file_path, "w") as file:
-            json.dump(data, file, indent=4)
-        logger.info(f"File written to {file_path}")
 
     def publish_workflow_experiment(self, write_to_file: bool = False):
         workflow_id = self._normalize_name(self.workflow_config.get("workflow_id"))
@@ -344,8 +347,8 @@ class Publisher:
 
         # Write to files if testing
         if write_to_file:
-            self._write_to_file(wf_file_path, workflow_dict)
-            self._write_to_file(exp_file_path, experiment_dict)
+            for file_path, data in file_dict.items():
+                self._write_to_file(file_path, data)
 
         # Publish to GitHub if not testing
         if not write_to_file:
@@ -370,4 +373,5 @@ if __name__ == '__main__':
                                               "-code/dataset-config.yaml",
                           workflow_config_path="/home/tejas/bc/projects/deepesdl/deep-code/workflow"
                              "-config.yaml")
+    publisher.publish_dataset(write_to_file=True)
     publisher.publish_workflow_experiment(write_to_file=True)
