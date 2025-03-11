@@ -12,6 +12,7 @@ from pathlib import Path
 
 import requests
 
+from deep_code.utils.helper import serialize
 
 class GitHubAutomation:
     """Automates GitHub operations needed to create a Pull Request.
@@ -43,16 +44,40 @@ class GitHubAutomation:
         response.raise_for_status()
         logging.info(f"Repository forked to {self.username}/{self.repo_name}")
 
+    # def clone_repository(self):
+    #     """Clone the forked repository locally."""
+    #     logging.info("Cloning forked repository...")
+    #     try:
+    #         subprocess.run(
+    #             ["git", "clone", self.fork_repo_url, self.local_clone_dir], check=True
+    #         )
+    #         # os.chdir(self.local_clone_dir)
+    #     except subprocess.CalledProcessError as e:
+    #         raise RuntimeError(f"Failed to clone repository: {e}")
+
     def clone_repository(self):
-        """Clone the forked repository locally."""
-        logging.info("Cloning forked repository...")
-        try:
-            subprocess.run(
-                ["git", "clone", self.fork_repo_url, self.local_clone_dir], check=True
-            )
-            # os.chdir(self.local_clone_dir)
-        except subprocess.CalledProcessError as e:
-            raise RuntimeError(f"Failed to clone repository: {e}")
+        """Clone the forked repository locally if it doesn't exist, or pull updates if it does."""
+        logging.info("Checking local repository...")
+        if not os.path.exists(self.local_clone_dir):
+            # Directory doesn't exist, clone the repository
+            logging.info("Cloning forked repository...")
+            try:
+                subprocess.run(
+                    ["git", "clone", self.fork_repo_url, self.local_clone_dir],
+                    check=True
+                )
+                logging.info(f"Repository cloned to {self.local_clone_dir}")
+            except subprocess.CalledProcessError as e:
+                raise RuntimeError(f"Failed to clone repository: {e}")
+        else:
+            # Directory exists, pull the latest changes
+            logging.info("Local repository already exists. Pulling latest changes...")
+            try:
+                os.chdir(self.local_clone_dir)
+                subprocess.run(["git", "pull"], check=True)
+                logging.info("Repository updated with latest changes.")
+            except subprocess.CalledProcessError as e:
+                raise RuntimeError(f"Failed to pull latest changes: {e}")
 
     def create_branch(self, branch_name: str):
         """Create a new branch in the local repository."""
@@ -78,7 +103,7 @@ class GitHubAutomation:
 
         # Serialize to JSON
         try:
-            json_content = json.dumps(content, indent=2, default=self.serialize)
+            json_content = json.dumps(content, indent=2, default=serialize)
         except TypeError as e:
             raise RuntimeError(f"JSON serialization failed: {e}")
 
@@ -135,11 +160,11 @@ class GitHubAutomation:
         logging.debug(f"Checking existence of {full_path}: {exists}")
         return exists
 
-    # Check and convert any non-serializable objects
-    def serialize(self, obj):
-        if isinstance(obj, set):
-            return list(obj)  # Convert sets to lists
-        if hasattr(obj, "__dict__"):
-            return obj.__dict__  # Convert objects with attributes to dicts
-        raise TypeError(
-            f"Object of type {type(obj).__name__} is not JSON serializable")
+    # # Check and convert any non-serializable objects
+    # def serialize(self, obj):
+    #     if isinstance(obj, set):
+    #         return list(obj)  # Convert sets to lists
+    #     if hasattr(obj, "__dict__"):
+    #         return obj.__dict__  # Convert objects with attributes to dicts
+    #     raise TypeError(
+    #         f"Object of type {type(obj).__name__} is not JSON serializable")
