@@ -44,17 +44,6 @@ class GitHubAutomation:
         response.raise_for_status()
         logging.info(f"Repository forked to {self.username}/{self.repo_name}")
 
-    # def clone_repository(self):
-    #     """Clone the forked repository locally."""
-    #     logging.info("Cloning forked repository...")
-    #     try:
-    #         subprocess.run(
-    #             ["git", "clone", self.fork_repo_url, self.local_clone_dir], check=True
-    #         )
-    #         # os.chdir(self.local_clone_dir)
-    #     except subprocess.CalledProcessError as e:
-    #         raise RuntimeError(f"Failed to clone repository: {e}")
-
     def clone_repository(self):
         """Clone the forked repository locally if it doesn't exist, or pull updates if it does."""
         logging.info("Checking local repository...")
