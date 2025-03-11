@@ -11,13 +11,12 @@ from datetime import datetime
 
 import fsspec
 import yaml
-from pystac import Catalog
 
 from deep_code.constants import (
     OSC_BRANCH_NAME,
     OSC_REPO_NAME,
     OSC_REPO_OWNER,
-    WF_BRANCH_NAME,
+    WF_BRANCH_NAME
 )
 from deep_code.utils.dataset_stac_generator import OscDatasetStacGenerator
 from deep_code.utils.github_automation import GitHubAutomation
@@ -170,6 +169,46 @@ class Publisher:
         with open(file_path, "w") as f:
             f.write(json_content)
 
+    def _update_and_add_to_file_dict(self, file_dict, catalog_path,
+                                     update_method, *args):
+        """Update a catalog using the specified method and add it to file_dict.
+
+        Args:
+            file_dict: The dictionary to which the updated catalog will be added.
+            catalog_path: The path to the catalog file.
+            update_method: The method to call for updating the catalog.
+            *args: Additional arguments to pass to the update method.
+        """
+        full_path = Path(
+            self.gh_publisher.github_automation.local_clone_dir) / catalog_path
+        updated_catalog = update_method(full_path, *args)
+        file_dict[catalog_path] = updated_catalog.to_dict()
+
+    def _update_variable_catalogs(self, generator, file_dict, variable_ids):
+        """Update or create variable catalogs and add them to file_dict.
+
+        Args:
+            generator: The generator object.
+            file_dict: The dictionary to which the updated catalogs will be added.
+            variable_ids: A list of variable IDs.
+        """
+        for var_id in variable_ids:
+            var_file_path = f"variables/{var_id}/catalog.json"
+            if not self.gh_publisher.github_automation.file_exists(var_file_path):
+                logger.info(
+                    f"Variable catalog for {var_id} does not exist. Creating...")
+                var_metadata = generator.variables_metadata.get(var_id)
+                var_catalog = generator.build_variable_catalog(var_metadata)
+                file_dict[var_file_path] = var_catalog.to_dict()
+            else:
+                logger.info(
+                    f"Variable catalog already exists for {var_id}, adding product link.")
+                full_path = Path(
+                    self.gh_publisher.github_automation.local_clone_dir) / var_file_path
+                updated_catalog = generator.update_existing_variable_catalog(full_path,
+                                                                             var_id)
+                file_dict[var_file_path] = updated_catalog.to_dict()
+
     def publish_dataset(self, write_to_file: bool = False):
         """Publish a product collection to the specified GitHub repository."""
 
@@ -206,58 +245,26 @@ class Publisher:
         product_path = f"products/{self.collection_id}/collection.json"
         file_dict[product_path] = ds_collection.to_dict()
 
-        variable_base_catalog_path = f"variables/catalog.json"
-        variable_catalog_full_path = (
-                Path(self.gh_publisher.github_automation.local_clone_dir)
-                / variable_base_catalog_path
-        )
-        # Add or update variable files
-        for var_id in variable_ids:
-            var_file_path = f"variables/{var_id}/catalog.json"
-            if not self.gh_publisher.github_automation.file_exists(var_file_path):
-                logger.info(
-                    f"Variable catalog for {var_id} does not exist. Creating..."
-                )
-                var_metadata = generator.variables_metadata.get(var_id)
-                var_catalog = generator.build_variable_catalog(var_metadata)
-                file_dict[var_file_path] = var_catalog.to_dict()
-            else:
-                logger.info(
-                    f"Variable catalog already exists for {var_id}, adding product link."
-                )
-                full_path = (
-                    Path(self.gh_publisher.github_automation.local_clone_dir)
-                    / var_file_path
-                )
-                updated_catalog = generator.update_existing_variable_catalog(
-                    full_path, var_id
-                )
-                file_dict[var_file_path] = updated_catalog.to_dict()
+        # Update or create variable catalogs for each osc:variable
+        self._update_variable_catalogs(generator, file_dict, variable_ids)
 
-        file_dict[variable_base_catalog_path] = generator.update_variable_base_catalog(
-            variable_catalog_full_path, variable_ids
-        ).to_dict()
-
-        # Link product to base product catalog
-        product_catalog_path = f"products/catalog.json"
-        full_path = (
-                Path(self.gh_publisher.github_automation.local_clone_dir)
-                / product_catalog_path
+        # Update variable base catalog
+        variable_base_catalog_path = "variables/catalog.json"
+        self._update_and_add_to_file_dict(file_dict, variable_base_catalog_path,
+            generator.update_variable_base_catalog, variable_ids
         )
-        updated_product_base_catalog = generator.update_product_base_catalog(full_path)
-        # clean special characters
-        # self.clean_catalog_titles(updated_product_base_catalog)
-        file_dict[product_catalog_path] = updated_product_base_catalog.to_dict()
 
-        #Link product to project catalog
-        deepesdl_collection_path = \
-            f"projects/deep-earth-system-data-lab/collection.json"
-        deepesdl_collection_full_path = (
-                Path(self.gh_publisher.github_automation.local_clone_dir)
-                / deepesdl_collection_path
+        # Update product base catalog
+        product_catalog_path = "products/catalog.json"
+        self._update_and_add_to_file_dict(file_dict, product_catalog_path,
+            generator.update_product_base_catalog
         )
-        updated_deepesdl_collection = generator.update_deepesdl_collection(deepesdl_collection_full_path)
-        file_dict[deepesdl_collection_path] = updated_deepesdl_collection.to_dict()
+
+        # Update DeepESDL collection
+        deepesdl_collection_path = "projects/deep-earth-system-data-lab/collection.json"
+        self._update_and_add_to_file_dict(file_dict, deepesdl_collection_path,
+            generator.update_deepesdl_collection
+        )
 
         # Write to files if testing
         if write_to_file:
@@ -269,9 +276,10 @@ class Publisher:
                            f"-{datetime.now().strftime('%Y%m%d%H%M%S')}")
             commit_message = f"Add new dataset collection: {self.collection_id}"
             pr_title = f"Add new dataset collection: {self.collection_id}"
-            pr_body = (f"This PR adds a new dataset collection: {self.collection_id} and "
-                       f"it's "
-                       f"corresponding variable catalogs to the repository.")
+            pr_body = (
+                f"This PR adds a new dataset collection: {self.collection_id} and "
+                f"it's "
+                f"corresponding variable catalogs to the repository.")
 
             # Publish all files in one go
             pr_url = self.gh_publisher.publish_files(
@@ -349,9 +357,8 @@ class Publisher:
         if write_to_file:
             for file_path, data in file_dict.items():
                 self._write_to_file(file_path, data)
-
-        # Publish to GitHub if not testing
-        if not write_to_file:
+        else:
+            # Publish to GitHub if not testing
             branch_name = f"{WF_BRANCH_NAME}-{workflow_id}"
             commit_message = f"Adding workflow from DeepESDL: {workflow_id}"
             pr_title = f"Add workflow and Experiment from DeepESDL: {workflow_id}"
@@ -366,12 +373,3 @@ class Publisher:
             )
 
             logger.info(f"Pull request created: {pr_url}")
-
-if __name__ == '__main__':
-    # Example usage for testing
-    publisher = Publisher(dataset_config_path="/home/tejas/bc/projects/deepesdl/deep"
-                                              "-code/dataset-config.yaml",
-                          workflow_config_path="/home/tejas/bc/projects/deepesdl/deep-code/workflow"
-                             "-config.yaml")
-    publisher.publish_dataset(write_to_file=True)
-    publisher.publish_workflow_experiment(write_to_file=True)
