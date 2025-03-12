@@ -6,23 +6,16 @@
 
 import click
 
-from deep_code.tools.publish import Publisher, WorkflowPublisher
+from deep_code.tools.publish import Publisher
 
 
-@click.command(name="publish-dataset")
+@click.command(name="publish")
 @click.argument("dataset_config", type=click.Path(exists=True))
-def publish_dataset(dataset_config):
+@click.argument("workflow_config", type=click.Path(exists=True))
+def publish(dataset_config, workflow_config):
     """Request publishing a dataset to the open science catalogue.
     """
-    publisher = Publisher()
-    publisher.publish_dataset(dataset_config_path=dataset_config)
-
-
-@click.command(name="publish-workflow")
-@click.argument("workflow_metadata", type=click.Path(exists=True))
-def publish_workflow(workflow_metadata):
-
-    workflow_publisher = WorkflowPublisher()
-    workflow_publisher.publish_workflow_experiment(
-        workflow_config_path=workflow_metadata
+    publisher = Publisher(
+        dataset_config_path=dataset_config, workflow_config_path=workflow_config
     )
+    publisher.publish_all()
