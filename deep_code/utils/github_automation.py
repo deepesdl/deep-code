@@ -149,12 +149,3 @@ class GitHubAutomation:
         exists = os.path.isfile(full_path)
         logging.debug(f"Checking existence of {full_path}: {exists}")
         return exists
-
-    # # Check and convert any non-serializable objects
-    # def serialize(self, obj):
-    #     if isinstance(obj, set):
-    #         return list(obj)  # Convert sets to lists
-    #     if hasattr(obj, "__dict__"):
-    #         return obj.__dict__  # Convert objects with attributes to dicts
-    #     raise TypeError(
-    #         f"Object of type {type(obj).__name__} is not JSON serializable")
