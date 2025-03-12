@@ -14,6 +14,7 @@ import requests
 
 from deep_code.utils.helper import serialize
 
+
 class GitHubAutomation:
     """Automates GitHub operations needed to create a Pull Request.
 
@@ -53,7 +54,7 @@ class GitHubAutomation:
             try:
                 subprocess.run(
                     ["git", "clone", self.fork_repo_url, self.local_clone_dir],
-                    check=True
+                    check=True,
                 )
                 logging.info(f"Repository cloned to {self.local_clone_dir}")
             except subprocess.CalledProcessError as e:
@@ -80,7 +81,7 @@ class GitHubAutomation:
     def add_file(self, file_path: str, content):
         """Add a new file to the local repository."""
         logging.info(f"Adding new file: {file_path}...")
-        os.chdir(self.local_clone_dir) # Ensure we are in the Git repository
+        os.chdir(self.local_clone_dir)  # Ensure we are in the Git repository
         full_path = Path(self.local_clone_dir) / file_path
         full_path.parent.mkdir(parents=True, exist_ok=True)
 
