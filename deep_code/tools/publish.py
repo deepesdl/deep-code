@@ -1,10 +1,10 @@
 #!/usr/bin/env python3
-import copy
-import json
 # Copyright (c) 2025 by Brockmann Consult GmbH
 # Permissions are hereby granted under the terms of the MIT License:
 # https://opensource.org/licenses/MIT.
 
+import copy
+import json
 import logging
 from pathlib import Path
 from datetime import datetime
@@ -111,39 +111,8 @@ class Publisher:
         self._read_config_files()
         self.collection_id = self.dataset_config.get("collection_id")
 
-        # Ensure collection_id is set
         if not self.collection_id:
             raise ValueError("collection_id is missing in dataset config.")
-
-    # @staticmethod
-    # def clean_title(title: str) -> str:
-    #     """Clean up titles by replacing Unicode escape sequences with standard characters."""
-    #     title = title.replace('\u00a0',
-    #                           ' ')  # Replace non-breaking space with normal space
-    #     title = title.replace('\u00b0',
-    #                           '°')  # Replace unicode degree symbol with actual degree symbol
-    #     return title
-
-    # def clean_catalog_titles(self, catalog: Catalog):
-    #     """Recursively clean all titles in the catalog."""
-    #     # Clean title for the catalog itself
-    #     if isinstance(catalog.title, str):
-    #         catalog.title = self.clean_title(catalog.title)
-    #
-    #     # Clean titles in all links of the catalog
-    #     for link in catalog.links:
-    #         if isinstance(link.title, str):
-    #             link.title = self.clean_title(link.title)
-    #
-    #     for link in catalog.links:
-    #         if link.rel == 'child':
-    #             try:
-    #                 # If the link points to another catalog or collection, clean it recursively
-    #                 child_catalog = Catalog.from_file(link.href)
-    #                 self.clean_catalog_titles(child_catalog)
-    #             except Exception as e:
-    #                 # If the link doesn't point to a valid catalog file, skip it
-    #                 pass
 
     def _read_config_files(self) -> None:
         with fsspec.open(self.dataset_config_path, "r") as file:
@@ -210,7 +179,8 @@ class Publisher:
                 file_dict[var_file_path] = updated_catalog.to_dict()
 
     def publish_dataset(self, write_to_file: bool = False):
-        """Publish a product collection to the specified GitHub repository."""
+        """Prepare dataset/product collection for publishing to the specified GitHub
+        repository."""
 
         dataset_id = self.dataset_config.get("dataset_id")
         self.collection_id = self.dataset_config.get("collection_id")
@@ -270,27 +240,8 @@ class Publisher:
         if write_to_file:
             for file_path, data in file_dict.items():
                 self._write_to_file(file_path, data)  # Pass file_path and data
-        else:
-            # Create branch name, commit message, PR info
-            branch_name = (f"{OSC_BRANCH_NAME}-{self.collection_id}"
-                           f"-{datetime.now().strftime('%Y%m%d%H%M%S')}")
-            commit_message = f"Add new dataset collection: {self.collection_id}"
-            pr_title = f"Add new dataset collection: {self.collection_id}"
-            pr_body = (
-                f"This PR adds a new dataset collection: {self.collection_id} and "
-                f"it's "
-                f"corresponding variable catalogs to the repository.")
-
-            # Publish all files in one go
-            pr_url = self.gh_publisher.publish_files(
-                branch_name=branch_name,
-                file_dict=file_dict,
-                commit_message=commit_message,
-                pr_title=pr_title,
-                pr_body=pr_body,
-            )
-
-            logger.info(f"Pull request created: {pr_url}")
+            return {}
+        return file_dict
 
 
     @staticmethod
@@ -299,6 +250,8 @@ class Publisher:
 
 
     def publish_workflow_experiment(self, write_to_file: bool = False):
+        """prepare workflow and experiment as ogc api record to publish it to the
+        specified GitHub repository."""
         workflow_id = self._normalize_name(self.workflow_config.get("workflow_id"))
         if not workflow_id:
             raise ValueError("workflow_id is missing in workflow config.")
@@ -357,16 +310,39 @@ class Publisher:
         if write_to_file:
             for file_path, data in file_dict.items():
                 self._write_to_file(file_path, data)
-        else:
-            # Publish to GitHub if not testing
-            branch_name = f"{WF_BRANCH_NAME}-{workflow_id}"
-            commit_message = f"Adding workflow from DeepESDL: {workflow_id}"
-            pr_title = f"Add workflow and Experiment from DeepESDL: {workflow_id}"
-            pr_body = "This PR adds a new workflow/experiment to the OSC repository."
+            return {}
+        return file_dict
 
+    def publish_all(self, write_to_file: bool = False):
+        """Publish both dataset and workflow/experiment in a single PR."""
+        # Get file dictionaries from both methods
+        dataset_files = self.publish_dataset(write_to_file=write_to_file)
+        workflow_files = self.publish_workflow_experiment(write_to_file=write_to_file)
+
+        # Combine the file dictionaries
+        combined_files = {**dataset_files, **workflow_files}
+
+        if not write_to_file:
+            # Create branch name, commit message, PR info
+            branch_name = (f"{OSC_BRANCH_NAME}-{self.collection_id}"
+                           f"-{datetime.now().strftime('%Y%m%d%H%M%S')}")
+            commit_message = (
+                f"Add new dataset collection: {self.collection_id} and "
+                f"workflow/experiment: {self.workflow_config.get('workflow_id')}"
+            )
+            pr_title = (
+                f"Add new dataset collection: {self.collection_id} and "
+                f"workflow/experiment: {self.workflow_config.get('workflow_id')}"
+            )
+            pr_body = (
+                f"This PR adds a new dataset collection: {self.collection_id} and "
+                f"its corresponding workflow/experiment to the repository."
+            )
+
+            # Publish all files in one go
             pr_url = self.gh_publisher.publish_files(
                 branch_name=branch_name,
-                file_dict=file_dict,
+                file_dict=combined_files,
                 commit_message=commit_message,
                 pr_title=pr_title,
                 pr_body=pr_body,
