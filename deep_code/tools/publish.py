@@ -6,24 +6,22 @@
 import copy
 import json
 import logging
-from pathlib import Path
 from datetime import datetime
+from pathlib import Path
 
 import fsspec
 import yaml
 
-from deep_code.constants import (
-    OSC_BRANCH_NAME,
-    OSC_REPO_NAME,
-    OSC_REPO_OWNER,
-    WF_BRANCH_NAME
-)
+from deep_code.constants import OSC_BRANCH_NAME, OSC_REPO_NAME, OSC_REPO_OWNER
 from deep_code.utils.dataset_stac_generator import OscDatasetStacGenerator
 from deep_code.utils.github_automation import GitHubAutomation
-from deep_code.utils.ogc_api_record import WorkflowAsOgcRecord, \
-    ExperimentAsOgcRecord, LinksBuilder
-from deep_code.utils.ogc_record_generator import OSCWorkflowOGCApiRecordGenerator
 from deep_code.utils.helper import serialize
+from deep_code.utils.ogc_api_record import (
+    ExperimentAsOgcRecord,
+    LinksBuilder,
+    WorkflowAsOgcRecord,
+)
+from deep_code.utils.ogc_record_generator import OSCWorkflowOGCApiRecordGenerator
 
 logger = logging.getLogger(__name__)
 logging.basicConfig(level=logging.INFO)
@@ -138,8 +136,9 @@ class Publisher:
         with open(file_path, "w") as f:
             f.write(json_content)
 
-    def _update_and_add_to_file_dict(self, file_dict, catalog_path,
-                                     update_method, *args):
+    def _update_and_add_to_file_dict(
+        self, file_dict, catalog_path, update_method, *args
+    ):
         """Update a catalog using the specified method and add it to file_dict.
 
         Args:
@@ -148,8 +147,9 @@ class Publisher:
             update_method: The method to call for updating the catalog.
             *args: Additional arguments to pass to the update method.
         """
-        full_path = Path(
-            self.gh_publisher.github_automation.local_clone_dir) / catalog_path
+        full_path = (
+            Path(self.gh_publisher.github_automation.local_clone_dir) / catalog_path
+        )
         updated_catalog = update_method(full_path, *args)
         file_dict[catalog_path] = updated_catalog.to_dict()
 
@@ -165,17 +165,22 @@ class Publisher:
             var_file_path = f"variables/{var_id}/catalog.json"
             if not self.gh_publisher.github_automation.file_exists(var_file_path):
                 logger.info(
-                    f"Variable catalog for {var_id} does not exist. Creating...")
+                    f"Variable catalog for {var_id} does not exist. Creating..."
+                )
                 var_metadata = generator.variables_metadata.get(var_id)
                 var_catalog = generator.build_variable_catalog(var_metadata)
                 file_dict[var_file_path] = var_catalog.to_dict()
             else:
                 logger.info(
-                    f"Variable catalog already exists for {var_id}, adding product link.")
-                full_path = Path(
-                    self.gh_publisher.github_automation.local_clone_dir) / var_file_path
-                updated_catalog = generator.update_existing_variable_catalog(full_path,
-                                                                             var_id)
+                    f"Variable catalog already exists for {var_id}, adding product link."
+                )
+                full_path = (
+                    Path(self.gh_publisher.github_automation.local_clone_dir)
+                    / var_file_path
+                )
+                updated_catalog = generator.update_existing_variable_catalog(
+                    full_path, var_id
+                )
                 file_dict[var_file_path] = updated_catalog.to_dict()
 
     def publish_dataset(self, write_to_file: bool = False):
@@ -220,20 +225,23 @@ class Publisher:
 
         # Update variable base catalog
         variable_base_catalog_path = "variables/catalog.json"
-        self._update_and_add_to_file_dict(file_dict, variable_base_catalog_path,
-            generator.update_variable_base_catalog, variable_ids
+        self._update_and_add_to_file_dict(
+            file_dict,
+            variable_base_catalog_path,
+            generator.update_variable_base_catalog,
+            variable_ids,
         )
 
         # Update product base catalog
         product_catalog_path = "products/catalog.json"
-        self._update_and_add_to_file_dict(file_dict, product_catalog_path,
-            generator.update_product_base_catalog
+        self._update_and_add_to_file_dict(
+            file_dict, product_catalog_path, generator.update_product_base_catalog
         )
 
         # Update DeepESDL collection
         deepesdl_collection_path = "projects/deep-earth-system-data-lab/collection.json"
-        self._update_and_add_to_file_dict(file_dict, deepesdl_collection_path,
-            generator.update_deepesdl_collection
+        self._update_and_add_to_file_dict(
+            file_dict, deepesdl_collection_path, generator.update_deepesdl_collection
         )
 
         # Write to files if testing
@@ -243,11 +251,9 @@ class Publisher:
             return {}
         return file_dict
 
-
     @staticmethod
     def _normalize_name(name: str | None) -> str | None:
         return name.replace(" ", "-").lower() if name else None
-
 
     def publish_workflow_experiment(self, write_to_file: bool = False):
         """prepare workflow and experiment as ogc api record to publish it to the
@@ -275,7 +281,7 @@ class Publisher:
             properties=wf_record_properties,
             links=links + theme_links,
             jupyter_notebook_url=jupyter_notebook_url,
-            themes=osc_themes
+            themes=osc_themes,
         )
         # Convert to dictionary and remove jupyter_notebook_url
         workflow_dict = workflow_record.to_dict()
@@ -295,7 +301,7 @@ class Publisher:
             jupyter_notebook_url=jupyter_notebook_url,
             collection_id=self.collection_id,
             properties=exp_record_properties,
-            links=links + theme_links
+            links=links + theme_links,
         )
         # Convert to dictionary and remove jupyter_notebook_url
         experiment_dict = experiment_record.to_dict()
@@ -324,8 +330,10 @@ class Publisher:
 
         if not write_to_file:
             # Create branch name, commit message, PR info
-            branch_name = (f"{OSC_BRANCH_NAME}-{self.collection_id}"
-                           f"-{datetime.now().strftime('%Y%m%d%H%M%S')}")
+            branch_name = (
+                f"{OSC_BRANCH_NAME}-{self.collection_id}"
+                f"-{datetime.now().strftime('%Y%m%d%H%M%S')}"
+            )
             commit_message = (
                 f"Add new dataset collection: {self.collection_id} and "
                 f"workflow/experiment: {self.workflow_config.get('workflow_id')}"

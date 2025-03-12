@@ -24,4 +24,5 @@ def publish_workflow(workflow_metadata):
 
     workflow_publisher = WorkflowPublisher()
     workflow_publisher.publish_workflow_experiment(
-        workflow_config_path=workflow_metadata)
+        workflow_config_path=workflow_metadata
+    )

@@ -13,7 +13,6 @@ from pystac.extensions.base import ExtensionManagementMixin, PropertiesExtension
 from deep_code.constants import CF_SCHEMA_URI, OSC_SCHEMA_URI, THEMES_SCHEMA_URI
 
 
-
 class OscExtension(
     PropertiesExtension, ExtensionManagementMixin[pystac.Item | pystac.Collection]
 ):

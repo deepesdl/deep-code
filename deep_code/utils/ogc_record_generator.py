@@ -11,7 +11,7 @@ from deep_code.utils.ogc_api_record import (
     Contact,
     RecordProperties,
     Theme,
-    ThemeConcept
+    ThemeConcept,
 )
 
 
@@ -39,7 +39,9 @@ class OSCWorkflowOGCApiRecordGenerator:
         concepts = [ThemeConcept(id=theme_str) for theme_str in osc_themes]
         return Theme(concepts=concepts, scheme=OSC_THEME_SCHEME)
 
-    def build_record_properties(self, properties: dict, contacts: list) -> RecordProperties:
+    def build_record_properties(
+        self, properties: dict, contacts: list
+    ) -> RecordProperties:
         """Build a RecordProperties object from a properties dictionary.
 
         Args:
@@ -64,7 +66,8 @@ class OSCWorkflowOGCApiRecordGenerator:
         if themes_list:
             theme_obj = self.build_theme(themes_list)
             properties.update(
-                {"themes": [theme_obj]})  # Wrap the Theme object in a list
+                {"themes": [theme_obj]}
+            )  # Wrap the Theme object in a list
 
         properties.setdefault("type", "workflow")
 

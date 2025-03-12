@@ -1,5 +1,4 @@
 import unittest
-from datetime import datetime, timezone
 
 from deep_code.constants import DEFAULT_THEME_SCHEME
 from deep_code.utils.ogc_record_generator import OSCWorkflowOGCApiRecordGenerator
@@ -49,8 +48,6 @@ class TestOSCWorkflowOGCApiRecordGenerator(unittest.TestCase):
         ]
 
         record_properties = generator.build_record_properties(properties, contacts)
-
-        now_iso = datetime.now(timezone.utc).isoformat()
 
         self.assertEqual(record_properties.title, "Test Workflow")
         self.assertEqual(record_properties.description, "A test description")

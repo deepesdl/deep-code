@@ -1,7 +1,3 @@
-import json
-from pathlib import Path
-
-
 def serialize(obj):
     """Convert non-serializable objects to JSON-compatible formats.
     Args:

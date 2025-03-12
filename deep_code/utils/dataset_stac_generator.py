@@ -1,5 +1,4 @@
 #!/usr/bin/env python3
-import json
 # Copyright (c) 2025 by Brockmann Consult GmbH
 # Permissions are hereby granted under the terms of the MIT License:
 # https://opensource.org/licenses/MIT.
@@ -12,10 +11,14 @@ import pandas as pd
 from pystac import Catalog, Collection, Extent, Link, SpatialExtent, TemporalExtent
 from xcube.core.store import new_data_store
 
-from deep_code.constants import OSC_THEME_SCHEME, VARIABLE_BASE_CATALOG_SELF_HREF, \
-    PRODUCT_BASE_CATALOG_SELF_HREF, DEEPESDL_COLLECTION_SELF_HREF
-from deep_code.utils.osc_extension import OscExtension
+from deep_code.constants import (
+    DEEPESDL_COLLECTION_SELF_HREF,
+    OSC_THEME_SCHEME,
+    PRODUCT_BASE_CATALOG_SELF_HREF,
+    VARIABLE_BASE_CATALOG_SELF_HREF,
+)
 from deep_code.utils.ogc_api_record import Theme, ThemeConcept
+from deep_code.utils.osc_extension import OscExtension
 
 
 class OscDatasetStacGenerator:
@@ -222,10 +225,6 @@ class OscDatasetStacGenerator:
         """
         gcmd_keyword_url = var_metadata.get("gcmd_keyword_url")
         if not gcmd_keyword_url:
-            self.logger.debug(
-                f"No gcmd_keyword_url in var_metadata. Please input GCMD link "
-                f"for the {var_metadata.get("variable_id")} catalog"
-            )
             gcmd_keyword_url = input(
                 f"Enter GCMD keyword URL or a similar url for"
                 f" {var_metadata.get("variable_id")}: ").strip()
@@ -382,7 +381,7 @@ class OscDatasetStacGenerator:
             deepesdl_collection.add_link(
                 Link(
                     rel="related",
-                    target=f"../../themes/cryosphere/catalog.json",
+                    target=f"../../themes/{theme}/catalog.json",
                     media_type="application/json",
                     title=f"Theme: {self.format_string(theme)}"
                 )
@@ -526,9 +525,9 @@ class OscDatasetStacGenerator:
         collection.add_link(
             Link(
                 rel="related",
-                target=f"../../projects/deep-earth-system-data-lab/collection.json",
+                target="../../projects/deep-earth-system-data-lab/collection.json",
                 media_type="application/json",
-                title=f"Project: DeepESDL"
+                title="Project: DeepESDL"
             )
         )
 
