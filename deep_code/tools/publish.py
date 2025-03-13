@@ -11,8 +11,15 @@ from pathlib import Path
 
 import fsspec
 import yaml
+from pystac import Catalog, Link
 
-from deep_code.constants import OSC_BRANCH_NAME, OSC_REPO_NAME, OSC_REPO_OWNER
+from deep_code.constants import (
+    EXPERIMENT_BASE_CATALOG_SELF_HREF,
+    OSC_BRANCH_NAME,
+    OSC_REPO_NAME,
+    OSC_REPO_OWNER,
+    WORKFLOW_BASE_CATALOG_SELF_HREF,
+)
 from deep_code.utils.dataset_stac_generator import OscDatasetStacGenerator
 from deep_code.utils.github_automation import GitHubAutomation
 from deep_code.utils.helper import serialize
@@ -255,6 +262,37 @@ class Publisher:
     def _normalize_name(name: str | None) -> str | None:
         return name.replace(" ", "-").lower() if name else None
 
+    def _update_base_catalog(
+        self, catalog_path: str, item_id: str, self_href: str
+    ) -> Catalog:
+        """Update a base catalog by adding a link to a new item.
+
+        Args:
+            catalog_path: Path to the base catalog JSON file.
+            item_id: ID of the new item (experiment or workflow).
+            self_href: Self-href for the base catalog.
+
+        Returns:
+            Updated Catalog object.
+        """
+        # Load the base catalog
+        base_catalog = Catalog.from_file(Path(self.gh_publisher.github_automation.local_clone_dir) / catalog_path)
+
+        # Add a link to the new item
+        base_catalog.add_link(
+            Link(
+                rel="item",
+                target=f"./{item_id}/collection.json",
+                media_type="application/json",
+                title=item_id,
+            )
+        )
+
+        # Set the self-href for the base catalog
+        base_catalog.set_self_href(self_href)
+
+        return base_catalog
+
     def publish_workflow_experiment(self, write_to_file: bool = False):
         """prepare workflow and experiment as ogc api record to publish it to the
         specified GitHub repository."""
@@ -287,7 +325,7 @@ class Publisher:
         workflow_dict = workflow_record.to_dict()
         if "jupyter_notebook_url" in workflow_dict:
             del workflow_dict["jupyter_notebook_url"]
-        wf_file_path = f"workflow/{workflow_id}/record.json"
+        wf_file_path = f"workflows/{workflow_id}/record.json"
         file_dict = {wf_file_path: workflow_dict}
 
         # Build properties for the experiment record
@@ -312,6 +350,17 @@ class Publisher:
         exp_file_path = f"experiments/{workflow_id}/record.json"
         file_dict[exp_file_path] = experiment_dict
 
+        self._update_base_catalog(
+            catalog_path="experiments/catalog.json",
+            item_id=workflow_id,
+            self_href=EXPERIMENT_BASE_CATALOG_SELF_HREF,
+        )
+
+        self._update_base_catalog(
+            catalog_path="workflow/catalog.json",
+            item_id=workflow_id,
+            self_href=WORKFLOW_BASE_CATALOG_SELF_HREF,
+        )
         # Write to files if testing
         if write_to_file:
             for file_path, data in file_dict.items():
