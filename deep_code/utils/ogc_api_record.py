@@ -172,12 +172,6 @@ class WorkflowAsOgcRecord(MappingConstructible["OgcRecord"], JsonSerializable):
             },
         ]
 
-    # def _assemble_all_links(self):
-    #     static_links = self._generate_static_links()
-    #     link_builder = LinksBuilder(self.themes)
-    #     theme_links = link_builder.build_them_links_for_records()
-    #     return static_links + theme_links
-
 
 class ExperimentAsOgcRecord(MappingConstructible["OgcRecord"], JsonSerializable):
     def __init__(
