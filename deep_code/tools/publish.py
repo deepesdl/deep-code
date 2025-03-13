@@ -107,6 +107,7 @@ class Publisher:
         # Composition
         self.gh_publisher = GitHubPublisher()
         self.collection_id = ""
+        self.workflow_title = ""
 
         # Paths to configuration files
         self.dataset_config_path = dataset_config_path
@@ -115,6 +116,7 @@ class Publisher:
         # Load configuration files
         self._read_config_files()
         self.collection_id = self.dataset_config.get("collection_id")
+        self.workflow_title = self.workflow_config.get("properties", {}).get("title")
 
         if not self.collection_id:
             raise ValueError("collection_id is missing in dataset config.")
@@ -158,7 +160,7 @@ class Publisher:
             Path(self.gh_publisher.github_automation.local_clone_dir) / catalog_path
         )
         updated_catalog = update_method(full_path, *args)
-        file_dict[catalog_path] = updated_catalog.to_dict()
+        file_dict[full_path] = updated_catalog.to_dict()
 
     def _update_variable_catalogs(self, generator, file_dict, variable_ids):
         """Update or create variable catalogs and add them to file_dict.
@@ -282,9 +284,9 @@ class Publisher:
         base_catalog.add_link(
             Link(
                 rel="item",
-                target=f"./{item_id}/collection.json",
+                target=f"./{item_id}/record.json",
                 media_type="application/json",
-                title=item_id,
+                title=f"{self.workflow_title}",
             )
         )
 
@@ -309,6 +311,8 @@ class Publisher:
         logger.info("Generating OGC API Record for the workflow...")
         rg = OSCWorkflowOGCApiRecordGenerator()
         wf_record_properties = rg.build_record_properties(properties_list, contacts)
+        # make a copy for experiment record
+        exp_record_properties = copy.deepcopy(wf_record_properties)
 
         link_builder = LinksBuilder(osc_themes)
         theme_links = link_builder.build_them_links_for_records()
@@ -316,6 +320,7 @@ class Publisher:
         workflow_record = WorkflowAsOgcRecord(
             id=workflow_id,
             type="Feature",
+            title=self.workflow_title,
             properties=wf_record_properties,
             links=links + theme_links,
             jupyter_notebook_url=jupyter_notebook_url,
@@ -325,16 +330,18 @@ class Publisher:
         workflow_dict = workflow_record.to_dict()
         if "jupyter_notebook_url" in workflow_dict:
             del workflow_dict["jupyter_notebook_url"]
+        if "osc:workflow" in workflow_dict["properties"]:
+            del workflow_dict["properties"]["osc:workflow"]
         wf_file_path = f"workflows/{workflow_id}/record.json"
         file_dict = {wf_file_path: workflow_dict}
 
         # Build properties for the experiment record
-        exp_record_properties = copy.deepcopy(wf_record_properties)
         exp_record_properties.type = "experiment"
         exp_record_properties.osc_workflow = workflow_id
 
         experiment_record = ExperimentAsOgcRecord(
             id=workflow_id,
+            title=self.workflow_title,
             type="Feature",
             jupyter_notebook_url=jupyter_notebook_url,
             collection_id=self.collection_id,
@@ -347,17 +354,19 @@ class Publisher:
             del experiment_dict["jupyter_notebook_url"]
         if "collection_id" in experiment_dict:
             del experiment_dict["collection_id"]
+        if "osc:project" in experiment_dict["properties"]:
+            del experiment_dict["properties"]["osc:project"]
         exp_file_path = f"experiments/{workflow_id}/record.json"
         file_dict[exp_file_path] = experiment_dict
 
-        self._update_base_catalog(
+        file_dict["experiments/catalog.json"] = self._update_base_catalog(
             catalog_path="experiments/catalog.json",
             item_id=workflow_id,
             self_href=EXPERIMENT_BASE_CATALOG_SELF_HREF,
         )
 
-        self._update_base_catalog(
-            catalog_path="workflow/catalog.json",
+        file_dict["workflows/catalog.json"] = self._update_base_catalog(
+            catalog_path="workflows/catalog.json",
             item_id=workflow_id,
             self_href=WORKFLOW_BASE_CATALOG_SELF_HREF,
         )
