@@ -26,5 +26,6 @@ BASE_URL_OSC = "https://esa-earthcode.github.io/open-science-catalog-metadata"
 EXPERIMENT_BASE_CATALOG_SELF_HREF = \
     "https://esa-earthcode.github.io/open-science-catalog-metadata/experiments/catalog.json"
 WORKFLOW_BASE_CATALOG_SELF_HREF = \
-    ("https://esa-earthcode.github.io/open-science-catalog-metadata/workflow/catalog"
+    ("https://esa-earthcode.github.io/open-science-catalog-metadata/workflows/catalog"
      ".json")
+PROJECT_COLLECTION_NAME = "deep-earth-system-data-lab"

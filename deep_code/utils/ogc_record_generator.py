@@ -47,7 +47,6 @@ class OSCWorkflowOGCApiRecordGenerator:
         Args:
             properties: A dictionary containing properties (e.g., title, description, themes).
             contacts: A list of contact dictionaries.
-            caller: The caller type ("WorkflowAsOgcRecord" or "ExperimentAsOgcRecord").
 
         Returns:
             A RecordProperties object.
@@ -70,5 +69,6 @@ class OSCWorkflowOGCApiRecordGenerator:
             )  # Wrap the Theme object in a list
 
         properties.setdefault("type", "workflow")
+        properties.setdefault("osc_project", "deep-earth-system-data-lab")
 
         return RecordProperties.from_value(properties)

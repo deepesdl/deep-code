@@ -3,7 +3,8 @@ from typing import Any, Optional
 from xrlint.util.constructible import MappingConstructible
 from xrlint.util.serializable import JsonSerializable, JsonValue
 
-from deep_code.constants import BASE_URL_OSC, OGC_API_RECORD_SPEC
+from deep_code.constants import BASE_URL_OSC, OGC_API_RECORD_SPEC, \
+    PROJECT_COLLECTION_NAME
 
 
 class Contact(MappingConstructible["Contact"], JsonSerializable):
@@ -50,6 +51,7 @@ class RecordProperties(MappingConstructible["RecordProperties"], JsonSerializabl
         title: str,
         description: str,
         jupyter_kernel_info: JupyterKernelInfo,
+        osc_project: str,
         osc_workflow: str = None,
         updated: str = None,
         contacts: list[Contact] = None,
@@ -64,6 +66,7 @@ class RecordProperties(MappingConstructible["RecordProperties"], JsonSerializabl
         self.title = title
         self.description = description
         self.jupyter_kernel_info = jupyter_kernel_info
+        self.osc_project = osc_project
         self.osc_workflow = osc_workflow
         self.keywords = keywords or []
         self.contacts = contacts
@@ -77,6 +80,9 @@ class RecordProperties(MappingConstructible["RecordProperties"], JsonSerializabl
         if self.osc_workflow is not None:
             data["osc:workflow"] = self.osc_workflow
             del data["osc_workflow"]  # Remove the original key
+        if self.osc_project is not None:
+            data["osc:project"] = self.osc_project
+            del data["osc_project"]
         return data
 
 
@@ -118,6 +124,7 @@ class WorkflowAsOgcRecord(MappingConstructible["OgcRecord"], JsonSerializable):
         self,
         id: str,
         type: str,
+        title: str,
         jupyter_notebook_url: str,
         properties: RecordProperties,
         links: list[dict],
@@ -130,6 +137,7 @@ class WorkflowAsOgcRecord(MappingConstructible["OgcRecord"], JsonSerializable):
             conformsTo = [OGC_API_RECORD_SPEC]
         self.id = id
         self.type = type
+        self.title = title
         self.jupyter_notebook_url = jupyter_notebook_url
         self.geometry = geometry
         self.properties = properties
@@ -157,13 +165,19 @@ class WorkflowAsOgcRecord(MappingConstructible["OgcRecord"], JsonSerializable):
                 "rel": "child",
                 "href": f"../../experiments/{self.id}/record.json",
                 "type": "application/json",
-                "title": f"{self.id}",
+                "title": f"{self.title}",
             },
             {
                 "rel": "jupyter-notebook",
                 "type": "application/json",
                 "title": "Jupyter Notebook",
                 "href": f"{self.jupyter_notebook_url}",
+            },
+            {
+                "rel": "related",
+                "href": f"../../projects/{PROJECT_COLLECTION_NAME}/collection.json",
+                "type": "application/json",
+                "title": "Project: DeepESDL",
             },
             {
                 "rel": "self",
@@ -177,6 +191,7 @@ class ExperimentAsOgcRecord(MappingConstructible["OgcRecord"], JsonSerializable)
     def __init__(
         self,
         id: str,
+        title: str,
         type: str,
         jupyter_notebook_url: str,
         collection_id: str,
@@ -191,6 +206,7 @@ class ExperimentAsOgcRecord(MappingConstructible["OgcRecord"], JsonSerializable)
         if conformsTo is None:
             conformsTo = [OGC_API_RECORD_SPEC]
         self.id = id
+        self.title = title
         self.type = type
         self.conformsTo = conformsTo
         self.jupyter_notebook_url = jupyter_notebook_url
@@ -219,7 +235,7 @@ class ExperimentAsOgcRecord(MappingConstructible["OgcRecord"], JsonSerializable)
                 "rel": "related",
                 "href": f"../../workflows/{self.id}/record.json",
                 "type": "application/json",
-                "title": "Workflow: POLARIS",
+                "title": f"Workflow: {self.title}",
             },
             {
                 "rel": "child",
@@ -229,7 +245,7 @@ class ExperimentAsOgcRecord(MappingConstructible["OgcRecord"], JsonSerializable)
             },
             {
                 "rel": "related",
-                "href": "../../projects/deepesdl/collection.json",
+                "href": f"../../projects/{PROJECT_COLLECTION_NAME}/collection.json",
                 "type": "application/json",
                 "title": "Project: DeepESDL",
             },
