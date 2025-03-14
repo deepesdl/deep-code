@@ -41,16 +41,9 @@ class TestPublisher(unittest.TestCase):
         )
 
     def test_normalize_name(self):
-        # Test normal input
         self.assertEqual(Publisher._normalize_name("Test Name"), "test-name")
-
-        # Test input with multiple spaces
         self.assertEqual(Publisher._normalize_name("Test   Name"), "test---name")
-
-        # Test empty input
         self.assertIsNone(Publisher._normalize_name(""))
-
-        # Test None input
         self.assertIsNone(Publisher._normalize_name(None))
 
     def test_write_to_file(self):
