@@ -3,8 +3,11 @@ from typing import Any, Optional
 from xrlint.util.constructible import MappingConstructible
 from xrlint.util.serializable import JsonSerializable, JsonValue
 
-from deep_code.constants import BASE_URL_OSC, OGC_API_RECORD_SPEC, \
-    PROJECT_COLLECTION_NAME
+from deep_code.constants import (
+    BASE_URL_OSC,
+    OGC_API_RECORD_SPEC,
+    PROJECT_COLLECTION_NAME,
+)
 
 
 class Contact(MappingConstructible["Contact"], JsonSerializable):
@@ -267,4 +270,3 @@ class ExperimentAsOgcRecord(MappingConstructible["OgcRecord"], JsonSerializable)
                 "type": "application/json",
             },
         ]
-
