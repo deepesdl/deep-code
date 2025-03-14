@@ -18,7 +18,10 @@ class TestPublisher(unittest.TestCase):
         mock_github_publisher.return_value = self.mock_github_publisher_instance
 
         # Mock dataset and workflow config files
-        self.dataset_config = {"collection_id": "test-collection", "dataset_id": "test-dataset"}
+        self.dataset_config = {
+            "collection_id": "test-collection",
+            "dataset_id": "test-dataset",
+        }
         self.workflow_config = {
             "properties": {"title": "Test Workflow"},
             "workflow_id": "test-workflow",
@@ -82,8 +85,9 @@ class TestPublisher(unittest.TestCase):
 
         # Mock the Catalog.from_file method
         with patch("pystac.Catalog.from_file", return_value=catalog):
-            updated_catalog = self.publisher._update_base_catalog(catalog_path,
-                                                                  item_id, self_href)
+            updated_catalog = self.publisher._update_base_catalog(
+                catalog_path, item_id, self_href
+            )
 
         # Assertions
         self.assertEqual(updated_catalog.get_self_href(), self_href)
@@ -91,7 +95,10 @@ class TestPublisher(unittest.TestCase):
 
     def test_read_config_files(self):
         # Mock dataset and workflow config files
-        dataset_config = {"collection_id": "test-collection", "dataset_id": "test-dataset"}
+        dataset_config = {
+            "collection_id": "test-collection",
+            "dataset_id": "test-dataset",
+        }
         workflow_config = {
             "properties": {"title": "Test Workflow"},
             "workflow_id": "test-workflow",
