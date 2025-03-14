@@ -1,6 +1,6 @@
 import unittest
 
-from deep_code.constants import DEFAULT_THEME_SCHEME
+from deep_code.constants import OSC_THEME_SCHEME
 from deep_code.utils.ogc_record_generator import OSCWorkflowOGCApiRecordGenerator
 
 
@@ -29,7 +29,7 @@ class TestOSCWorkflowOGCApiRecordGenerator(unittest.TestCase):
         self.assertEqual(len(theme.concepts), 2)
         self.assertEqual(theme.concepts[0].id, "theme1")
         self.assertEqual(theme.concepts[1].id, "theme2")
-        self.assertEqual(theme.scheme, DEFAULT_THEME_SCHEME)
+        self.assertEqual(theme.scheme, OSC_THEME_SCHEME)
 
     def test_build_record_properties(self):
         generator = OSCWorkflowOGCApiRecordGenerator()
