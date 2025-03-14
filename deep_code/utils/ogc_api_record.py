@@ -79,7 +79,7 @@ class RecordProperties(MappingConstructible["RecordProperties"], JsonSerializabl
         data = super().to_dict(value_name)
         if self.osc_workflow is not None:
             data["osc:workflow"] = self.osc_workflow
-            del data["osc_workflow"]  # Remove the original key
+            del data["osc_workflow"]  # Remove the original key as it be renamed it
         if self.osc_project is not None:
             data["osc:project"] = self.osc_project
             del data["osc_project"]

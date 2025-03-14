@@ -326,12 +326,12 @@ class Publisher:
             jupyter_notebook_url=jupyter_notebook_url,
             themes=osc_themes,
         )
-        # Convert to dictionary and remove jupyter_notebook_url
+        # Convert to dictionary and cleanup
         workflow_dict = workflow_record.to_dict()
         if "jupyter_notebook_url" in workflow_dict:
             del workflow_dict["jupyter_notebook_url"]
-        if "osc:workflow" in workflow_dict["properties"]:
-            del workflow_dict["properties"]["osc:workflow"]
+        if "osc_workflow" in workflow_dict["properties"]:
+            del workflow_dict["properties"]["osc_workflow"]
         wf_file_path = f"workflows/{workflow_id}/record.json"
         file_dict = {wf_file_path: workflow_dict}
 
@@ -348,7 +348,7 @@ class Publisher:
             properties=exp_record_properties,
             links=links + theme_links,
         )
-        # Convert to dictionary and remove jupyter_notebook_url
+        # Convert to dictionary and cleanup
         experiment_dict = experiment_record.to_dict()
         if "jupyter_notebook_url" in experiment_dict:
             del experiment_dict["jupyter_notebook_url"]
@@ -359,6 +359,7 @@ class Publisher:
         exp_file_path = f"experiments/{workflow_id}/record.json"
         file_dict[exp_file_path] = experiment_dict
 
+        # Update base catalogs of experiments and workflows with links
         file_dict["experiments/catalog.json"] = self._update_base_catalog(
             catalog_path="experiments/catalog.json",
             item_id=workflow_id,
