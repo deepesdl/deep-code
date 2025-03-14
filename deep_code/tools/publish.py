@@ -278,7 +278,9 @@ class Publisher:
             Updated Catalog object.
         """
         # Load the base catalog
-        base_catalog = Catalog.from_file(Path(self.gh_publisher.github_automation.local_clone_dir) / catalog_path)
+        base_catalog = Catalog.from_file(
+            Path(self.gh_publisher.github_automation.local_clone_dir) / catalog_path
+        )
 
         # Add a link to the new item
         base_catalog.add_link(
