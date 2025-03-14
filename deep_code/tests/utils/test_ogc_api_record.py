@@ -99,7 +99,7 @@ class TestRecordProperties(unittest.TestCase):
         self.assertEqual(record_properties.title, "Test Workflow")
         self.assertEqual(record_properties.description, "A test workflow")
         self.assertEqual(record_properties.jupyter_kernel_info, kernel_info)
-        self.assertEqual(record_properties.osc_project, "deep-esdl")
+        self.assertEqual(record_properties.osc_project, "DeepESDL")
         self.assertEqual(record_properties.osc_workflow, "test-workflow")
         self.assertEqual(record_properties.keywords, ["test", "workflow"])
         self.assertEqual(record_properties.contacts, [contact])
