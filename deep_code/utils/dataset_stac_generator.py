@@ -175,7 +175,10 @@ class OscDatasetStacGenerator:
 
     @staticmethod
     def _normalize_name(name: str | None) -> str | None:
-        return name.replace(" ", "-").lower() if name else None
+        if name:
+            return (name.replace(" ", "-").
+                    replace("_", "-").lower())
+        return None
 
     def _get_general_metadata(self) -> dict:
         return {
@@ -200,8 +203,10 @@ class OscDatasetStacGenerator:
     def get_variable_ids(self) -> list[str]:
         """Get variable IDs for all variables in the dataset."""
         variable_ids = list(self.variables_metadata.keys())
-        #  Remove 'crs' and 'spatial_ref' from the list if they exist
-        return [var_id for var_id in variable_ids if var_id not in ["crs", "spatial_ref"]]
+        #  Remove 'crs' and 'spatial_ref' from the list if they exist, note that
+        #  spatial_ref will be normalized to spatial-ref in variable_ids and skipped.
+        return [var_id for var_id in variable_ids if var_id not in ["crs",
+                                                                    "spatial-ref"]]
 
     def get_variables_metadata(self) -> dict[str, dict]:
         """Extract metadata for all variables in the dataset."""
@@ -263,7 +268,7 @@ class OscDatasetStacGenerator:
         var_catalog = Catalog(
             id=var_id,
             description=var_metadata.get("description"),
-            title=var_id,
+            title=self.format_string(var_id),
             stac_extensions=[
                 "https://stac-extensions.github.io/themes/v1.0.0/schema.json"
             ],
@@ -335,8 +340,7 @@ class OscDatasetStacGenerator:
             product_base_catalog.set_self_href(PRODUCT_BASE_CATALOG_SELF_HREF)
             return product_base_catalog
 
-    @staticmethod
-    def update_variable_base_catalog(variable_base_catalog_path, variable_ids) \
+    def update_variable_base_catalog(self, variable_base_catalog_path, variable_ids) \
             -> (
             Catalog):
         """Link product to base product catalog"""
@@ -347,7 +351,7 @@ class OscDatasetStacGenerator:
                     rel="child",
                     target=f"./{var_id}/catalog.json",
                     media_type="application/json",
-                    title=var_id,
+                    title=self.format_string(var_id),
                 )
             )
         # 'self' link: the direct URL where this JSON is hosted
@@ -414,8 +418,11 @@ class OscDatasetStacGenerator:
         return existing_catalog
 
     @staticmethod
-    def format_string(s):
-        return s.capitalize()
+    def format_string(s: str) -> str:
+        # Strip leading/trailing spaces/underscores and replace underscores with spaces
+        words = s.strip(" _").replace("_", " ").replace("-", " ").split()
+        # Capitalize each word and join them with a space
+        return " ".join(word.capitalize() for word in words)
 
     @staticmethod
     def build_theme(osc_themes: list[str]) -> Theme:
@@ -496,7 +503,7 @@ class OscDatasetStacGenerator:
                     rel="related",
                     target=f"../../variables/{var}/catalog.json",
                     media_type="application/json",
-                    title="Variable: " + var,
+                    title="Variable: " + self.format_string(var),
                 )
             )
 
