@@ -59,13 +59,13 @@ Use the --help option with these subcommands to get more details on usage.
 The CLI retrieves the Git username and personal access token from a hidden file named .gitaccess. Ensure this file is located in the same directory where you execute the CLI
 command.
 
-###  deep-code publish-product
+###  deep-code publish
 
-Publish a dataset which is a result of an experiment to the EarthCODE 
-open-science catalog.
+Publish the experiment, workflow and  dataset which is a result of an experiment to 
+the EarthCODE open-science catalog.
 
 ```commandline
- deep-code publish-dataset /path/to/dataset-config.yaml
+ deep-code publish /path/to/dataset-config.yaml /path/to/workflow-config.yaml
  ```
 
 #### .gitaccess example
@@ -94,12 +94,6 @@ cf_parameter:
 
 dataset-id has to be a valid dataset-id from `deep-esdl-public` s3 or your team bucket.
 
-### deep-code publish-workflow
-
-Publish a workflow/experiment to the EarthCODE open-science catalog.
-
-```commandline
-deep-code publish-workflow /path/to/workflow-config.yaml
  ```
 #### workflow-config.yaml example
 
