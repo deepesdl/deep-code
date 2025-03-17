@@ -218,33 +218,60 @@ class TestOSCProductSTACGenerator(unittest.TestCase):
         self.assertIn("Public store, Authenticated store", str(context.exception))
         self.assertEqual(mock_new_data_store.call_count, 2)
 
+
 class TestFormatString(unittest.TestCase):
     def test_single_word(self):
-        self.assertEqual(OscDatasetStacGenerator.format_string("temperature"), "Temperature")
+        self.assertEqual(
+            OscDatasetStacGenerator.format_string("temperature"), "Temperature"
+        )
         self.assertEqual(OscDatasetStacGenerator.format_string("temp"), "Temp")
         self.assertEqual(OscDatasetStacGenerator.format_string("hello"), "Hello")
 
     def test_multiple_words_with_spaces(self):
-        self.assertEqual(OscDatasetStacGenerator.format_string("surface temp"), "Surface Temp")
-        self.assertEqual(OscDatasetStacGenerator.format_string("this is a test"), "This Is A Test")
+        self.assertEqual(
+            OscDatasetStacGenerator.format_string("surface temp"), "Surface Temp"
+        )
+        self.assertEqual(
+            OscDatasetStacGenerator.format_string("this is a test"), "This Is A Test"
+        )
 
     def test_multiple_words_with_underscores(self):
-        self.assertEqual(OscDatasetStacGenerator.format_string("surface_temp"), "Surface Temp")
-        self.assertEqual(OscDatasetStacGenerator.format_string("this_is_a_test"), "This Is A Test")
+        self.assertEqual(
+            OscDatasetStacGenerator.format_string("surface_temp"), "Surface Temp"
+        )
+        self.assertEqual(
+            OscDatasetStacGenerator.format_string("this_is_a_test"), "This Is A Test"
+        )
 
     def test_mixed_spaces_and_underscores(self):
-        self.assertEqual(OscDatasetStacGenerator.format_string("surface_temp and_more"), "Surface Temp And More")
-        self.assertEqual(OscDatasetStacGenerator.format_string("mixed_case_with_underscores_and spaces"), "Mixed Case With Underscores And Spaces")
+        self.assertEqual(
+            OscDatasetStacGenerator.format_string("surface_temp and_more"),
+            "Surface Temp And More",
+        )
+        self.assertEqual(
+            OscDatasetStacGenerator.format_string(
+                "mixed_case_with_underscores_and spaces"
+            ),
+            "Mixed Case With Underscores And Spaces",
+        )
 
     def test_edge_cases(self):
         # Empty string
         self.assertEqual(OscDatasetStacGenerator.format_string(""), "")
         # Single word with trailing underscore
-        self.assertEqual(OscDatasetStacGenerator.format_string("temperature_"), "Temperature")
+        self.assertEqual(
+            OscDatasetStacGenerator.format_string("temperature_"), "Temperature"
+        )
         # Single word with leading underscore
         self.assertEqual(OscDatasetStacGenerator.format_string("_temp"), "Temp")
         # Single word with leading/trailing spaces
         self.assertEqual(OscDatasetStacGenerator.format_string("  hello  "), "Hello")
         # Multiple spaces or underscores
-        self.assertEqual(OscDatasetStacGenerator.format_string("too___many___underscores"), "Too Many Underscores")
-        self.assertEqual(OscDatasetStacGenerator.format_string("too   many   spaces"), "Too Many Spaces")
+        self.assertEqual(
+            OscDatasetStacGenerator.format_string("too___many___underscores"),
+            "Too Many Underscores",
+        )
+        self.assertEqual(
+            OscDatasetStacGenerator.format_string("too   many   spaces"),
+            "Too Many Spaces",
+        )
