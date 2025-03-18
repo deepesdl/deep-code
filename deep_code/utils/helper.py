@@ -8,7 +8,7 @@ def serialize(obj):
         TypeError: If the object cannot be serialized.
     """
     if isinstance(obj, set):
-        return list(obj)  # Convert sets to lists
+        return list(obj)
     if hasattr(obj, "__dict__"):
-        return obj.__dict__  # Convert objects with attributes to dicts
+        return obj.__dict__
     raise TypeError(f"Object of type {type(obj).__name__} is not JSON serializable")

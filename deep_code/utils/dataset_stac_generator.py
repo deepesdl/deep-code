@@ -519,13 +519,13 @@ class OscDatasetStacGenerator:
             collection.extra_fields["themes"] = [theme_obj]
 
             for theme in self.osc_themes:
-                formated_theme = self.format_string(theme)
+                formatted_theme = self.format_string(theme)
                 collection.add_link(
                     Link(
                         rel="related",
                         target=f"../../themes/{theme}/catalog.json",
                         media_type="application/json",
-                        title=f"Theme: {formated_theme}",
+                        title=f"Theme: {formatted_theme}",
                     )
                 )
 

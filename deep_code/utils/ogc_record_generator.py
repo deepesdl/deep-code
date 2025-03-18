@@ -61,9 +61,7 @@ class OSCWorkflowOGCApiRecordGenerator:
 
         if themes_list:
             theme_obj = self.build_theme(themes_list)
-            properties.update(
-                {"themes": [theme_obj]}
-            )
+            properties.update({"themes": [theme_obj]})
 
         properties.setdefault("type", "workflow")
         properties.setdefault("osc_project", "deep-earth-system-data-lab")

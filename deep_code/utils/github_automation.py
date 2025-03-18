@@ -49,7 +49,6 @@ class GitHubAutomation:
         """Clone the forked repository locally if it doesn't exist, or pull updates if it does."""
         logging.info("Checking local repository...")
         if not os.path.exists(self.local_clone_dir):
-            # Directory doesn't exist, clone the repository
             logging.info("Cloning forked repository...")
             try:
                 subprocess.run(
@@ -60,7 +59,6 @@ class GitHubAutomation:
             except subprocess.CalledProcessError as e:
                 raise RuntimeError(f"Failed to clone repository: {e}")
         else:
-            # Directory exists, pull the latest changes
             logging.info("Local repository already exists. Pulling latest changes...")
             try:
                 os.chdir(self.local_clone_dir)
@@ -81,26 +79,20 @@ class GitHubAutomation:
     def add_file(self, file_path: str, content):
         """Add a new file to the local repository."""
         logging.info(f"Adding new file: {file_path}...")
-        os.chdir(self.local_clone_dir)  # Ensure we are in the Git repository
+        os.chdir(self.local_clone_dir)
         full_path = Path(self.local_clone_dir) / file_path
         full_path.parent.mkdir(parents=True, exist_ok=True)
-
         # Ensure content is serializable
         if hasattr(content, "to_dict"):
             content = content.to_dict()
         if not isinstance(content, (dict, list, str, int, float, bool, type(None))):
             raise TypeError(f"Cannot serialize content of type {type(content)}")
-
-        # Serialize to JSON
         try:
             json_content = json.dumps(content, indent=2, default=serialize)
         except TypeError as e:
             raise RuntimeError(f"JSON serialization failed: {e}")
-
         with open(full_path, "w") as f:
             f.write(json_content)
-
-        # Git add the file
         try:
             subprocess.run(["git", "add", str(full_path)], check=True)
         except subprocess.CalledProcessError as e:
