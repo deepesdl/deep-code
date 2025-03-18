@@ -105,7 +105,7 @@ class LinksBuilder:
                 "rel": "related",
                 "href": f"../../themes/{theme}/catalog.json",
                 "type": "application/json",
-                "title": f"Theme: {formated_theme}",
+                "title": f"Theme: {formatted_theme}",
             }
             self.theme_links.append(link)
         return self.theme_links
