@@ -44,7 +44,7 @@ class TestGitHubAutomation(unittest.TestCase):
 
         # Mock os.path.exists to return False (directory does not exist)
         with patch("os.path.exists", return_value=False):
-            self.github_automation.clone_repository()
+            self.github_automation.clone_sync_repository()
 
         # Assertions
         mock_run.assert_called_once_with(
@@ -65,7 +65,7 @@ class TestGitHubAutomation(unittest.TestCase):
         # Mock os.path.exists to return True (directory exists)
         with patch("os.path.exists", return_value=True):
             with patch("os.chdir"):
-                self.github_automation.clone_repository()
+                self.github_automation.clone_sync_repository()
 
         # Assertions
         mock_run.assert_called_once_with(["git", "pull"], check=True)

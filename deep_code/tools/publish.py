@@ -53,7 +53,7 @@ class GitHubPublisher:
             self.github_username, self.github_token, OSC_REPO_OWNER, OSC_REPO_NAME
         )
         self.github_automation.fork_repository()
-        self.github_automation.clone_repository()
+        self.github_automation.clone_sync_repository()
 
     def publish_files(
         self,
