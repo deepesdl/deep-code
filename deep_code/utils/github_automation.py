@@ -45,7 +45,7 @@ class GitHubAutomation:
         response.raise_for_status()
         logging.info(f"Repository forked to {self.username}/{self.repo_name}")
 
-    def clone_repository(self):
+    def clone_sync_repository(self):
         """Clone the forked repository locally if it doesn't exist, or pull updates if it does."""
         logging.info("Checking local repository...")
         if not os.path.exists(self.local_clone_dir):
