@@ -55,18 +55,15 @@ class OSCWorkflowOGCApiRecordGenerator:
         properties.update({"created": now_iso})
         properties.update({"updated": now_iso})
 
-        # Extract themes from the properties dictionary
         themes_list = properties.get("themes", [])
 
-        # Build contact objects
         properties.update({"contacts": self.build_contact_objects(contacts)})
 
-        # Build theme object if themes are present
         if themes_list:
             theme_obj = self.build_theme(themes_list)
             properties.update(
                 {"themes": [theme_obj]}
-            )  # Wrap the Theme object in a list
+            )
 
         properties.setdefault("type", "workflow")
         properties.setdefault("osc_project", "deep-earth-system-data-lab")
