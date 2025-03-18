@@ -100,7 +100,7 @@ class LinksBuilder:
 
     def build_them_links_for_records(self):
         for theme in self.themes:
-            formated_theme = self.format_string(theme)
+            formatted_theme = self.format_string(theme)
             link = {
                 "rel": "related",
                 "href": f"../../themes/{theme}/catalog.json",
