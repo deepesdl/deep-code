@@ -10,7 +10,7 @@ import pystac
 from pystac import Extent, SpatialExtent, TemporalExtent
 from pystac.extensions.base import ExtensionManagementMixin, PropertiesExtension
 
-from deep_code.constants import CF_SCHEMA_URI, OSC_SCHEMA_URI
+from deep_code.constants import CF_SCHEMA_URI, OSC_SCHEMA_URI, THEMES_SCHEMA_URI
 
 
 class OscExtension(
@@ -62,18 +62,6 @@ class OscExtension(
     @osc_project.setter
     def osc_project(self, v: str) -> None:
         self._set_property("osc:project", v, pop_if_none=False)
-
-    @property
-    def osc_themes(self) -> list[str] | None:
-        return self._get_property("osc:themes", list)
-
-    @osc_themes.setter
-    def osc_themes(self, value: list[str]) -> None:
-        if not isinstance(value, list) or not all(
-            isinstance(item, str) for item in value
-        ):
-            raise ValueError("osc:themes must be a list of strings")
-        self._set_property("osc:themes", value, pop_if_none=False)
 
     @property
     def osc_region(self) -> str | None:
@@ -150,7 +138,7 @@ class OscExtension(
 
     @classmethod
     def get_schema_uri(cls) -> list[str]:
-        return [OSC_SCHEMA_URI, CF_SCHEMA_URI]
+        return [OSC_SCHEMA_URI, CF_SCHEMA_URI, THEMES_SCHEMA_URI]
 
     @classmethod
     def ext(

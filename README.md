@@ -56,17 +56,9 @@ pytest --cov-report html --cov=deep-code
 providing different utility functions.
 Use the --help option with these subcommands to get more details on usage.
 
-The CLI retrieves the Git username and personal access token from a hidden file named .gitaccess. Ensure this file is located in the same directory where you execute the CLI
+The CLI retrieves the Git username and personal access token from a hidden file named 
+.gitaccess. Ensure this file is located in the same directory where you execute the CLI
 command.
-
-###  deep-code publish-product
-
-Publish a dataset which is a result of an experiment to the EarthCODE 
-open-science catalog.
-
-```commandline
- deep-code publish-dataset /path/to/dataset-config.yaml
- ```
 
 #### .gitaccess example
 
@@ -74,6 +66,15 @@ open-science catalog.
 github-username: your-git-user
 github-token: personal access token
 ```
+
+###  deep-code publish
+
+Publish the experiment, workflow and dataset which is a result of an experiment to 
+the EarthCODE open-science catalog.
+
+```commandline
+ deep-code publish /path/to/dataset-config.yaml /path/to/workflow-config.yaml
+ ```
 
 #### dataset-config.yaml example
 
@@ -92,42 +93,26 @@ cf_parameter:
   - name: hydrology
 ```
 
-dataset-id has to be a valid dataset-id from `deep-esdl-public` s3 or your team bucket.
+dataset-id has to be a valid dataset-id from `deep-esdl-public` s3 bucket or your team 
+bucket.
 
-### deep-code publish-workflow
-
-Publish a workflow/experiment to the EarthCODE open-science catalog.
-
-```commandline
-deep-code publish-workflow /path/to/workflow-config.yaml
- ```
 #### workflow-config.yaml example
 
 ```
-workflow_id: "4D Med hydrology cube generation"
+workflow_id: "esa-cci-permafrost"
 properties:
-  title: "Hydrology cube generation recipe"
-  description: "4D Med cube generation"
+  title: "ESA CCI permafrost"
+  description: "cube generation workflow for esa-cci-permafrost"
   keywords:
     - Earth Science
   themes:
-      - Atmosphere
-      - Ocean
-      - Evaporation
+      - cryosphere
   license: proprietary
   jupyter_kernel_info:
-    name: deepesdl-xcube-1.7.1
+    name: deepesdl-xcube-1.8.3
     python_version: 3.11
-    env_file: https://git/env.yml
-links:
-  - rel: "documentation"
-    type: "application/json"
-    title: "4DMed Hydrology Cube Generation Recipe"
-    href: "https://github.com/deepesdl/cube-gen/tree/main/hydrology/README.md"
-  - rel: "jupyter-notebook"
-    type: "application/json"
-    title: "Workflow Jupyter Notebook"
-    href: "https://github.com/deepesdl/cube-gen/blob/main/hydrology/notebooks/reading_hydrology.ipynb"
+    env_file: "https://github.com/deepesdl/cube-gen/blob/main/Permafrost/environment.yml"
+jupyter_notebook_url: "https://github.com/deepesdl/cube-gen/blob/main/Permafrost/Create-CCI-Permafrost-cube-EarthCODE.ipynb"
 contact:
   - name: Tejas Morbagal Harish
     organization: Brockmann Consult GmbH

@@ -6,7 +6,7 @@
 
 from datetime import datetime, timezone
 
-from deep_code.constants import DEFAULT_THEME_SCHEME
+from deep_code.constants import OSC_THEME_SCHEME
 from deep_code.utils.ogc_api_record import (
     Contact,
     RecordProperties,
@@ -37,18 +37,33 @@ class OSCWorkflowOGCApiRecordGenerator:
         """Convert each string into a ThemeConcept
         """
         concepts = [ThemeConcept(id=theme_str) for theme_str in osc_themes]
-        return Theme(concepts=concepts, scheme=DEFAULT_THEME_SCHEME)
+        return Theme(concepts=concepts, scheme=OSC_THEME_SCHEME)
 
-    def build_record_properties(self, properties, contacts) -> RecordProperties:
-        """Build a RecordProperties object from a list of single-key property dicts
+    def build_record_properties(
+        self, properties: dict, contacts: list
+    ) -> RecordProperties:
+        """Build a RecordProperties object from a properties dictionary.
+
+        Args:
+            properties: A dictionary containing properties (e.g., title, description, themes).
+            contacts: A list of contact dictionaries.
+
+        Returns:
+            A RecordProperties object.
         """
         now_iso = datetime.now(timezone.utc).isoformat()
         properties.update({"created": now_iso})
         properties.update({"updated": now_iso})
+
         themes_list = properties.get("themes", [])
+
         properties.update({"contacts": self.build_contact_objects(contacts)})
+
         if themes_list:
             theme_obj = self.build_theme(themes_list)
             properties.update({"themes": [theme_obj]})
+
         properties.setdefault("type", "workflow")
+        properties.setdefault("osc_project", "deep-earth-system-data-lab")
+
         return RecordProperties.from_value(properties)

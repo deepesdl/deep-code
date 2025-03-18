@@ -1,120 +1,108 @@
-from unittest.mock import MagicMock, mock_open, patch
+import unittest
+from unittest.mock import patch, mock_open, MagicMock
+import json
+import yaml
+from pathlib import Path
+import tempfile
+from pystac import Catalog
 
-import pytest
-
-from deep_code.tools.publish import DatasetPublisher
+from deep_code.tools.publish import Publisher
 
 
-class TestDatasetPublisher:
-    @patch("deep_code.tools.publish.fsspec.open")
-    def test_init_missing_credentials(self, mock_fsspec_open):
-        mock_fsspec_open.return_value.__enter__.return_value = mock_open(
-            read_data="{}"
-        )()
+class TestPublisher(unittest.TestCase):
+    @patch("fsspec.open")
+    @patch("deep_code.tools.publish.GitHubPublisher")
+    def setUp(self, mock_github_publisher, mock_fsspec_open):
+        # Mock GitHubPublisher to avoid reading .gitaccess
+        self.mock_github_publisher_instance = MagicMock()
+        mock_github_publisher.return_value = self.mock_github_publisher_instance
 
-        with pytest.raises(
-            ValueError, match="GitHub credentials are missing in the `.gitaccess` file."
-        ):
-            DatasetPublisher()
-
-    @patch("deep_code.tools.publish.fsspec.open")
-    def test_publish_dataset_missing_ids(self, mock_fsspec_open):
-        git_yaml_content = """
-        github-username: test-user
-        github-token: test-token
-        """
-        dataset_yaml_content = """
-        collection-id: test-collection
-        """
-        mock_fsspec_open.side_effect = [
-            mock_open(read_data=git_yaml_content)(),
-            mock_open(read_data=dataset_yaml_content)(),
-        ]
-
-        publisher = DatasetPublisher()
-
-        with pytest.raises(
-            ValueError, match="Dataset ID or Collection ID missing in the config."
-        ):
-            publisher.publish_dataset("/path/to/dataset-config.yaml")
-
-    @patch("deep_code.utils.github_automation.os.chdir")
-    @patch("deep_code.utils.github_automation.subprocess.run")
-    @patch("deep_code.utils.github_automation.os.path.expanduser", return_value="/tmp")
-    @patch("requests.post")
-    @patch("deep_code.utils.github_automation.GitHubAutomation")
-    @patch("deep_code.tools.publish.fsspec.open")
-    def test_publish_dataset_success(
-        self,
-        mock_fsspec_open,
-        mock_github_automation,
-        mock_requests_post,
-        mock_expanduser,
-        mock_subprocess_run,
-        mock_chdir,
-    ):
-        #  Mock the YAML reads
-        git_yaml_content = """
-             github-username: test-user
-             github-token: test-token
-             """
-        dataset_yaml_content = """
-             dataset_id: test-dataset
-             collection_id: test-collection
-             documentation_link: http://example.com/doc
-             access_link: http://example.com/access
-             dataset_status: ongoing
-             dataset_region: Global
-             osc_theme: ["climate"]
-             cf_parameter: []
-             """
-        mock_fsspec_open.side_effect = [
-            mock_open(read_data=git_yaml_content)(),
-            mock_open(read_data=dataset_yaml_content)(),
-        ]
-
-        # Mock GitHubAutomation methods
-        mock_git = mock_github_automation.return_value
-        mock_git.fork_repository.return_value = None
-        mock_git.clone_repository.return_value = None
-        mock_git.create_branch.return_value = None
-        mock_git.add_file.return_value = None
-        mock_git.commit_and_push.return_value = None
-        mock_git.create_pull_request.return_value = "http://example.com/pr"
-        mock_git.clean_up.return_value = None
-
-        # Mock subprocess.run & os.chdir
-        mock_subprocess_run.return_value = None
-        mock_chdir.return_value = None
-
-        # Mock STAC generator
-        mock_collection = MagicMock()
-        mock_collection.to_dict.return_value = {
-            "type": "Collection",
-            "id": "test-collection",
-            "description": "A test STAC collection",
-            "extent": {
-                "spatial": {"bbox": [[-180.0, -90.0, 180.0, 90.0]]},
-                "temporal": {"interval": [["2023-01-01T00:00:00Z", None]]},
-            },
-            "links": [],
-            "stac_version": "1.0.0",
+        # Mock dataset and workflow config files
+        self.dataset_config = {
+            "collection_id": "test-collection",
+            "dataset_id": "test-dataset",
         }
-        with patch("deep_code.tools.publish.OscDatasetStacGenerator") as mock_generator:
-            mock_generator.return_value.build_dataset_stac_collection.return_value = (
-                mock_collection
-            )
+        self.workflow_config = {
+            "properties": {"title": "Test Workflow"},
+            "workflow_id": "test-workflow",
+        }
 
-            # Instantiate & publish
-            publisher = DatasetPublisher()
-            publisher.publish_dataset("/fake/path/to/dataset-config.yaml")
+        # Mock fsspec.open for config files
+        self.mock_fsspec_open = mock_fsspec_open
+        self.mock_fsspec_open.side_effect = [
+            mock_open(read_data=yaml.dump(self.dataset_config)).return_value,
+            mock_open(read_data=yaml.dump(self.workflow_config)).return_value,
+        ]
 
-        # Assert that we called git clone with /tmp/temp_repo
-        # Because expanduser("~") is now patched to /tmp, the actual path is /tmp/temp_repo
-        auth_url = "https://test-user:test-token@github.com/test-user/open-science-catalog-metadata-testing.git"
-        mock_subprocess_run.assert_any_call(
-            ["git", "clone", auth_url, "/tmp/temp_repo"], check=True
+        # Initialize Publisher
+        self.publisher = Publisher(
+            dataset_config_path="test-dataset-config.yaml",
+            workflow_config_path="test-workflow-config.yaml",
         )
 
-        # Also confirm we changed directories to /tmp/temp_repo
-        mock_chdir.assert_any_call("/tmp/temp_repo")
+    def test_normalize_name(self):
+        self.assertEqual(Publisher._normalize_name("Test Name"), "test-name")
+        self.assertEqual(Publisher._normalize_name("Test   Name"), "test---name")
+        self.assertIsNone(Publisher._normalize_name(""))
+        self.assertIsNone(Publisher._normalize_name(None))
+
+    def test_write_to_file(self):
+        # Create a temporary file
+        with tempfile.NamedTemporaryFile(delete=False) as temp_file:
+            file_path = temp_file.name
+
+        # Test data
+        data = {"key": "value"}
+
+        # Call the method
+        Publisher._write_to_file(file_path, data)
+
+        # Read the file and verify its content
+        with open(file_path, "r") as f:
+            content = json.load(f)
+            self.assertEqual(content, data)
+
+        # Clean up
+        Path(file_path).unlink()
+
+    def test_update_base_catalog(self):
+        # Create a mock Catalog
+        catalog = Catalog(id="test-catalog", description="Test Catalog")
+
+        # Mock file path and item ID
+        catalog_path = "test-catalog.json"
+        item_id = "test-item"
+        self_href = "https://example.com/catalog.json"
+
+        self.publisher.workflow_title = "Test Workflow"
+
+        # Mock the Catalog.from_file method
+        with patch("pystac.Catalog.from_file", return_value=catalog):
+            updated_catalog = self.publisher._update_base_catalog(
+                catalog_path, item_id, self_href
+            )
+
+        # Assertions
+        self.assertEqual(updated_catalog.get_self_href(), self_href)
+        self.assertIsInstance(updated_catalog, Catalog)
+
+    def test_read_config_files(self):
+        # Mock dataset and workflow config files
+        dataset_config = {
+            "collection_id": "test-collection",
+            "dataset_id": "test-dataset",
+        }
+        workflow_config = {
+            "properties": {"title": "Test Workflow"},
+            "workflow_id": "test-workflow",
+        }
+
+        # Mock fsspec.open for config files
+        self.mock_fsspec_open.side_effect = [
+            mock_open(read_data=yaml.dump(dataset_config)).return_value,
+            mock_open(read_data=yaml.dump(workflow_config)).return_value,
+        ]
+
+        # Assertions
+        self.assertEqual(self.publisher.dataset_config, dataset_config)
+        self.assertEqual(self.publisher.workflow_config, workflow_config)

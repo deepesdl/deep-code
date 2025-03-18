@@ -21,7 +21,12 @@ jobs:
         shell: bash -l {0}
         run: |
           cd /home/runner/work/deep-code/deep-code
-          pip install .[dev]
+          pip install -e ".[dev]" 
+
+      - name: Lint with ruff
+        run: |
+            pip install ruff
+            ruff check
 
       - name: Run unit tests
         shell: bash -l {0}
