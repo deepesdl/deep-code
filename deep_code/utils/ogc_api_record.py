@@ -82,7 +82,7 @@ class RecordProperties(MappingConstructible["RecordProperties"], JsonSerializabl
         data = super().to_dict(value_name)
         if self.osc_workflow is not None:
             data["osc:workflow"] = self.osc_workflow
-            del data["osc_workflow"]  # Remove the original key as it be renamed it
+            del data["osc_workflow"]  # Remove the original key as it has been renamed
         if self.osc_project is not None:
             data["osc:project"] = self.osc_project
             del data["osc_project"]
@@ -94,13 +94,9 @@ class LinksBuilder:
         self.themes = themes
         self.theme_links = []
 
-    @staticmethod
-    def format_string(s):
-        return s.capitalize()
-
-    def build_them_links_for_records(self):
+    def build_theme_links_for_records(self):
         for theme in self.themes:
-            formatted_theme = self.format_string(theme)
+            formatted_theme = theme.capitalize()
             link = {
                 "rel": "related",
                 "href": f"../../themes/{theme}/catalog.json",

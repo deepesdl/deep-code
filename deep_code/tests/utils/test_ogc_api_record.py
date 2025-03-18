@@ -137,7 +137,7 @@ class TestRecordProperties(unittest.TestCase):
 class TestLinksBuilder(unittest.TestCase):
     def test_build_theme_links_for_records(self):
         links_builder = LinksBuilder(themes=["climate", "ocean"])
-        theme_links = links_builder.build_them_links_for_records()
+        theme_links = links_builder.build_theme_links_for_records()
 
         expected_links = [
             {

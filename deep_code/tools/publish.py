@@ -100,7 +100,6 @@ class GitHubPublisher:
 
 class Publisher:
     """Publishes products (datasets) to the OSC GitHub repository.
-    Inherits from BasePublisher for GitHub publishing logic.
     """
 
     def __init__(self, dataset_config_path: str, workflow_config_path: str):
@@ -317,7 +316,7 @@ class Publisher:
         exp_record_properties = copy.deepcopy(wf_record_properties)
 
         link_builder = LinksBuilder(osc_themes)
-        theme_links = link_builder.build_them_links_for_records()
+        theme_links = link_builder.build_theme_links_for_records()
 
         workflow_record = WorkflowAsOgcRecord(
             id=workflow_id,
