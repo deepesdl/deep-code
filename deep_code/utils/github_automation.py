@@ -88,10 +88,12 @@ class GitHubAutomation:
         if not isinstance(content, (dict, list, str, int, float, bool, type(None))):
             raise TypeError(f"Cannot serialize content of type {type(content)}")
         try:
-            json_content = json.dumps(content, indent=2, default=serialize)
+            json_content = json.dumps(
+                content, indent=2, ensure_ascii=False, default=serialize
+            )
         except TypeError as e:
             raise RuntimeError(f"JSON serialization failed: {e}")
-        with open(full_path, "w") as f:
+        with open(full_path, "w", encoding="utf-8") as f:
             f.write(json_content)
         try:
             subprocess.run(["git", "add", str(full_path)], check=True)
