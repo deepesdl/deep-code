@@ -79,18 +79,15 @@ the EarthCODE open-science catalog.
 #### dataset-config.yaml example
 
 ```
-dataset_id: hydrology-1D-0.009deg-100x60x60-3.0.2.zarr
-collection_id: hydrology
+dataset_id: esa-cci-permafrost-1x1151x1641-1.0.0.zarr
+collection_id: esa-cci-permafrost
 osc_themes:
-  - Land
-  - Oceans
-# non-mandatory
-documentation_link: https://deepesdl.readthedocs.io/en/latest/datasets/hydrology-1D-0.009deg-100x60x60-3.0.2.zarr/
-access_link: s3://test
-dataset_status: completed
+  - cryosphere
 osc_region: global
-cf_parameter:
-  - name: hydrology
+# non-mandatory
+documentation_link: https://deepesdl.readthedocs.io/en/latest/datasets/esa-cci-permafrost-1x1151x1641-0-0-2-zarr
+access_link: s3://deep-esdl-public/esa-cci-permafrost-1x1151x1641-1.0.0.zarr
+dataset_status: completed
 ```
 
 dataset-id has to be a valid dataset-id from `deep-esdl-public` s3 bucket or your team 
