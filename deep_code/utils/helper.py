@@ -1,3 +1,7 @@
+import fsspec
+import yaml
+
+
 def serialize(obj):
     """Convert non-serializable objects to JSON-compatible formats.
     Args:
@@ -12,3 +16,7 @@ def serialize(obj):
     if hasattr(obj, "__dict__"):
         return obj.__dict__
     raise TypeError(f"Object of type {type(obj).__name__} is not JSON serializable")
+
+def read_git_access_file():
+    with fsspec.open(".gitaccess", "r") as file:
+        return yaml.safe_load(file) or {}

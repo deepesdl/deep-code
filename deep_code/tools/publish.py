@@ -22,7 +22,7 @@ from deep_code.constants import (
 )
 from deep_code.utils.dataset_stac_generator import OscDatasetStacGenerator
 from deep_code.utils.github_automation import GitHubAutomation
-from deep_code.utils.helper import serialize
+from deep_code.utils.helper import serialize, read_git_access_file
 from deep_code.utils.ogc_api_record import (
     ExperimentAsOgcRecord,
     LinksBuilder,
@@ -42,8 +42,7 @@ class GitHubPublisher:
     """
 
     def __init__(self):
-        with fsspec.open(".gitaccess", "r") as file:
-            git_config = yaml.safe_load(file) or {}
+        git_config = read_git_access_file()
         self.github_username = git_config.get("github-username")
         self.github_token = git_config.get("github-token")
         if not self.github_username or not self.github_token:
