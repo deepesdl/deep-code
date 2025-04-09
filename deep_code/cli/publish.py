@@ -12,10 +12,19 @@ from deep_code.tools.publish import Publisher
 @click.command(name="publish")
 @click.argument("dataset_config", type=click.Path(exists=True))
 @click.argument("workflow_config", type=click.Path(exists=True))
-def publish(dataset_config, workflow_config):
+@click.option(
+    "--environment",
+    type=click.Choice(["production", "staging", "testing"],
+                      case_sensitive=False),
+    default="production",
+    help="Target environment for publishing (production, staging, testing)",
+)
+def publish(dataset_config, workflow_config, environment):
     """Request publishing a dataset to the open science catalogue.
     """
     publisher = Publisher(
-        dataset_config_path=dataset_config, workflow_config_path=workflow_config
+        dataset_config_path=dataset_config,
+        workflow_config_path=workflow_config,
+        environment=environment.lower(),
     )
     publisher.publish_all()
