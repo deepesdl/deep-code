@@ -15,7 +15,8 @@ experiments/workflow as OGC API record and Datasets as an OSC stac collection.
 ## Setup
 
 ## Install
-`deep-code` will be available in PyPI and conda-forge. Till the stable release,
+`deep-code` will be available in PyPI for now and will be available in conda-forge 
+in the near future. Till the stable release,
 developers/contributors can follow the below steps to install deep-code.
 
 ## Installing from the repository for Developers/Contributors
@@ -69,13 +70,38 @@ github-token: personal access token
 
 ###  deep-code publish
 
-Publish the experiment, workflow and dataset which is a result of an experiment to 
-the EarthCODE open-science catalog.
+Publishes metadata of experiment, workflow and dataset to the EarthCODE open-science 
+catalog
 
-```commandline
- deep-code publish /path/to/dataset-config.yaml /path/to/workflow-config.yaml
+### Usage
+```
+deep-code publish DATASET_CONFIG WORKFLOW_CONFIG [--environment ENVIRONMENT]
  ```
 
+#### Arguments
+    DATASET_CONFIG - Path to the dataset configuration YAML file
+    (e.g., dataset-config.yaml)
+
+    WORKFLOW_CONFIG - Path to the workflow configuration YAML file
+    (e.g., workflow-config.yaml)
+
+#### Options
+    --environment, -e - Target catalog environment:
+    production (default) | staging | testing
+
+#### Examples:
+1. Publish to staging catalog
+```
+deep-code publish dataset-config.yaml workflow-config.yaml --environment=staging
+```
+2. Publish to testing catalog
+```
+deep-code publish dataset-config.yaml workflow-config.yaml -e testing
+```
+3. Publish to production catalog
+```
+deep-code publish dataset-config.yaml workflow-config.yaml
+```
 #### dataset-config.yaml example
 
 ```

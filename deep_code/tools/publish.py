@@ -41,7 +41,7 @@ class GitHubPublisher:
       - Common GitHub automation steps (fork, clone, branch, file commit, pull request)
     """
 
-    def __init__(self):
+    def __init__(self, repo_name: str = OSC_REPO_NAME):
         with fsspec.open(".gitaccess", "r") as file:
             git_config = yaml.safe_load(file) or {}
         self.github_username = git_config.get("github-username")
@@ -50,7 +50,7 @@ class GitHubPublisher:
             raise ValueError("GitHub credentials are missing in the `.gitaccess` file.")
 
         self.github_automation = GitHubAutomation(
-            self.github_username, self.github_token, OSC_REPO_OWNER, OSC_REPO_NAME
+            self.github_username, self.github_token, OSC_REPO_OWNER, repo_name
         )
         self.github_automation.fork_repository()
         self.github_automation.clone_sync_repository()
@@ -102,9 +102,23 @@ class Publisher:
     """Publishes products (datasets) to the OSC GitHub repository.
     """
 
-    def __init__(self, dataset_config_path: str, workflow_config_path: str):
+    def __init__(
+        self,
+        dataset_config_path: str,
+        workflow_config_path: str,
+        environment: str = "production",
+    ):
+        self.environment = environment
+        # Determine repo name based on environment
+        repo_name = "open-science-catalog-metadata"
+
+        if environment == "staging":
+            repo_name = "open-science-catalog-metadata-staging"
+        elif environment == "testing":
+            repo_name = "open-science-catalog-metadata-testing"
+
         # Composition
-        self.gh_publisher = GitHubPublisher()
+        self.gh_publisher = GitHubPublisher(repo_name=repo_name)
         self.collection_id = ""
         self.workflow_title = ""
 
