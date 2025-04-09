@@ -1,9 +1,10 @@
-import unittest
-from unittest.mock import patch, mock_open, MagicMock
 import json
-import yaml
-from pathlib import Path
 import tempfile
+import unittest
+from pathlib import Path
+from unittest.mock import MagicMock, mock_open, patch
+
+import yaml
 from pystac import Catalog
 
 from deep_code.tools.publish import Publisher

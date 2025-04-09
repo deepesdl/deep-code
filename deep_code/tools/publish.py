@@ -50,10 +50,7 @@ class GitHubPublisher:
             raise ValueError("GitHub credentials are missing in the `.gitaccess` file.")
 
         self.github_automation = GitHubAutomation(
-            self.github_username,
-            self.github_token,
-            OSC_REPO_OWNER,
-            repo_name
+            self.github_username, self.github_token, OSC_REPO_OWNER, repo_name
         )
         self.github_automation.fork_repository()
         self.github_automation.clone_sync_repository()

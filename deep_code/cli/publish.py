@@ -14,8 +14,7 @@ from deep_code.tools.publish import Publisher
 @click.argument("workflow_config", type=click.Path(exists=True))
 @click.option(
     "--environment",
-    type=click.Choice(["production", "staging", "testing"],
-                      case_sensitive=False),
+    type=click.Choice(["production", "staging", "testing"], case_sensitive=False),
     default="production",
     help="Target environment for publishing (production, staging, testing)",
 )
