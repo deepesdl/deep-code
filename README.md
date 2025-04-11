@@ -67,6 +67,24 @@ command.
 github-username: your-git-user
 github-token: personal access token
 ```
+### deep-code generate-config
+
+Generates starter configuration templates for publishing to EarthCODE openscience 
+catalog.
+
+#### Usage
+```
+deep-code generate-config [OPTIONS]
+```
+
+#### Options
+     --output-dir, -o : Output directory (default: current)
+
+#### Examples:
+```
+deep-code generate-config
+deep-code generate-config -o ./configs
+```
 
 ###  deep-code publish
 
