@@ -6,6 +6,7 @@
 
 import click
 
+from deep_code.cli.generate_config import generate_config
 from deep_code.cli.publish import publish
 
 
@@ -16,6 +17,7 @@ def main():
 
 
 main.add_command(publish)
+main.add_command(generate_config)
 
 if __name__ == "__main__":
     main()

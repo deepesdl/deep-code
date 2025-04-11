@@ -13,7 +13,8 @@ from deep_code.tools.publish import Publisher
 @click.argument("dataset_config", type=click.Path(exists=True))
 @click.argument("workflow_config", type=click.Path(exists=True))
 @click.option(
-    "--environment", "-e",
+    "--environment",
+    "-e",
     type=click.Choice(["production", "staging", "testing"], case_sensitive=False),
     default="production",
     help="Target environment for publishing (production, staging, testing)",
