@@ -232,7 +232,7 @@ class OscDatasetStacGenerator:
         if not gcmd_keyword_url:
             gcmd_keyword_url = input(
                 f"Enter GCMD keyword URL or a similar url for"
-                f" {var_metadata.get("variable_id")}: ").strip()
+                f" {var_metadata.get('variable_id')}: ").strip()
         var_catalog.add_link(
             Link(
                 rel="via",
