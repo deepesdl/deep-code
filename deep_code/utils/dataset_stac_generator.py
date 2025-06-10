@@ -69,15 +69,7 @@ class OscDatasetStacGenerator:
                 "description": "Public store",
                 "params": {
                     "storage_type": "s3",
-                    "root": "deep-esdl-public",
-                    "storage_options": {"anon": True},
-                },
-            },
-            {
-                "description": "User Managed Public store",
-                "params": {
-                    "storage_type": "s3",
-                    "root": os.environ.get("S3_USER_STORAGE_BUCKET"),
+                    "root": os.environ.get("S3_USER_STORAGE_BUCKET") or "deep-esdl-public",
                     "storage_options": {"anon": True},
                 },
             },
