@@ -74,6 +74,14 @@ class OscDatasetStacGenerator:
                 },
             },
             {
+                "description": "User Managed Public store",
+                "params": {
+                    "storage_type": "s3",
+                    "root": os.environ.get("S3_USER_STORAGE_BUCKET"),
+                    "storage_options": {"anon": True},
+                },
+            },
+            {
                 "description": "Authenticated store",
                 "params": {
                     "storage_type": "s3",
