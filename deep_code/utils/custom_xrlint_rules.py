@@ -3,7 +3,7 @@
 # MIT license (https://mit-license.org/).
 
 """
-This module defines the catalog_metadata_plugin for XRLint, which validates
+This module defines the deepcode plugin for XRLint, which validates
 metadata required for dataset publication to a catalog. It checks for:
 - A 'description' attribute in dataset.attrs
 - A 'gcmd_keyword_url' attribute in each variable's attrs
