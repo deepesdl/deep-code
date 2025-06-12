@@ -14,3 +14,13 @@
   open-science-metadata.
 - Implemented new cli command `generate-config` to generate starter templates for 
   config files.
+
+## Changes in 0.1.3
+
+- _Version bump only_; no code or functionality changes. This release was 
+  republished to update the package on PyPI.
+
+## Changes in 0.1.4
+
+- Implemented custom rules using xrlint to check required metadata in dataset to 
+  generate valid open science catalog STAC collection.
