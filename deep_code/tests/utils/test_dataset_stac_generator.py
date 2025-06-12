@@ -4,12 +4,12 @@
 # https://opensource.org/licenses/MIT.
 
 import unittest
-from datetime import datetime, timezone
+from datetime import datetime
 from unittest.mock import MagicMock, patch
 
 import numpy as np
-from pystac import Catalog, Collection, Link
-from xarray import Dataset, DataArray
+from pystac import Catalog, Collection
+from xarray import DataArray, Dataset
 
 from deep_code.constants import (
     DEEPESDL_COLLECTION_SELF_HREF,
@@ -17,8 +17,7 @@ from deep_code.constants import (
     PRODUCT_BASE_CATALOG_SELF_HREF,
     VARIABLE_BASE_CATALOG_SELF_HREF,
 )
-from deep_code.utils.dataset_stac_generator import OscDatasetStacGenerator
-from deep_code.utils.dataset_stac_generator import Theme, ThemeConcept
+from deep_code.utils.dataset_stac_generator import OscDatasetStacGenerator, Theme
 
 
 class TestOSCProductSTACGenerator(unittest.TestCase):
@@ -104,18 +103,18 @@ class TestOSCProductSTACGenerator(unittest.TestCase):
 
     def test_extract_metadata_for_variable(self):
         """Test single variable metadata extraction."""
-        da: DataArray = self.mock_dataset.data_vars['var1']
+        da: DataArray = self.mock_dataset.data_vars["var1"]
         var_meta = self.generator.extract_metadata_for_variable(da)
-        self.assertEqual(var_meta['variable_id'], 'var1')
-        self.assertEqual(var_meta['description'], 'dummy')
-        self.assertEqual(var_meta['gcmd_keyword_url'], 'https://dummy')
+        self.assertEqual(var_meta["variable_id"], "var1")
+        self.assertEqual(var_meta["description"], "dummy")
+        self.assertEqual(var_meta["gcmd_keyword_url"], "https://dummy")
 
     def test_get_variables_metadata(self):
         """Test metadata dict for all variables."""
         meta_dict = self.generator.get_variables_metadata()
-        self.assertIn('var1', meta_dict)
-        self.assertIn('var2', meta_dict)
-        self.assertIsInstance(meta_dict['var1'], dict)
+        self.assertIn("var1", meta_dict)
+        self.assertIn("var2", meta_dict)
+        self.assertIsInstance(meta_dict["var1"], dict)
 
     def test_build_theme(self):
         """Test Theme builder static method."""
@@ -123,52 +122,52 @@ class TestOSCProductSTACGenerator(unittest.TestCase):
         theme_obj: Theme = OscDatasetStacGenerator.build_theme(themes)
         self.assertEqual(theme_obj.scheme, OSC_THEME_SCHEME)
         ids = [tc.id for tc in theme_obj.concepts]
-        self.assertListEqual(ids, ['a', 'b'])
+        self.assertListEqual(ids, ["a", "b"])
 
-    @patch.object(OscDatasetStacGenerator, '_add_gcmd_link_to_var_catalog')
-    @patch.object(OscDatasetStacGenerator, 'add_themes_as_related_links_var_catalog')
+    @patch.object(OscDatasetStacGenerator, "_add_gcmd_link_to_var_catalog")
+    @patch.object(OscDatasetStacGenerator, "add_themes_as_related_links_var_catalog")
     def test_build_variable_catalog(self, mock_add_themes, mock_add_gcmd):
         """Test building of variable-level STAC catalog."""
-        var_meta = self.generator.variables_metadata['var1']
+        var_meta = self.generator.variables_metadata["var1"]
         catalog = self.generator.build_variable_catalog(var_meta)
         self.assertIsInstance(catalog, Catalog)
-        self.assertEqual(catalog.id, 'var1')
+        self.assertEqual(catalog.id, "var1")
         # Title should be capitalized
-        self.assertEqual(catalog.title, 'Var1')
+        self.assertEqual(catalog.title, "Var1")
         # Self href ends with var1/catalog.json
-        self.assertTrue(catalog.self_href.endswith('/var1/catalog.json'))
+        self.assertTrue(catalog.self_href.endswith("/var1/catalog.json"))
 
-    @patch('pystac.Catalog.from_file')
+    @patch("pystac.Catalog.from_file")
     def test_update_product_base_catalog(self, mock_from_file):
         """Test linking product catalog."""
         mock_cat = MagicMock(spec=Catalog)
         mock_from_file.return_value = mock_cat
 
-        result = self.generator.update_product_base_catalog('path.json')
+        result = self.generator.update_product_base_catalog("path.json")
         self.assertIs(result, mock_cat)
         mock_cat.add_link.assert_called_once()
         mock_cat.set_self_href.assert_called_once_with(PRODUCT_BASE_CATALOG_SELF_HREF)
 
-    @patch('pystac.Catalog.from_file')
+    @patch("pystac.Catalog.from_file")
     def test_update_variable_base_catalog(self, mock_from_file):
         """Test linking variable base catalog."""
         mock_cat = MagicMock(spec=Catalog)
         mock_from_file.return_value = mock_cat
 
-        vars_ = ['v1', 'v2']
-        result = self.generator.update_variable_base_catalog('vars.json', vars_)
+        vars_ = ["v1", "v2"]
+        result = self.generator.update_variable_base_catalog("vars.json", vars_)
         self.assertIs(result, mock_cat)
         # Expect one add_link per variable
         self.assertEqual(mock_cat.add_link.call_count, len(vars_))
         mock_cat.set_self_href.assert_called_once_with(VARIABLE_BASE_CATALOG_SELF_HREF)
 
-    @patch('pystac.Collection.from_file')
+    @patch("pystac.Collection.from_file")
     def test_update_deepesdl_collection(self, mock_from_file):
         """Test updating DeepESDL collection."""
         mock_coll = MagicMock(spec=Collection)
         mock_from_file.return_value = mock_coll
 
-        result = self.generator.update_deepesdl_collection('deep.json')
+        result = self.generator.update_deepesdl_collection("deep.json")
         self.assertIs(result, mock_coll)
         # Expect child and theme related links for each theme
         calls = mock_coll.add_link.call_count

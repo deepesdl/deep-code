@@ -5,7 +5,7 @@
 
 import os
 import unittest
-from unittest.mock import MagicMock, patch, call
+from unittest.mock import MagicMock, call, patch
 
 import xarray
 import xarray as xr
@@ -16,14 +16,13 @@ from deep_code.utils.helper import open_dataset
 def make_dummy_dataset():
     """Create a simple xarray.Dataset for testing."""
     return xr.Dataset(
-        coords={"time": [0, 1, 2]},
-        data_vars={"x": (("time",), [10, 20, 30])}
+        coords={"time": [0, 1, 2]}, data_vars={"x": (("time",), [10, 20, 30])}
     )
 
 
 class TestOpenDataset(unittest.TestCase):
-    @patch('deep_code.utils.helper.logging.getLogger')
-    @patch('deep_code.utils.helper.new_data_store')
+    @patch("deep_code.utils.helper.logging.getLogger")
+    @patch("deep_code.utils.helper.new_data_store")
     def test_success_public_store(self, mock_new_store, mock_get_logger):
         """Should open dataset with the public store on first try."""
         dummy = make_dummy_dataset()
@@ -33,13 +32,11 @@ class TestOpenDataset(unittest.TestCase):
         mock_logger = MagicMock()
         mock_get_logger.return_value = mock_logger
 
-        result = open_dataset('test-id')
+        result = open_dataset("test-id")
 
         self.assertIs(result, dummy)
         mock_new_store.assert_called_once_with(
-            's3',
-            root='deep-esdl-public',
-            storage_options={'anon': True}
+            "s3", root="deep-esdl-public", storage_options={"anon": True}
         )
         mock_logger.info.assert_any_call(
             "Attempting to open dataset 'test-id' with configuration: Public store"
@@ -93,25 +90,25 @@ class TestOpenDataset(unittest.TestCase):
             "Successfully opened dataset 'my-id' with configuration: Authenticated store"
         )
 
-    @patch('deep_code.utils.helper.logging.getLogger')
-    @patch('deep_code.utils.helper.new_data_store')
+    @patch("deep_code.utils.helper.logging.getLogger")
+    @patch("deep_code.utils.helper.new_data_store")
     def test_all_stores_fail_raises(self, mock_new_store, mock_get_logger):
         """Should raise ValueError if all stores fail."""
-        mock_new_store.side_effect = Exception('fail')
-        os.environ['S3_USER_STORAGE_BUCKET'] = 'user-bucket'
-        os.environ['S3_USER_STORAGE_KEY'] = 'key'
-        os.environ['S3_USER_STORAGE_SECRET'] = 'secret'
+        mock_new_store.side_effect = Exception("fail")
+        os.environ["S3_USER_STORAGE_BUCKET"] = "user-bucket"
+        os.environ["S3_USER_STORAGE_KEY"] = "key"
+        os.environ["S3_USER_STORAGE_SECRET"] = "secret"
         mock_logger = MagicMock()
         mock_get_logger.return_value = mock_logger
 
         with self.assertRaises(ValueError) as ctx:
-            open_dataset('test-id')
+            open_dataset("test-id")
         msg = str(ctx.exception)
         self.assertIn("Tried configurations: Public store, Authenticated store", msg)
         self.assertIn("Last error: fail", msg)
 
-    @patch('deep_code.utils.helper.logging.getLogger')
-    @patch('deep_code.utils.helper.new_data_store')
+    @patch("deep_code.utils.helper.logging.getLogger")
+    @patch("deep_code.utils.helper.new_data_store")
     def test_with_custom_configs(self, mock_new_store, mock_get_logger):
         """Should use provided storage_configs instead of defaults."""
         dummy = make_dummy_dataset()
@@ -122,15 +119,16 @@ class TestOpenDataset(unittest.TestCase):
         mock_get_logger.return_value = mock_logger
 
         custom_cfgs = [
-            {"description": "Local store", "params": {"storage_type": "file", "root": ".", "storage_options": {}}}
+            {
+                "description": "Local store",
+                "params": {"storage_type": "file", "root": ".", "storage_options": {}},
+            }
         ]
 
-        result = open_dataset('test-id', storage_configs=custom_cfgs)
+        result = open_dataset("test-id", storage_configs=custom_cfgs)
 
         self.assertIs(result, dummy)
-        mock_new_store.assert_called_once_with(
-            'file', root='.', storage_options={}
-        )
+        mock_new_store.assert_called_once_with("file", root=".", storage_options={})
         mock_logger.info.assert_any_call(
             "Attempting to open dataset 'test-id' with configuration: Local store"
         )
@@ -138,8 +136,8 @@ class TestOpenDataset(unittest.TestCase):
             "Successfully opened dataset 'test-id' with configuration: Local store"
         )
 
-    @patch('deep_code.utils.helper.logging.getLogger')
-    @patch('deep_code.utils.helper.new_data_store')
+    @patch("deep_code.utils.helper.logging.getLogger")
+    @patch("deep_code.utils.helper.new_data_store")
     def test_uses_provided_logger(self, mock_new_store, mock_get_logger):
         """Should use the logger provided by the caller."""
         dummy = make_dummy_dataset()
@@ -149,7 +147,7 @@ class TestOpenDataset(unittest.TestCase):
         custom_logger = MagicMock()
         mock_get_logger.side_effect = AssertionError("getLogger should not be used")
 
-        result = open_dataset('test-id', logger=custom_logger)
+        result = open_dataset("test-id", logger=custom_logger)
 
         self.assertIs(result, dummy)
         custom_logger.info.assert_any_call(
@@ -158,4 +156,3 @@ class TestOpenDataset(unittest.TestCase):
         custom_logger.info.assert_any_call(
             "Successfully opened dataset 'test-id' with configuration: Public store"
         )
-

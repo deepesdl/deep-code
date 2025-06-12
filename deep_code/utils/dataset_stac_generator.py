@@ -15,9 +15,9 @@ from deep_code.constants import (
     PRODUCT_BASE_CATALOG_SELF_HREF,
     VARIABLE_BASE_CATALOG_SELF_HREF,
 )
+from deep_code.utils.helper import open_dataset
 from deep_code.utils.ogc_api_record import Theme, ThemeConcept
 from deep_code.utils.osc_extension import OscExtension
-from deep_code.utils.helper import open_dataset
 
 
 class OscDatasetStacGenerator:
@@ -57,12 +57,8 @@ class OscDatasetStacGenerator:
         self.osc_missions = osc_missions or []
         self.cf_params = cf_params or {}
         self.logger = logging.getLogger(__name__)
-        self.dataset = open_dataset(
-            dataset_id=dataset_id,
-            logger=self.logger
-        )
+        self.dataset = open_dataset(dataset_id=dataset_id, logger=self.logger)
         self.variables_metadata = self.get_variables_metadata()
-
 
     def _get_spatial_extent(self) -> SpatialExtent:
         """Extract spatial extent from the dataset."""
@@ -119,8 +115,7 @@ class OscDatasetStacGenerator:
     @staticmethod
     def _normalize_name(name: str | None) -> str | None:
         if name:
-            return (name.replace(" ", "-").
-                    replace("_", "-").lower())
+            return name.replace(" ", "-").replace("_", "-").lower()
         return None
 
     def _get_general_metadata(self) -> dict:
@@ -148,8 +143,9 @@ class OscDatasetStacGenerator:
         variable_ids = list(self.variables_metadata.keys())
         #  Remove 'crs' and 'spatial_ref' from the list if they exist, note that
         #  spatial_ref will be normalized to spatial-ref in variable_ids and skipped.
-        return [var_id for var_id in variable_ids if var_id not in ["crs",
-                                                                    "spatial-ref"]]
+        return [
+            var_id for var_id in variable_ids if var_id not in ["crs", "spatial-ref"]
+        ]
 
     def get_variables_metadata(self) -> dict[str, dict]:
         """Extract metadata for all variables in the dataset."""
@@ -175,7 +171,8 @@ class OscDatasetStacGenerator:
         if not gcmd_keyword_url:
             gcmd_keyword_url = input(
                 f"Enter GCMD keyword URL or a similar url for"
-                f" {var_metadata.get('variable_id')}: ").strip()
+                f" {var_metadata.get('variable_id')}: "
+            ).strip()
         var_catalog.add_link(
             Link(
                 rel="via",
@@ -269,23 +266,23 @@ class OscDatasetStacGenerator:
         return var_catalog
 
     def update_product_base_catalog(self, product_catalog_path) -> Catalog:
-            """Link product to base product catalog"""
-            product_base_catalog = Catalog.from_file(product_catalog_path)
-            product_base_catalog.add_link(
-                Link(
-                    rel="child",
-                    target=f"./{self.collection_id}/collection.json",
-                    media_type="application/json",
-                    title=self.collection_id,
-                )
+        """Link product to base product catalog"""
+        product_base_catalog = Catalog.from_file(product_catalog_path)
+        product_base_catalog.add_link(
+            Link(
+                rel="child",
+                target=f"./{self.collection_id}/collection.json",
+                media_type="application/json",
+                title=self.collection_id,
             )
-            # 'self' link: the direct URL where this JSON is hosted
-            product_base_catalog.set_self_href(PRODUCT_BASE_CATALOG_SELF_HREF)
-            return product_base_catalog
+        )
+        # 'self' link: the direct URL where this JSON is hosted
+        product_base_catalog.set_self_href(PRODUCT_BASE_CATALOG_SELF_HREF)
+        return product_base_catalog
 
-    def update_variable_base_catalog(self, variable_base_catalog_path, variable_ids) \
-            -> (
-            Catalog):
+    def update_variable_base_catalog(
+        self, variable_base_catalog_path, variable_ids
+    ) -> (Catalog):
         """Link product to base product catalog"""
         variable_base_catalog = Catalog.from_file(variable_base_catalog_path)
         for var_id in variable_ids:
@@ -330,7 +327,7 @@ class OscDatasetStacGenerator:
                     rel="related",
                     target=f"../../themes/{theme}/catalog.json",
                     media_type="application/json",
-                    title=f"Theme: {self.format_string(theme)}"
+                    title=f"Theme: {self.format_string(theme)}",
                 )
             )
         deepesdl_collection.set_self_href(DEEPESDL_COLLECTION_SELF_HREF)
@@ -477,7 +474,7 @@ class OscDatasetStacGenerator:
                 rel="related",
                 target="../../projects/deep-earth-system-data-lab/collection.json",
                 media_type="application/json",
-                title="Project: DeepESDL"
+                title="Project: DeepESDL",
             )
         )
 

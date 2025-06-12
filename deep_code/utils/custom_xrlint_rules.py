@@ -24,7 +24,7 @@ class DatasetDescriptionRule(RuleOp):
         if "description" not in node.dataset.attrs:
             ctx.report(
                 "Dataset missing required 'description' attribute.",
-                suggestions=["Add a 'description' attribute to dataset.attrs."]
+                suggestions=["Add a 'description' attribute to dataset.attrs."],
             )
 
 
@@ -37,9 +37,7 @@ class VariableGcmdKeywordUrlRule(RuleOp):
             return
 
         if "gcmd_keyword_url" not in node.array.attrs:
-            ctx.report(
-                f"Variable '{node.name}' missing 'gcmd_keyword_url' attribute."
-            )
+            ctx.report(f"Variable '{node.name}' missing 'gcmd_keyword_url' attribute.")
 
 
 # Define the recommended ruleset for this plugin
@@ -52,7 +50,7 @@ plugin.define_config(
                 "deepcode/dataset-description": "error",
             }
         }
-    ]
+    ],
 )
 
 
@@ -66,11 +64,7 @@ def export_config() -> list:
         A list of plugin config dictionaries and rule presets.
     """
     return [
-        {
-            "plugins": {
-                "deepcode": plugin,
-            },
-        },
+        {"plugins": {"deepcode": plugin}},
         "recommended",
         {
             "rules": {

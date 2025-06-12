@@ -5,6 +5,7 @@ from typing import Optional
 import xarray as xr
 from xcube.core.store import new_data_store
 
+
 def serialize(obj):
     """Convert non-serializable objects to JSON-compatible formats.
     Args:
@@ -20,11 +21,12 @@ def serialize(obj):
         return obj.__dict__
     raise TypeError(f"Object of type {type(obj).__name__} is not JSON serializable")
 
+
 def open_dataset(
     dataset_id: str,
     root: str = "deep-esdl-public",
     storage_configs: Optional[list[dict]] = None,
-    logger: Optional[logging.Logger] = None
+    logger: Optional[logging.Logger] = None,
 ) -> xr.Dataset:
     """Open an xarray dataset from a specified store.
 
