@@ -4,12 +4,10 @@
 # https://opensource.org/licenses/MIT.
 
 import logging
-import os
 from datetime import datetime, timezone
 
 import pandas as pd
 from pystac import Catalog, Collection, Extent, Link, SpatialExtent, TemporalExtent
-from xcube.core.store import new_data_store
 
 from deep_code.constants import (
     DEEPESDL_COLLECTION_SELF_HREF,
@@ -19,6 +17,7 @@ from deep_code.constants import (
 )
 from deep_code.utils.ogc_api_record import Theme, ThemeConcept
 from deep_code.utils.osc_extension import OscExtension
+from deep_code.utils.helper import open_dataset
 
 
 class OscDatasetStacGenerator:
@@ -58,68 +57,12 @@ class OscDatasetStacGenerator:
         self.osc_missions = osc_missions or []
         self.cf_params = cf_params or {}
         self.logger = logging.getLogger(__name__)
-        self.dataset = self._open_dataset()
+        self.dataset = open_dataset(
+            dataset_id=dataset_id,
+            logger=self.logger
+        )
         self.variables_metadata = self.get_variables_metadata()
 
-    def _open_dataset(self):
-        """Open the dataset using a S3 store as a xarray Dataset."""
-
-        store_configs = [
-            {
-                "description": "Public store",
-                "params": {
-                    "storage_type": "s3",
-                    "root": "deep-esdl-public",
-                    "storage_options": {"anon": True},
-                },
-            },
-            {
-                "description": "Authenticated store",
-                "params": {
-                    "storage_type": "s3",
-                    "root": os.environ.get("S3_USER_STORAGE_BUCKET"),
-                    "storage_options": {
-                        "anon": False,
-                        "key": os.environ.get("S3_USER_STORAGE_KEY"),
-                        "secret": os.environ.get("S3_USER_STORAGE_SECRET"),
-                    },
-                },
-            },
-        ]
-
-        # Iterate through configurations and attempt to open the dataset
-        last_exception = None
-        tried_configurations = []
-        for config in store_configs:
-            tried_configurations.append(config["description"])
-            try:
-                self.logger.info(
-                    f"Attempting to open dataset with configuration: "
-                    f"{config['description']}"
-                )
-                store = new_data_store(
-                    config["params"]["storage_type"],
-                    root=config["params"]["root"],
-                    storage_options=config["params"]["storage_options"],
-                )
-                dataset = store.open_data(self.dataset_id)
-                self.logger.info(
-                    f"Successfully opened dataset with configuration: "
-                    f"{config['description']}"
-                )
-                return dataset
-            except Exception as e:
-                self.logger.error(
-                    f"Failed to open dataset with configuration: "
-                    f"{config['description']}. Error: {e}"
-                )
-                last_exception = e
-
-        raise ValueError(
-            f"Failed to open Zarr dataset with ID {self.dataset_id}. "
-            f"Tried configurations: {', '.join(tried_configurations)}. "
-            f"Last error: {last_exception}"
-        )
 
     def _get_spatial_extent(self) -> SpatialExtent:
         """Extract spatial extent from the dataset."""
