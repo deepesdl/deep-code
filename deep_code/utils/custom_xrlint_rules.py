@@ -71,6 +71,7 @@ def export_config() -> list:
                 "content-desc": "off",
                 "no-empty-attrs": "off",
                 "conventions": "off",
+                "time-coordinate": "off"
             }
         },
         "deepcode/recommended",
