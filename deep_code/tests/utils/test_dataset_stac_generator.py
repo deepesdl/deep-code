@@ -1,17 +1,27 @@
-import os
+#!/usr/bin/env python3
+# Copyright (c) 2025 by Brockmann Consult GmbH
+# Permissions are hereby granted under the terms of the MIT License:
+# https://opensource.org/licenses/MIT.
+
 import unittest
 from datetime import datetime
 from unittest.mock import MagicMock, patch
 
 import numpy as np
-from pystac import Collection
-from xarray import Dataset
+from pystac import Catalog, Collection
+from xarray import DataArray, Dataset
 
-from deep_code.utils.dataset_stac_generator import OscDatasetStacGenerator
+from deep_code.constants import (
+    DEEPESDL_COLLECTION_SELF_HREF,
+    OSC_THEME_SCHEME,
+    PRODUCT_BASE_CATALOG_SELF_HREF,
+    VARIABLE_BASE_CATALOG_SELF_HREF,
+)
+from deep_code.utils.dataset_stac_generator import OscDatasetStacGenerator, Theme
 
 
 class TestOSCProductSTACGenerator(unittest.TestCase):
-    @patch("deep_code.utils.dataset_stac_generator.new_data_store")
+    @patch("deep_code.utils.dataset_stac_generator.open_dataset")
     def setUp(self, mock_data_store):
         """Set up a mock dataset and generator."""
         self.mock_dataset = Dataset(
@@ -50,7 +60,7 @@ class TestOSCProductSTACGenerator(unittest.TestCase):
         )
         mock_store = MagicMock()
         mock_store.open_data.return_value = self.mock_dataset
-        mock_data_store.return_value = mock_store
+        mock_data_store.return_value = self.mock_dataset
 
         self.generator = OscDatasetStacGenerator(
             dataset_id="mock-dataset-id",
@@ -65,9 +75,8 @@ class TestOSCProductSTACGenerator(unittest.TestCase):
     def test_open_dataset(self):
         """Test if the dataset is opened correctly."""
         self.assertIsInstance(self.generator.dataset, Dataset)
-        self.assertIn("lon", self.generator.dataset.coords)
-        self.assertIn("lat", self.generator.dataset.coords)
-        self.assertIn("time", self.generator.dataset.coords)
+        for coord in ("lon", "lat", "time"):
+            self.assertIn(coord, self.generator.dataset.coords)
 
     def test_get_spatial_extent(self):
         """Test spatial extent extraction."""
@@ -77,146 +86,93 @@ class TestOSCProductSTACGenerator(unittest.TestCase):
     def test_get_temporal_extent(self):
         """Test temporal extent extraction."""
         extent = self.generator._get_temporal_extent()
-        expected_intervals = [datetime(2023, 1, 1, 0, 0), datetime(2023, 1, 2, 0, 0)]
-        self.assertEqual(extent.intervals[0], expected_intervals)
+        # TemporalExtent.intervals is a list of [start, end]
+        interval = extent.intervals[0]
+        self.assertEqual(interval[0], datetime(2023, 1, 1, 0, 0))
+        self.assertEqual(interval[1], datetime(2023, 1, 2, 0, 0))
 
     def test_get_variables(self):
-        """Test variable extraction."""
-        variables = self.generator.get_variable_ids()
-        self.assertEqual(variables, ["var1", "var2"])
+        """Test variable ID extraction."""
+        vars_ = self.generator.get_variable_ids()
+        self.assertCountEqual(vars_, ["var1", "var2"])
 
     def test_get_general_metadata(self):
         """Test general metadata extraction."""
-        metadata = self.generator._get_general_metadata()
-        self.assertEqual(metadata["description"], "Mock dataset for testing.")
+        meta = self.generator._get_general_metadata()
+        self.assertEqual(meta.get("description"), "Mock dataset for testing.")
 
-    @patch("pystac.Collection.add_link")
-    @patch("pystac.Collection.set_self_href")
-    def test_build_stac_collection(self, mock_set_self_href, mock_add_link):
-        """Test STAC collection creation."""
-        collection = self.generator.build_dataset_stac_collection()
-        self.assertIsInstance(collection, Collection)
-        self.assertEqual(collection.id, "mock-collection-id")
-        self.assertEqual(collection.description, "Mock dataset for testing.")
-        self.assertEqual(
-            collection.extent.spatial.bboxes[0], [-180.0, -90.0, 180.0, 90.0]
-        )
-        self.assertEqual(
-            collection.extent.temporal.intervals[0],
-            [datetime(2023, 1, 1, 0, 0), datetime(2023, 1, 2, 0, 0)],
-        )
-        mock_set_self_href.assert_called_once()
-        mock_add_link.assert_called()
+    def test_extract_metadata_for_variable(self):
+        """Test single variable metadata extraction."""
+        da: DataArray = self.mock_dataset.data_vars["var1"]
+        var_meta = self.generator.extract_metadata_for_variable(da)
+        self.assertEqual(var_meta["variable_id"], "var1")
+        self.assertEqual(var_meta["description"], "dummy")
+        self.assertEqual(var_meta["gcmd_keyword_url"], "https://dummy")
 
-    def test_invalid_spatial_extent(self):
-        """Test spatial extent extraction with missing coordinates."""
-        self.generator.dataset = Dataset(coords={"x": [], "y": []})
-        with self.assertRaises(ValueError):
-            self.generator._get_spatial_extent()
+    def test_get_variables_metadata(self):
+        """Test metadata dict for all variables."""
+        meta_dict = self.generator.get_variables_metadata()
+        self.assertIn("var1", meta_dict)
+        self.assertIn("var2", meta_dict)
+        self.assertIsInstance(meta_dict["var1"], dict)
 
-    def test_invalid_temporal_extent(self):
-        """Test temporal extent extraction with missing time."""
-        self.generator.dataset = Dataset(coords={})
-        with self.assertRaises(ValueError):
-            self.generator._get_temporal_extent()
+    def test_build_theme(self):
+        """Test Theme builder static method."""
+        themes = ["a", "b"]
+        theme_obj: Theme = OscDatasetStacGenerator.build_theme(themes)
+        self.assertEqual(theme_obj.scheme, OSC_THEME_SCHEME)
+        ids = [tc.id for tc in theme_obj.concepts]
+        self.assertListEqual(ids, ["a", "b"])
 
-    @patch("deep_code.utils.dataset_stac_generator.new_data_store")
-    @patch("deep_code.utils.dataset_stac_generator.logging.getLogger")
-    def test_open_dataset_success_public_store(self, mock_logger, mock_new_data_store):
-        """Test dataset opening with the public store configuration."""
-        # Create a mock store and mock its `open_data` method
-        mock_store = MagicMock()
-        mock_new_data_store.return_value = mock_store
-        mock_store.open_data.return_value = self.mock_dataset
+    @patch.object(OscDatasetStacGenerator, "_add_gcmd_link_to_var_catalog")
+    @patch.object(OscDatasetStacGenerator, "add_themes_as_related_links_var_catalog")
+    def test_build_variable_catalog(self, mock_add_themes, mock_add_gcmd):
+        """Test building of variable-level STAC catalog."""
+        var_meta = self.generator.variables_metadata["var1"]
+        catalog = self.generator.build_variable_catalog(var_meta)
+        self.assertIsInstance(catalog, Catalog)
+        self.assertEqual(catalog.id, "var1")
+        # Title should be capitalized
+        self.assertEqual(catalog.title, "Var1")
+        # Self href ends with var1/catalog.json
+        self.assertTrue(catalog.self_href.endswith("/var1/catalog.json"))
 
-        # Instantiate the generator (this will implicitly call _open_dataset)
-        generator = OscDatasetStacGenerator("mock-dataset-id", "mock-collection-id")
+    @patch("pystac.Catalog.from_file")
+    def test_update_product_base_catalog(self, mock_from_file):
+        """Test linking product catalog."""
+        mock_cat = MagicMock(spec=Catalog)
+        mock_from_file.return_value = mock_cat
 
-        # Validate that the dataset is assigned correctly
-        self.assertEqual(generator.dataset, "mock_dataset")
+        result = self.generator.update_product_base_catalog("path.json")
+        self.assertIs(result, mock_cat)
+        mock_cat.add_link.assert_called_once()
+        mock_cat.set_self_href.assert_called_once_with(PRODUCT_BASE_CATALOG_SELF_HREF)
 
-        # Validate that `new_data_store` was called once with the correct parameters
-        mock_new_data_store.assert_called_once_with(
-            "s3", root="deep-esdl-public", storage_options={"anon": True}
-        )
+    @patch("pystac.Catalog.from_file")
+    def test_update_variable_base_catalog(self, mock_from_file):
+        """Test linking variable base catalog."""
+        mock_cat = MagicMock(spec=Catalog)
+        mock_from_file.return_value = mock_cat
 
-        # Ensure `open_data` was called once on the returned store
-        mock_store.open_data.assert_called_once_with("mock-dataset-id")
+        vars_ = ["v1", "v2"]
+        result = self.generator.update_variable_base_catalog("vars.json", vars_)
+        self.assertIs(result, mock_cat)
+        # Expect one add_link per variable
+        self.assertEqual(mock_cat.add_link.call_count, len(vars_))
+        mock_cat.set_self_href.assert_called_once_with(VARIABLE_BASE_CATALOG_SELF_HREF)
 
-        # Validate logging behavior
-        mock_logger().info.assert_any_call(
-            "Attempting to open dataset with configuration: Public store"
-        )
-        mock_logger().info.assert_any_call(
-            "Successfully opened dataset with configuration: Public store"
-        )
+    @patch("pystac.Collection.from_file")
+    def test_update_deepesdl_collection(self, mock_from_file):
+        """Test updating DeepESDL collection."""
+        mock_coll = MagicMock(spec=Collection)
+        mock_from_file.return_value = mock_coll
 
-    @patch("deep_code.utils.dataset_stac_generator.new_data_store")
-    @patch("deep_code.utils.dataset_stac_generator.logging.getLogger")
-    def test_open_dataset_success_authenticated_store(
-        self, mock_logger, mock_new_data_store
-    ):
-        """Test dataset opening with the authenticated store configuration."""
-        # Simulate public store failure
-        mock_store = MagicMock()
-        mock_new_data_store.side_effect = [
-            Exception("Public store failure"),
-            # First call (public store) raises an exception
-            mock_store,
-            # Second call (authenticated store) returns a mock store
-        ]
-        mock_store.open_data.return_value = self.mock_dataset
-
-        os.environ["S3_USER_STORAGE_BUCKET"] = "mock-bucket"
-        os.environ["S3_USER_STORAGE_KEY"] = "mock-key"
-        os.environ["S3_USER_STORAGE_SECRET"] = "mock-secret"
-
-        generator = OscDatasetStacGenerator("mock-dataset-id", "mock-collection-id")
-
-        # Validate that the dataset was successfully opened with the authenticated store
-        self.assertEqual(generator.dataset, "mock_dataset")
-        self.assertEqual(mock_new_data_store.call_count, 2)
-
-        # Validate calls to `new_data_store`
-        mock_new_data_store.assert_any_call(
-            "s3", root="deep-esdl-public", storage_options={"anon": True}
-        )
-        mock_new_data_store.assert_any_call(
-            "s3",
-            root="mock-bucket",
-            storage_options={"anon": False, "key": "mock-key", "secret": "mock-secret"},
-        )
-
-        # Validate logging calls
-        mock_logger().info.assert_any_call(
-            "Attempting to open dataset with configuration: Public store"
-        )
-        mock_logger().info.assert_any_call(
-            "Attempting to open dataset with configuration: Authenticated store"
-        )
-        mock_logger().info.assert_any_call(
-            "Successfully opened dataset with configuration: Authenticated store"
-        )
-
-    @patch("deep_code.utils.dataset_stac_generator.new_data_store")
-    @patch("deep_code.utils.dataset_stac_generator.logging.getLogger")
-    def test_open_dataset_failure(self, mock_logger, mock_new_data_store):
-        """Test dataset opening failure with all configurations."""
-        # Simulate all store failures
-        mock_new_data_store.side_effect = Exception("Store failure")
-        os.environ["S3_USER_STORAGE_BUCKET"] = "mock-bucket"
-        os.environ["S3_USER_STORAGE_KEY"] = "mock-key"
-        os.environ["S3_USER_STORAGE_SECRET"] = "mock-secret"
-
-        with self.assertRaises(ValueError) as context:
-            OscDatasetStacGenerator("mock-dataset-id", "mock-collection-id")
-
-        self.assertIn(
-            "Failed to open Zarr dataset with ID mock-dataset-id",
-            str(context.exception),
-        )
-        self.assertIn("Public store, Authenticated store", str(context.exception))
-        self.assertEqual(mock_new_data_store.call_count, 2)
+        result = self.generator.update_deepesdl_collection("deep.json")
+        self.assertIs(result, mock_coll)
+        # Expect child and theme related links for each theme
+        calls = mock_coll.add_link.call_count
+        self.assertGreaterEqual(calls, 1 + len(self.generator.osc_themes))
+        mock_coll.set_self_href.assert_called_once_with(DEEPESDL_COLLECTION_SELF_HREF)
 
 
 class TestFormatString(unittest.TestCase):
