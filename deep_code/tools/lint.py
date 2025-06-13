@@ -1,5 +1,6 @@
 import xarray as xr
 from xrlint.linter import new_linter
+from xrlint.result import Result
 
 from deep_code.utils.custom_xrlint_rules import export_config
 from deep_code.utils.helper import open_dataset
@@ -24,7 +25,7 @@ class LintDataset:
         self.dataset_id = dataset_id
         self.dataset = dataset
 
-    def lint_dataset(self):
+    def lint_dataset(self) -> Result:
         if self.dataset is not None:
             ds = self.dataset
         elif self.dataset_id is not None:
