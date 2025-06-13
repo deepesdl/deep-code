@@ -22,5 +22,5 @@
 
 ## Changes in 0.1.4
 
-- Implemented custom rules using xrlint to check required metadata in dataset to 
-  generate valid open science catalog STAC collection.
+- Implemented custom rules using xrlint to validate metadata in dataset, which is necessary to 
+  generate a STAC collection valid for ESA Open Science Catalog.
