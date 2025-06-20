@@ -15,24 +15,24 @@ class TemplateGenerator:
         """Generate a complete template with all possible keys and placeholder values"""
 
         template = {
-            "workflow_id": "[WORKFLOW_ID]",
+            "workflow_id": "[A unique identifier for your workflow]",
             "properties": {
-                "title": "[TITLE]",
-                "description": "[DESCRIPTION]",
+                "title": "[Human-readable title of the workflow]",
+                "description": "[A concise summary of what the workflow does]",
                 "keywords": ["[KEYWORD1]", "[KEYWORD2]"],
-                "themes": ["[THEME1]", "[THEME2]"],
-                "license": "[LICENSE_TYPE]",
+                "themes": ["[Thematic area(s) of focus (e.g. land, ocean, atmosphere)]","[THEME1]", "[THEME2]"],
+                "license": "[License type (e.g. MIT, Apache-2.0, CC-BY-4.0, proprietary)]",
                 "jupyter_kernel_info": {
-                    "name": "[DEEPESDL_KERNEL_NAME]",
+                    "name": "[Name of the execution environment or notebook kernel]",
                     "python_version": "[PYTHON_VERSION]",
-                    "env_file": "[ENV_FILE_URL_IN_GIT]",
+                    "env_file": "[Link to the environment file (YAML) used to create the notebook environment]",
                 },
             },
-            "jupyter_notebook_url": "[NOTEBOOK_URL]",
+            "jupyter_notebook_url": "[Link to the source notebook (e.g. on GitHub)]",
             "contact": [
                 {
-                    "name": "[CONTACT_NAME]",
-                    "organization": "[ORGANIZATION]",
+                    "name": "[Contact person's full name]",
+                    "organization": "[Affiliated institution or company]",
                     "links": [
                         {
                             "rel": "about",
@@ -59,12 +59,13 @@ class TemplateGenerator:
         """Generate a complete dataset template with all possible keys and placeholder values"""
 
         template = {
-            "dataset_id": "[DATASET_ID].zarr",
-            "collection_id": "[COLLECTION_ID]",
-            "osc_themes": ["[THEME1]", "[THEME2]"],
-            "osc_region": "[REGION]",
-            "dataset_status": "[STATUS]",
-            "documentation_link": "[DOCS_URL]",
+            "dataset_id": "[The name of the dataset object within your S3 bucket].zarr",
+            "collection_id": "[A unique identifier for the dataset collection]",
+            "osc_themes": ["[Oceans]",  "[Open Science theme (choose from "
+                                           "https://opensciencedata.esa.int/themes/catalog)"],
+            "osc_region": "[Geographical coverage, e.g. 'global']",
+            "dataset_status": "[Status of the dataset: 'ongoing', 'completed', or 'planned']",
+            "documentation_link": "[Link to relevant documentation, publication, or handbook]",
         }
 
         yaml_str = yaml.dump(
