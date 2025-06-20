@@ -24,3 +24,4 @@
 
 - Implemented custom rules using xrlint to validate metadata in dataset, which is necessary to 
   generate a STAC collection valid for ESA Open Science Catalog.
+- Improved starter templates used for publishing.
