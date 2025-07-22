@@ -130,6 +130,7 @@ class Publisher:
         self._read_config_files()
         self.collection_id = self.dataset_config.get("collection_id")
         self.workflow_title = self.workflow_config.get("properties", {}).get("title")
+        self.workflow_id = self.workflow_config.get("workflow_id")
 
         if not self.collection_id:
             raise ValueError("collection_id is missing in dataset config.")
@@ -226,6 +227,8 @@ class Publisher:
         generator = OscDatasetStacGenerator(
             dataset_id=dataset_id,
             collection_id=self.collection_id,
+            workflow_id= self.workflow_id,
+            workflow_title = self.workflow_title,
             documentation_link=documentation_link,
             access_link=access_link,
             osc_status=dataset_status,
