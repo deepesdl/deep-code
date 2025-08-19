@@ -1,10 +1,12 @@
 from typing import Any, Optional
+from urllib.parse import quote, urlencode
 
 from xrlint.util.constructible import MappingConstructible
 from xrlint.util.serializable import JsonSerializable, JsonValue
 
 from deep_code.constants import (
     BASE_URL_OSC,
+    DEEPESDL_GIT_PULL_BASE,
     OGC_API_RECORD_SPEC,
     PROJECT_COLLECTION_NAME,
 )
@@ -86,12 +88,16 @@ class RecordProperties(MappingConstructible["RecordProperties"], JsonSerializabl
         if self.osc_project is not None:
             data["osc:project"] = self.osc_project
             del data["osc_project"]
+        data["application:type"] = "jupyter-notebook"
+        data["application:container"] = ("true",)
+        data["application:language"] = ("Python",)
         return data
 
 
 class LinksBuilder:
-    def __init__(self, themes: list[str]):
+    def __init__(self, themes: list[str], jupyter_kernel_info: dict[str]):
         self.themes = themes
+        self.jupyter_kernel_info = jupyter_kernel_info
         self.theme_links = []
 
     def build_theme_links_for_records(self):
@@ -116,6 +122,55 @@ class LinksBuilder:
                 "title": f"{collection_id}",
             }
         ]
+
+    def build_link_to_jnb(self, workflow_title, jupyter_nb_url):
+        return [
+            {
+                "rel": "application",
+                "title": f"Jupyter Notebook: {workflow_title}",
+                "href": jupyter_nb_url,
+                "type": "application/x-ipynb+json",
+                "application:type": "jupyter-notebook",
+                "application:container": "true",
+                "application:language": "Python",
+                "jupyter:kernel": {
+                    "name": self.jupyter_kernel_info["name"],
+                    "pythonVersion": self.jupyter_kernel_info["python_version"],
+                    "envFile": self.jupyter_kernel_info["env_file"],
+                },
+            }
+        ]
+
+    def build_deepesdl_notebook_href(
+        repo_url: str,
+        notebook_path: str,
+        branch: str = "main",
+        base_redirect: str = DEEPESDL_GIT_PULL_BASE,
+    ) -> str:
+        """
+        Build a DeepESDL git-pull redirect URL:
+        {base}?repo=<encoded_repo>&urlpath=<encoded_lab_tree_path>&branch=<encoded_branch>
+        """
+        params = {
+            "repo": repo_url,
+            "urlpath": f"lab/tree/{notebook_path.lstrip('/')}",
+            "branch": branch,
+        }
+        return f"{base_redirect}?{urlencode(params, quote_via=quote)}"
+
+    def make_related_link_for_opening_jnb(
+        self,
+        repo_url: str,
+        notebook_path: str,
+        branch: str = "main",
+        title: str = "Open notebook on the DeepESDL platform",
+    ) -> dict[str, str]:
+        return {
+            "rel": "related",
+            "href": self.build_deepesdl_notebook_href(repo_url, notebook_path, branch),
+            "type": "text/html",
+            "title": title,
+        }
 
 
 class WorkflowAsOgcRecord(MappingConstructible["OgcRecord"], JsonSerializable):
@@ -236,12 +291,12 @@ class ExperimentAsOgcRecord(MappingConstructible["OgcRecord"], JsonSerializable)
                 "type": "application/json",
                 "title": f"Workflow: {self.title}",
             },
-            {
-                "rel": "child",
-                "href": f"../../products/{self.collection_id}/collection.json",
-                "type": "application/json",
-                "title": f"{self.collection_id}",
-            },
+            # {
+            #     "rel": "child",
+            #     "href": f"../../products/{self.collection_id}/collection.json",
+            #     "type": "application/json",
+            #     "title": f"{self.collection_id}",
+            # },
             {
                 "rel": "related",
                 "href": f"../../projects/{PROJECT_COLLECTION_NAME}/collection.json",

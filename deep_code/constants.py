@@ -29,3 +29,6 @@ WORKFLOW_BASE_CATALOG_SELF_HREF = (
     ".json"
 )
 PROJECT_COLLECTION_NAME = "deep-earth-system-data-lab"
+DEEPESDL_GIT_PULL_BASE = (
+    "https://deep.earthsystemdatalab.net/hub/user-redirect/git-pull"
+)

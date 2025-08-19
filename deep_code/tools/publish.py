@@ -4,12 +4,12 @@
 # https://opensource.org/licenses/MIT.
 
 import copy
-import json
 import logging
 from datetime import datetime
 from pathlib import Path
 
 import fsspec
+import jsonpickle
 import yaml
 from pystac import Catalog, Link
 
@@ -22,7 +22,6 @@ from deep_code.constants import (
 )
 from deep_code.utils.dataset_stac_generator import OscDatasetStacGenerator
 from deep_code.utils.github_automation import GitHubAutomation
-from deep_code.utils.helper import serialize
 from deep_code.utils.ogc_api_record import (
     ExperimentAsOgcRecord,
     LinksBuilder,
@@ -152,11 +151,13 @@ class Publisher:
         # Create the directory if it doesn't exist
         Path(file_path).parent.mkdir(parents=True, exist_ok=True)
         try:
-            json_content = json.dumps(data, indent=2, default=serialize)
+            # unpicklable=False -> plain JSON (drops type metadata); cycles are resolved.
+            json_content = jsonpickle.encode(data, unpicklable=False, indent=2)
+            # json_content = json.dumps(data, indent=2, default=serialize)
         except TypeError as e:
             raise RuntimeError(f"JSON serialization failed: {e}")
 
-        with open(file_path, "w") as f:
+        with open(file_path, "w", encoding="utf-8") as f:
             f.write(json_content)
 
     def _update_and_add_to_file_dict(
@@ -227,8 +228,8 @@ class Publisher:
         generator = OscDatasetStacGenerator(
             dataset_id=dataset_id,
             collection_id=self.collection_id,
-            workflow_id= self.workflow_id,
-            workflow_title = self.workflow_title,
+            workflow_id=self.workflow_id,
+            workflow_title=self.workflow_title,
             documentation_link=documentation_link,
             access_link=access_link,
             osc_status=dataset_status,
@@ -331,16 +332,19 @@ class Publisher:
         wf_record_properties = rg.build_record_properties(properties_list, contacts)
         # make a copy for experiment record
         exp_record_properties = copy.deepcopy(wf_record_properties)
+        jupyter_kernel_info = wf_record_properties.jupyter_kernel_info.to_dict()
 
-        link_builder = LinksBuilder(osc_themes)
+        link_builder = LinksBuilder(osc_themes, jupyter_kernel_info)
         theme_links = link_builder.build_theme_links_for_records()
-
+        application_link = link_builder.build_link_to_jnb(
+            self.workflow_title, jupyter_notebook_url
+        )
         workflow_record = WorkflowAsOgcRecord(
             id=workflow_id,
             type="Feature",
             title=self.workflow_title,
             properties=wf_record_properties,
-            links=links + theme_links,
+            links=links + theme_links + application_link,
             jupyter_notebook_url=jupyter_notebook_url,
             themes=osc_themes,
         )
@@ -357,6 +361,8 @@ class Publisher:
         exp_record_properties.type = "experiment"
         exp_record_properties.osc_workflow = workflow_id
 
+        dataset_link = link_builder.build_link_to_dataset(self.collection_id)
+
         experiment_record = ExperimentAsOgcRecord(
             id=workflow_id,
             title=self.workflow_title,
@@ -364,7 +370,7 @@ class Publisher:
             jupyter_notebook_url=jupyter_notebook_url,
             collection_id=self.collection_id,
             properties=exp_record_properties,
-            links=links + theme_links,
+            links=links + theme_links + dataset_link,
         )
         # Convert to dictionary and cleanup
         experiment_dict = experiment_record.to_dict()
