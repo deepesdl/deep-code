@@ -4,10 +4,12 @@ import unittest
 from pathlib import Path
 from unittest.mock import MagicMock, mock_open, patch
 
+import pytest
 import yaml
 from pystac import Catalog
 
 from deep_code.tools.publish import Publisher
+from deep_code.utils.ogc_api_record import LinksBuilder
 
 
 class TestPublisher(unittest.TestCase):
@@ -107,3 +109,59 @@ class TestPublisher(unittest.TestCase):
         # Assertions
         self.assertEqual(self.publisher.dataset_config, dataset_config)
         self.assertEqual(self.publisher.workflow_config, workflow_config)
+
+
+class TestParseGithubNotebookUrl:
+    @pytest.mark.parametrize(
+        "url,repo_url,repo_name,branch,file_path",
+        [
+            (
+                "https://github.com/deepesdl/cube-gen/blob/main/Permafrost/Create-CCI-Permafrost-cube-EarthCODE.ipynb",
+                "https://github.com/deepesdl/cube-gen",
+                "cube-gen",
+                "main",
+                "Permafrost/Create-CCI-Permafrost-cube-EarthCODE.ipynb",
+            ),
+            (
+                "https://github.com/deepesdl/cube-gen/tree/release-1.0/Permafrost/Create-CCI-Permafrost-cube-EarthCODE.ipynb",
+                "https://github.com/deepesdl/cube-gen",
+                "cube-gen",
+                "release-1.0",
+                "Permafrost/Create-CCI-Permafrost-cube-EarthCODE.ipynb",
+            ),
+            (
+                "https://raw.githubusercontent.com/deepesdl/cube-gen/main/Permafrost/Create-CCI-Permafrost-cube-EarthCODE.ipynb",
+                "https://github.com/deepesdl/cube-gen",
+                "cube-gen",
+                "main",
+                "Permafrost/Create-CCI-Permafrost-cube-EarthCODE.ipynb",
+            ),
+        ],
+    )
+    def test_valid_urls(self, url, repo_url, repo_name, branch, file_path):
+        got_repo_url, got_repo_name, got_branch, got_file_path = LinksBuilder._parse_github_notebook_url(
+            url
+        )
+        assert got_repo_url == repo_url
+        assert got_repo_name == repo_name
+        assert got_branch == branch
+        assert got_file_path == file_path
+
+    def test_invalid_domain(self):
+        url = "https://gitlab.com/deepesdl/cube-gen/-/blob/main/Permafrost/Create-CCI-Permafrost-cube-EarthCODE.ipynb"
+        with pytest.raises(ValueError) as e:
+            LinksBuilder._parse_github_notebook_url(url)
+        assert "Only GitHub URLs are supported" in str(e.value)
+
+    def test_unexpected_github_format_missing_blob_or_tree(self):
+        # Missing the "blob" or "tree" segment
+        url = "https://github.com/deepesdl/cube-gen/main/Permafrost/Create-CCI-Permafrost-cube-EarthCODE.ipynb"
+        with pytest.raises(ValueError) as e:
+            LinksBuilder._parse_github_notebook_url(url)
+        assert "Unexpected GitHub URL format" in str(e.value)
+
+    def test_unexpected_raw_format_too_short(self):
+        url = "https://raw.githubusercontent.com/deepesdl/cube-gen/main"
+        with pytest.raises(ValueError) as e:
+            LinksBuilder._parse_github_notebook_url(url)
+        assert "Unexpected raw.githubusercontent URL format" in str(e.value)
