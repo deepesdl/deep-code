@@ -20,7 +20,11 @@ class TemplateGenerator:
                 "title": "[Human-readable title of the workflow]",
                 "description": "[A concise summary of what the workflow does]",
                 "keywords": ["[KEYWORD1]", "[KEYWORD2]"],
-                "themes": ["[Thematic area(s) of focus (e.g. land, ocean, atmosphere)]","[THEME1]", "[THEME2]"],
+                "themes": [
+                    "[Thematic area(s) of focus (e.g. land, ocean, atmosphere)]",
+                    "[THEME1]",
+                    "[THEME2]",
+                ],
                 "license": "[License type (e.g. MIT, Apache-2.0, CC-BY-4.0, proprietary)]",
                 "jupyter_kernel_info": {
                     "name": "[Name of the execution environment or notebook kernel]",
@@ -61,8 +65,11 @@ class TemplateGenerator:
         template = {
             "dataset_id": "[The name of the dataset object within your S3 bucket].zarr",
             "collection_id": "[A unique identifier for the dataset collection]",
-            "osc_themes": ["[Oceans]",  "[Open Science theme (choose from "
-                                           "https://opensciencedata.esa.int/themes/catalog)"],
+            "osc_themes": [
+                "[Oceans]",
+                "[Open Science theme (choose from "
+                "https://opensciencedata.esa.int/themes/catalog)",
+            ],
             "osc_region": "[Geographical coverage, e.g. 'global']",
             "dataset_status": "[Status of the dataset: 'ongoing', 'completed', or 'planned']",
             "documentation_link": "[Link to relevant documentation, publication, or handbook]",
