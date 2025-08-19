@@ -316,11 +316,7 @@ class ExperimentAsOgcRecord(MappingConstructible["OgcRecord"], JsonSerializable)
         if linkTemplates is None:
             linkTemplates = []
         if conformsTo is None:
-            conformsTo = [
-                OGC_API_RECORD_SPEC,
-                APPLICATION_TYPE_JUPYTER_SPEC,
-                APPLICATION_STAC_EXTENSION_SPEC,
-            ]
+            conformsTo = [OGC_API_RECORD_SPEC]
         self.id = id
         self.title = title
         self.type = type

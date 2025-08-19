@@ -65,8 +65,11 @@ class TestOSCProductSTACGenerator(unittest.TestCase):
         self.generator = OscDatasetStacGenerator(
             dataset_id="mock-dataset-id",
             collection_id="mock-collection-id",
+            workflow_id="dummy",
+            workflow_title="test",
             access_link="s3://mock-bucket/mock-dataset",
             documentation_link="https://example.com/docs",
+            license_type="proprietary",
             osc_status="ongoing",
             osc_region="Global",
             osc_themes=["climate", "environment"],
