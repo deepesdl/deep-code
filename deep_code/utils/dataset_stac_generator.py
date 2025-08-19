@@ -489,7 +489,7 @@ class OscDatasetStacGenerator:
                 rel="related",
                 target=f"../../experiments/{self.workflow_id}/record.json",
                 media_type="application/json",
-                title=f"Experiment: {self.workflow_title}"
+                title=f"Experiment: {self.workflow_title}",
             )
         )
 
