@@ -219,6 +219,7 @@ class Publisher:
         osc_region = self.dataset_config.get("osc_region")
         osc_themes = self.dataset_config.get("osc_themes")
         cf_params = self.dataset_config.get("cf_parameter")
+        license_type = self.dataset_config.get("license_type")
 
         if not dataset_id or not self.collection_id:
             raise ValueError("Dataset ID or Collection ID missing in the config.")
@@ -230,6 +231,7 @@ class Publisher:
             collection_id=self.collection_id,
             workflow_id=self.workflow_id,
             workflow_title=self.workflow_title,
+            license_type=license_type,
             documentation_link=documentation_link,
             access_link=access_link,
             osc_status=dataset_status,
@@ -314,7 +316,7 @@ class Publisher:
 
         return base_catalog
 
-    def publish_workflow_experiment(self, write_to_file: bool = False):
+    def generate_workflow_experiment_records(self, write_to_file: bool = False):
         """prepare workflow and experiment as ogc api record to publish it to the
         specified GitHub repository."""
         workflow_id = self._normalize_name(self.workflow_config.get("workflow_id"))
@@ -339,12 +341,16 @@ class Publisher:
         application_link = link_builder.build_link_to_jnb(
             self.workflow_title, jupyter_notebook_url
         )
+        jnb_open_link = link_builder.make_related_link_for_opening_jnb_from_github(
+            jupyter_notebook_url=jupyter_notebook_url
+        )
+
         workflow_record = WorkflowAsOgcRecord(
             id=workflow_id,
             type="Feature",
             title=self.workflow_title,
             properties=wf_record_properties,
-            links=links + theme_links + application_link,
+            links=links + theme_links + application_link + jnb_open_link,
             jupyter_notebook_url=jupyter_notebook_url,
             themes=osc_themes,
         )
@@ -354,6 +360,7 @@ class Publisher:
             del workflow_dict["jupyter_notebook_url"]
         if "osc_workflow" in workflow_dict["properties"]:
             del workflow_dict["properties"]["osc_workflow"]
+        # add workflow record to file_dict
         wf_file_path = f"workflows/{workflow_id}/record.json"
         file_dict = {wf_file_path: workflow_dict}
 
@@ -380,6 +387,7 @@ class Publisher:
             del experiment_dict["collection_id"]
         if "osc:project" in experiment_dict["properties"]:
             del experiment_dict["properties"]["osc:project"]
+        # add experiment record to file_dict
         exp_file_path = f"experiments/{workflow_id}/record.json"
         file_dict[exp_file_path] = experiment_dict
 
@@ -406,7 +414,9 @@ class Publisher:
         """Publish both dataset and workflow/experiment in a single PR."""
         # Get file dictionaries from both methods
         dataset_files = self.publish_dataset(write_to_file=write_to_file)
-        workflow_files = self.publish_workflow_experiment(write_to_file=write_to_file)
+        workflow_files = self.generate_workflow_experiment_records(
+            write_to_file=write_to_file
+        )
 
         # Combine the file dictionaries
         combined_files = {**dataset_files, **workflow_files}
