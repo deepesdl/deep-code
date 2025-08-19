@@ -153,7 +153,6 @@ class Publisher:
         try:
             # unpicklable=False -> plain JSON (drops type metadata); cycles are resolved.
             json_content = jsonpickle.encode(data, unpicklable=False, indent=2)
-            # json_content = json.dumps(data, indent=2, default=serialize)
         except TypeError as e:
             raise RuntimeError(f"JSON serialization failed: {e}")
 
