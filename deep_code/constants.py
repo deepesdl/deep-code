@@ -29,3 +29,13 @@ WORKFLOW_BASE_CATALOG_SELF_HREF = (
     ".json"
 )
 PROJECT_COLLECTION_NAME = "deep-earth-system-data-lab"
+DEEPESDL_GIT_PULL_BASE = (
+    "https://deep.earthsystemdatalab.net/hub/user-redirect/git-pull"
+)
+APPLICATION_TYPE_JUPYTER_SPEC = (
+    "https://raw.githubusercontent.com/EOEPCA/metadata"
+    "-profile/refs/heads/1.0/schemas/application-type-jupyter-notebook"
+)
+APPLICATION_STAC_EXTENSION_SPEC = (
+    "https://stac-extensions.github.io/application/v0.1.0/schema.json"
+)

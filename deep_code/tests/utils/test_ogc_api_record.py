@@ -1,6 +1,10 @@
 import unittest
 
-from deep_code.constants import OGC_API_RECORD_SPEC
+from deep_code.constants import (
+    APPLICATION_STAC_EXTENSION_SPEC,
+    APPLICATION_TYPE_JUPYTER_SPEC,
+    OGC_API_RECORD_SPEC,
+)
 from deep_code.utils.ogc_api_record import (
     Contact,
     ExperimentAsOgcRecord,
@@ -136,7 +140,9 @@ class TestRecordProperties(unittest.TestCase):
 
 class TestLinksBuilder(unittest.TestCase):
     def test_build_theme_links_for_records(self):
-        links_builder = LinksBuilder(themes=["climate", "ocean"])
+        links_builder = LinksBuilder(
+            themes=["climate", "ocean"], jupyter_kernel_info={}
+        )
         theme_links = links_builder.build_theme_links_for_records()
 
         expected_links = [
@@ -201,7 +207,14 @@ class TestWorkflowAsOgcRecord(unittest.TestCase):
             workflow_record.jupyter_notebook_url, "https://example.com/notebook.ipynb"
         )
         self.assertEqual(workflow_record.properties, record_properties)
-        self.assertEqual(workflow_record.conformsTo, [OGC_API_RECORD_SPEC])
+        self.assertEqual(
+            workflow_record.conformsTo,
+            [
+                OGC_API_RECORD_SPEC,
+                APPLICATION_TYPE_JUPYTER_SPEC,
+                APPLICATION_STAC_EXTENSION_SPEC,
+            ],
+        )
         self.assertEqual(workflow_record.links[0]["rel"], "root")
         self.assertEqual(workflow_record.links[-1]["rel"], "self")
 

@@ -4,12 +4,12 @@
 # https://opensource.org/licenses/MIT.
 
 import copy
-import json
 import logging
 from datetime import datetime
 from pathlib import Path
 
 import fsspec
+import jsonpickle
 import yaml
 from pystac import Catalog, Link
 
@@ -22,7 +22,6 @@ from deep_code.constants import (
 )
 from deep_code.utils.dataset_stac_generator import OscDatasetStacGenerator
 from deep_code.utils.github_automation import GitHubAutomation
-from deep_code.utils.helper import serialize
 from deep_code.utils.ogc_api_record import (
     ExperimentAsOgcRecord,
     LinksBuilder,
@@ -130,6 +129,7 @@ class Publisher:
         self._read_config_files()
         self.collection_id = self.dataset_config.get("collection_id")
         self.workflow_title = self.workflow_config.get("properties", {}).get("title")
+        self.workflow_id = self.workflow_config.get("workflow_id")
 
         if not self.collection_id:
             raise ValueError("collection_id is missing in dataset config.")
@@ -151,11 +151,12 @@ class Publisher:
         # Create the directory if it doesn't exist
         Path(file_path).parent.mkdir(parents=True, exist_ok=True)
         try:
-            json_content = json.dumps(data, indent=2, default=serialize)
+            # unpicklable=False -> plain JSON (drops type metadata); cycles are resolved.
+            json_content = jsonpickle.encode(data, unpicklable=False, indent=2)
         except TypeError as e:
             raise RuntimeError(f"JSON serialization failed: {e}")
 
-        with open(file_path, "w") as f:
+        with open(file_path, "w", encoding="utf-8") as f:
             f.write(json_content)
 
     def _update_and_add_to_file_dict(
@@ -217,6 +218,7 @@ class Publisher:
         osc_region = self.dataset_config.get("osc_region")
         osc_themes = self.dataset_config.get("osc_themes")
         cf_params = self.dataset_config.get("cf_parameter")
+        license_type = self.dataset_config.get("license_type")
 
         if not dataset_id or not self.collection_id:
             raise ValueError("Dataset ID or Collection ID missing in the config.")
@@ -226,6 +228,9 @@ class Publisher:
         generator = OscDatasetStacGenerator(
             dataset_id=dataset_id,
             collection_id=self.collection_id,
+            workflow_id=self.workflow_id,
+            workflow_title=self.workflow_title,
+            license_type=license_type,
             documentation_link=documentation_link,
             access_link=access_link,
             osc_status=dataset_status,
@@ -310,7 +315,7 @@ class Publisher:
 
         return base_catalog
 
-    def publish_workflow_experiment(self, write_to_file: bool = False):
+    def generate_workflow_experiment_records(self, write_to_file: bool = False) -> None:
         """prepare workflow and experiment as ogc api record to publish it to the
         specified GitHub repository."""
         workflow_id = self._normalize_name(self.workflow_config.get("workflow_id"))
@@ -328,16 +333,23 @@ class Publisher:
         wf_record_properties = rg.build_record_properties(properties_list, contacts)
         # make a copy for experiment record
         exp_record_properties = copy.deepcopy(wf_record_properties)
+        jupyter_kernel_info = wf_record_properties.jupyter_kernel_info.to_dict()
 
-        link_builder = LinksBuilder(osc_themes)
+        link_builder = LinksBuilder(osc_themes, jupyter_kernel_info)
         theme_links = link_builder.build_theme_links_for_records()
+        application_link = link_builder.build_link_to_jnb(
+            self.workflow_title, jupyter_notebook_url
+        )
+        jnb_open_link = link_builder.make_related_link_for_opening_jnb_from_github(
+            jupyter_notebook_url=jupyter_notebook_url
+        )
 
         workflow_record = WorkflowAsOgcRecord(
             id=workflow_id,
             type="Feature",
             title=self.workflow_title,
             properties=wf_record_properties,
-            links=links + theme_links,
+            links=links + theme_links + application_link + jnb_open_link,
             jupyter_notebook_url=jupyter_notebook_url,
             themes=osc_themes,
         )
@@ -347,12 +359,15 @@ class Publisher:
             del workflow_dict["jupyter_notebook_url"]
         if "osc_workflow" in workflow_dict["properties"]:
             del workflow_dict["properties"]["osc_workflow"]
+        # add workflow record to file_dict
         wf_file_path = f"workflows/{workflow_id}/record.json"
         file_dict = {wf_file_path: workflow_dict}
 
         # Build properties for the experiment record
         exp_record_properties.type = "experiment"
         exp_record_properties.osc_workflow = workflow_id
+
+        dataset_link = link_builder.build_link_to_dataset(self.collection_id)
 
         experiment_record = ExperimentAsOgcRecord(
             id=workflow_id,
@@ -361,7 +376,7 @@ class Publisher:
             jupyter_notebook_url=jupyter_notebook_url,
             collection_id=self.collection_id,
             properties=exp_record_properties,
-            links=links + theme_links,
+            links=links + theme_links + dataset_link,
         )
         # Convert to dictionary and cleanup
         experiment_dict = experiment_record.to_dict()
@@ -371,6 +386,7 @@ class Publisher:
             del experiment_dict["collection_id"]
         if "osc:project" in experiment_dict["properties"]:
             del experiment_dict["properties"]["osc:project"]
+        # add experiment record to file_dict
         exp_file_path = f"experiments/{workflow_id}/record.json"
         file_dict[exp_file_path] = experiment_dict
 
@@ -397,7 +413,9 @@ class Publisher:
         """Publish both dataset and workflow/experiment in a single PR."""
         # Get file dictionaries from both methods
         dataset_files = self.publish_dataset(write_to_file=write_to_file)
-        workflow_files = self.publish_workflow_experiment(write_to_file=write_to_file)
+        workflow_files = self.generate_workflow_experiment_records(
+            write_to_file=write_to_file
+        )
 
         # Combine the file dictionaries
         combined_files = {**dataset_files, **workflow_files}

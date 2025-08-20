@@ -1,10 +1,14 @@
-from typing import Any, Optional
+from typing import Any, Optional, Tuple, List, Dict
+from urllib.parse import quote, urlencode, urlparse
 
 from xrlint.util.constructible import MappingConstructible
 from xrlint.util.serializable import JsonSerializable, JsonValue
 
 from deep_code.constants import (
+    APPLICATION_STAC_EXTENSION_SPEC,
+    APPLICATION_TYPE_JUPYTER_SPEC,
     BASE_URL_OSC,
+    DEEPESDL_GIT_PULL_BASE,
     OGC_API_RECORD_SPEC,
     PROJECT_COLLECTION_NAME,
 )
@@ -86,12 +90,16 @@ class RecordProperties(MappingConstructible["RecordProperties"], JsonSerializabl
         if self.osc_project is not None:
             data["osc:project"] = self.osc_project
             del data["osc_project"]
+        data["application:type"] = "jupyter-notebook"
+        data["application:container"] = ("true",)
+        data["application:language"] = ("Python",)
         return data
 
 
 class LinksBuilder:
-    def __init__(self, themes: list[str]):
+    def __init__(self, themes: list[str], jupyter_kernel_info: dict[str]):
         self.themes = themes
+        self.jupyter_kernel_info = jupyter_kernel_info
         self.theme_links = []
 
     def build_theme_links_for_records(self):
@@ -117,6 +125,99 @@ class LinksBuilder:
             }
         ]
 
+    def build_link_to_jnb(self, workflow_title, jupyter_nb_url) -> List[Dict[str, Any]]:
+        return [
+            {
+                "rel": "application",
+                "title": f"Jupyter Notebook: {workflow_title}",
+                "href": jupyter_nb_url,
+                "type": "application/x-ipynb+json",
+                "application:type": "jupyter-notebook",
+                "application:container": "true",
+                "application:language": "Python",
+                "jupyter:kernel": {
+                    "name": self.jupyter_kernel_info["name"],
+                    "pythonVersion": self.jupyter_kernel_info["python_version"],
+                    "envFile": self.jupyter_kernel_info["env_file"],
+                },
+            }
+        ]
+
+    @staticmethod
+    def _parse_github_notebook_url(url: str) -> Tuple[str, str, str, str]:
+        """
+        Returns (repo_url, repo_name, branch, file_path_in_repo) from a GitHub URL.
+
+        Supports:
+          - https://github.com/<owner>/<repo>/blob/<branch>/<path/to/notebook.ipynb>
+          - https://raw.githubusercontent.com/<owner>/<repo>/<branch>/<path/to/notebook.ipynb>
+        """
+        p = urlparse(url)
+        parts = p.path.strip("/").split("/")
+
+        if p.netloc == "github.com":
+            if len(parts) >= 5 and parts[2] in ("blob", "tree"):
+                owner, repo, _blob_or_tree, branch = parts[:4]
+                file_path = "/".join(parts[4:])
+            else:
+                raise ValueError(f"Unexpected GitHub URL format: {url}")
+            repo_url = f"https://github.com/{owner}/{repo}"
+            repo_name = repo
+
+        elif p.netloc == "raw.githubusercontent.com":
+            if len(parts) >= 4:
+                owner, repo, branch = parts[:3]
+                file_path = "/".join(parts[3:])
+            else:
+                raise ValueError(f"Unexpected raw.githubusercontent URL format: {url}")
+            repo_url = f"https://github.com/{owner}/{repo}"
+            repo_name = repo
+
+        else:
+            raise ValueError(f"Only GitHub URLs are supported: {url}")
+
+        return repo_url, repo_name, branch, file_path
+
+    def build_deepesdl_notebook_href_from_github(
+        self,
+        jupyter_notebook_url: str,
+        base_redirect: str = DEEPESDL_GIT_PULL_BASE,
+        branch_override: str | None = None,
+    ) -> str:
+        """
+        Build DeepESDL git-pull redirect from a full GitHub notebook URL.
+        {base}?repo=<repo_url>&urlpath=lab/tree/<repo_name>/<path>&branch=<branch>
+        """
+        repo_url, repo_name, branch, file_path = self._parse_github_notebook_url(
+            jupyter_notebook_url
+        )
+        if branch_override:
+            branch = branch_override
+
+        params = {
+            "repo": repo_url,
+            "urlpath": f"lab/tree/{repo_name}/{file_path}",
+            "branch": branch,
+        }
+        return f"{base_redirect}?{urlencode(params, quote_via=quote)}"
+
+    def make_related_link_for_opening_jnb_from_github(
+        self,
+        jupyter_notebook_url: str,
+        title: str = "Open notebook on the DeepESDL platform",
+        branch_override: str | None = None,
+    ) -> dict[str, str]:
+        return [
+            {
+                "rel": "related",
+                "href": self.build_deepesdl_notebook_href_from_github(
+                    jupyter_notebook_url, branch_override=branch_override
+                ),
+                "type": "text/html",
+                "title": title,
+            }
+        ]
+
 
 class WorkflowAsOgcRecord(MappingConstructible["OgcRecord"], JsonSerializable):
     def __init__(
@@ -133,7 +234,11 @@ class WorkflowAsOgcRecord(MappingConstructible["OgcRecord"], JsonSerializable):
         themes: Optional[Any] = None,
     ):
         if conformsTo is None:
-            conformsTo = [OGC_API_RECORD_SPEC]
+            conformsTo = [
+                OGC_API_RECORD_SPEC,
+                APPLICATION_TYPE_JUPYTER_SPEC,
+                APPLICATION_STAC_EXTENSION_SPEC,
+            ]
         self.id = id
         self.type = type
         self.title = title
@@ -171,6 +276,14 @@ class WorkflowAsOgcRecord(MappingConstructible["OgcRecord"], JsonSerializable):
                 "type": "application/json",
                 "title": "Jupyter Notebook",
                 "href": f"{self.jupyter_notebook_url}",
+            },
+            {
+                "rel": "application-originating-platform",
+                "title": "DeepESDL platform",
+                "href": "https://deep.earthsystemdatalab.net/",
+                "type": "text/html",
+                "application:platform_supports": ["jupyter-notebook"],
+                "application:preferred_app": "JupyterLab",
             },
             {
                 "rel": "related",
@@ -237,16 +350,18 @@ class ExperimentAsOgcRecord(MappingConstructible["OgcRecord"], JsonSerializable)
                 "title": f"Workflow: {self.title}",
             },
             {
-                "rel": "child",
-                "href": f"../../products/{self.collection_id}/collection.json",
-                "type": "application/json",
-                "title": f"{self.collection_id}",
-            },
-            {
                 "rel": "related",
                 "href": f"../../projects/{PROJECT_COLLECTION_NAME}/collection.json",
                 "type": "application/json",
                 "title": "Project: DeepESDL",
+            },
+            {
+                "rel": "application-originating-platform",
+                "title": "DeepESDL platform",
+                "href": "https://deep.earthsystemdatalab.net/",
+                "type": "text/html",
+                "application:platform_supports": ["jupyter-notebook"],
+                "application:preferred_app": "JupyterLab",
             },
             {
                 "rel": "input",

@@ -39,6 +39,9 @@ class OscDatasetStacGenerator:
         self,
         dataset_id: str,
         collection_id: str,
+        workflow_id: str,
+        workflow_title: str,
+        license_type: str,
         access_link: str | None = None,
         documentation_link: str | None = None,
         osc_status: str = "ongoing",
@@ -49,6 +52,9 @@ class OscDatasetStacGenerator:
     ):
         self.dataset_id = dataset_id
         self.collection_id = collection_id
+        self.workflow_id = workflow_id
+        self.workflow_title = workflow_title
+        self.license_type = license_type
         self.access_link = access_link or f"s3://deep-esdl-public/{dataset_id}"
         self.documentation_link = documentation_link
         self.osc_status = osc_status
@@ -477,6 +483,17 @@ class OscDatasetStacGenerator:
                 title="Project: DeepESDL",
             )
         )
+
+        collection.add_link(
+            Link(
+                rel="related",
+                target=f"../../experiments/{self.workflow_id}/record.json",
+                media_type="application/json",
+                title=f"Experiment: {self.workflow_title}",
+            )
+        )
+
+        collection.license = self.license_type
 
         # Validate OSC extension fields
         try:
