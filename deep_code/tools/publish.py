@@ -315,7 +315,7 @@ class Publisher:
 
         return base_catalog
 
-    def generate_workflow_experiment_records(self, write_to_file: bool = False):
+    def generate_workflow_experiment_records(self, write_to_file: bool = False) -> None:
         """prepare workflow and experiment as ogc api record to publish it to the
         specified GitHub repository."""
         workflow_id = self._normalize_name(self.workflow_config.get("workflow_id"))
