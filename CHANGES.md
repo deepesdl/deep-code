@@ -25,3 +25,12 @@
 - Implemented custom rules using xrlint to validate metadata in dataset, which is necessary to 
   generate a STAC collection valid for ESA Open Science Catalog.
 - Improved starter templates used for publishing.
+
+## Changes in 0.1.5
+
+- Automatic generation of git-pull redirect from a full GitHub notebook URL which 
+  allows users to open the referenced book directly from DeepESDL.
+- Introduced build_link_to_jnb method for creating STAC-compatible notebook links with 
+  metadata on kernel, environment, and containerization.
+- Added originating application platform metadata to generated OGC API records for 
+  DeepESDL experiments and workflows.
