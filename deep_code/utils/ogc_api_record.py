@@ -1,4 +1,4 @@
-from typing import Any, Optional, Tuple
+from typing import Any, Optional, Tuple, List, Dict
 from urllib.parse import quote, urlencode, urlparse
 
 from xrlint.util.constructible import MappingConstructible
@@ -125,7 +125,7 @@ class LinksBuilder:
             }
         ]
 
-    def build_link_to_jnb(self, workflow_title, jupyter_nb_url):
+    def build_link_to_jnb(self, workflow_title, jupyter_nb_url) -> List[Dict[str, Any]]:
         return [
             {
                 "rel": "application",
