@@ -1,4 +1,4 @@
-from typing import Any, Optional, Tuple, List, Dict
+from typing import Any, Dict, List, Optional, Tuple
 from urllib.parse import quote, urlencode, urlparse
 
 from xrlint.util.constructible import MappingConstructible

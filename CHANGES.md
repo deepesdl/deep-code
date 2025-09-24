@@ -34,3 +34,10 @@
   metadata on kernel, environment, and containerization.
 - Added originating application platform metadata to generated OGC API records for 
   DeepESDL experiments and workflows.
+
+## Changes in 0.1.6
+
+- Publisher now supports `mode` parameter, This allows more flexible publishing:
+  - `"dataset"` → publish dataset only
+  - `"workflow"` → publish workflow only
+  - `"all"` → publish both (default)
