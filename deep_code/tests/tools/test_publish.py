@@ -110,6 +110,46 @@ class TestPublisher(unittest.TestCase):
         self.assertEqual(self.publisher.dataset_config, dataset_config)
         self.assertEqual(self.publisher.workflow_config, workflow_config)
 
+    @patch("deep_code.tools.publish.GitHubPublisher")
+    def test_environment_repo_selection(self, mock_gp):
+        Publisher(environment="production")
+        assert mock_gp.call_args.kwargs["repo_name"] == "open-science-catalog-metadata"
+        Publisher(environment="staging")
+        assert (
+            mock_gp.call_args.kwargs["repo_name"]
+            == "open-science-catalog-metadata-staging"
+        )
+        Publisher(environment="testing")
+        assert (
+            mock_gp.call_args.kwargs["repo_name"]
+            == "open-science-catalog-metadata-testing"
+        )
+
+    @patch.object(Publisher, "publish_dataset", return_value={"a": {}})
+    @patch.object(
+        Publisher, "generate_workflow_experiment_records", return_value={"b": {}}
+    )
+    def test_publish_mode_routing(self, mock_wf, mock_ds):
+        # dataset only
+        self.publisher.publish(write_to_file=True, mode="dataset")
+        mock_ds.assert_called()
+        mock_wf.assert_not_called()
+
+        mock_ds.reset_mock()
+        mock_wf.reset_mock()
+        self.publisher.publish(write_to_file=True, mode="workflow")
+        mock_ds.assert_not_called()
+        mock_wf.assert_called()
+
+    @patch.object(Publisher, "generate_workflow_experiment_records", return_value={})
+    @patch.object(Publisher, "publish_dataset", return_value={})
+    def test_publish_nothing_to_publish_raises(
+        self, mock_publish_dataset, mock_generate_workflow_experiment_records
+    ):
+        with pytest.raises(ValueError):
+            self.publisher.publish(write_to_file=False, mode="dataset")
+        mock_publish_dataset.assert_called_once()
+        mock_generate_workflow_experiment_records.assert_not_called()
 
 class TestParseGithubNotebookUrl:
     @pytest.mark.parametrize(
