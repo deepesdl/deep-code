@@ -151,6 +151,29 @@ class TestPublisher(unittest.TestCase):
         mock_publish_dataset.assert_called_once()
         mock_generate_workflow_experiment_records.assert_not_called()
 
+    @patch.object(Publisher, "publish_dataset", return_value={"x": {}})
+    @patch.object(
+        Publisher, "generate_workflow_experiment_records", return_value={"y": {}}
+    )
+    def test_publish_builds_pr_params(self, mock_wf, mock_ds):
+        # Make PR creation return a fixed URL
+        self.publisher.gh_publisher.publish_files.return_value = "PR_URL"
+
+        # Provide IDs for commit/PR labels
+        self.publisher.collection_id = "col"
+        self.publisher.workflow_id = "wf"
+
+        url = self.publisher.publish(write_to_file=False, mode="all")
+        assert url == "PR_URL"
+
+        # Inspect the call arguments to publish_files
+        _, kwargs = self.publisher.gh_publisher.publish_files.call_args
+        assert "dataset: col" in kwargs["commit_message"]
+        assert "workflow/experiment: wf" in kwargs["commit_message"]
+        assert "dataset: col" in kwargs["pr_title"]
+        assert "workflow/experiment: wf" in kwargs["pr_title"]
+
+
 class TestParseGithubNotebookUrl:
     @pytest.mark.parametrize(
         "url,repo_url,repo_name,branch,file_path",
