@@ -475,7 +475,9 @@ class Publisher:
             files.update(ds_files)
 
         if mode in ("workflow", "all"):
-            wf_files = self.generate_workflow_experiment_records(write_to_file=False)
+            wf_files = self.generate_workflow_experiment_records(
+                write_to_file=False, mode=mode
+            )
             files.update(wf_files)
 
         if not files:
