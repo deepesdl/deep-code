@@ -17,19 +17,32 @@ from deep_code.constants import (
 class Contact(MappingConstructible["Contact"], JsonSerializable):
     def __init__(
         self,
-        name: str,
-        organization: str,
-        position: str | None = "",
+        name: str | None = None,
+        organization: str | None = None,
+        position: str | None = None,
         links: list[dict[str, Any]] | None = None,
-        contactInstructions: str | None = "",
-        roles: list[str] = None,
+        contactInstructions: str | None = None,
+        roles: list[str] | None = None,
     ):
         self.name = name
         self.organization = organization
         self.position = position
-        self.links = links or []
+        self.links = links
         self.contactInstructions = contactInstructions
-        self.roles = roles or ["principal investigator"]
+        self.roles = roles
+
+    def to_dict(self, value_name: str | None = None) -> dict[str, JsonValue]:
+        """Serialize to JSON, dropping None values."""
+        data = {
+            "name": self.name,
+            "organization": self.organization,
+            "position": self.position,
+            "links": self.links,
+            "contactInstructions": self.contactInstructions,
+            "roles": self.roles,
+        }
+        # keep only explicitly set fields
+        return {k: v for k, v in data.items() if v is not None}
 
 
 class ThemeConcept(MappingConstructible["ThemeConcept"], JsonSerializable):
