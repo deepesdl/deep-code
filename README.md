@@ -93,7 +93,8 @@ catalog
 
 ### Usage
 ```
-deep-code publish DATASET_CONFIG WORKFLOW_CONFIG [--environment ENVIRONMENT]
+deep-code publish DATASET_CONFIG WORKFLOW_CONFIG [--environment ENVIRONMENT] [--mode 
+all|dataset|workflow]
  ```
 
 #### Arguments
@@ -104,8 +105,12 @@ deep-code publish DATASET_CONFIG WORKFLOW_CONFIG [--environment ENVIRONMENT]
     (e.g., workflow-config.yaml)
 
 #### Options
+    --dataset-config, - Explict path to dataset config
+    --workflow-config, - Explicit path to workflow config
     --environment, -e - Target catalog environment:
     production (default) | staging | testing
+    --mode, -m Publishing mode:
+    all (default) | dataset | workflow
 
 #### Examples:
 1. Publish to staging catalog
@@ -119,6 +124,18 @@ deep-code publish dataset-config.yaml workflow-config.yaml -e testing
 3. Publish to production catalog
 ```
 deep-code publish dataset-config.yaml workflow-config.yaml
+```
+4. Publish Dataset only
+```
+deep-code publish dataset-config.yaml -m dataset
+
+deep-code publish --dataset-config dataset.yaml -m dataset
+```
+5. Publish Workflow only
+```
+deep-code publish dataset-config.yaml -m workflow
+
+deep-code publish --workflow-config workflow.yaml -m dataset
 ```
 #### dataset-config.yaml example
 
