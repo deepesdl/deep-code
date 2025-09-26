@@ -38,10 +38,10 @@ class TestContact(unittest.TestCase):
     def test_contact_default_values(self):
         contact = Contact(name="Jane Doe", organization="DeepESDL")
 
-        self.assertEqual(contact.position, "")
-        self.assertEqual(contact.links, [])
-        self.assertEqual(contact.contactInstructions, "")
-        self.assertEqual(contact.roles, ["principal investigator"])
+        self.assertEqual(contact.position, None)
+        self.assertEqual(contact.links, None)
+        self.assertEqual(contact.contactInstructions, None)
+        self.assertEqual(contact.roles, None)
 
 
 class TestThemeConcept(unittest.TestCase):
