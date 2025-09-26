@@ -128,13 +128,24 @@ class LinksBuilder:
         return self.theme_links
 
     @staticmethod
-    def build_link_to_dataset(collection_id):
+    def build_link_to_dataset(collection_id) -> list[dict[str, str]]:
         return [
             {
                 "rel": "child",
                 "href": f"../../products/{collection_id}/collection.json",
                 "type": "application/json",
                 "title": f"{collection_id}",
+            }
+        ]
+
+    def build_child_link_to_related_experiment(self) -> list[dict[str, str]]:
+        """Build a link to the related experiment record if publishing mode is 'all'."""
+        return [
+            {
+                "rel": "child",
+                "href": f"../../experiments/{self.id}/record.json",
+                "type": "application/json",
+                "title": self.title,
             }
         ]
 
@@ -277,12 +288,6 @@ class WorkflowAsOgcRecord(MappingConstructible["OgcRecord"], JsonSerializable):
                 "href": "../catalog.json",
                 "type": "application/json",
                 "title": "Workflows",
-            },
-            {
-                "rel": "child",
-                "href": f"../../experiments/{self.id}/record.json",
-                "type": "application/json",
-                "title": f"{self.title}",
             },
             {
                 "rel": "jupyter-notebook",

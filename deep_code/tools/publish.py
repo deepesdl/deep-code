@@ -386,6 +386,8 @@ class Publisher:
             jupyter_notebook_url=jupyter_notebook_url,
             themes=osc_themes,
         )
+        if mode == "all":
+            link_builder.build_child_link_to_related_experiment()
         # Convert to dictionary and cleanup
         workflow_dict = workflow_record.to_dict()
         if "jupyter_notebook_url" in workflow_dict:
@@ -399,6 +401,13 @@ class Publisher:
         # Build properties for the experiment record
         exp_record_properties.type = "experiment"
         exp_record_properties.osc_workflow = workflow_id
+
+        # Update base catalogs of workflows with links
+        file_dict["workflows/catalog.json"] = self._update_base_catalog(
+            catalog_path="workflows/catalog.json",
+            item_id=workflow_id,
+            self_href=WORKFLOW_BASE_CATALOG_SELF_HREF,
+        )
 
         if mode in ["all"]:
             if not getattr(self, "collection_id", None):
@@ -430,18 +439,13 @@ class Publisher:
             exp_file_path = f"experiments/{workflow_id}/record.json"
             file_dict[exp_file_path] = experiment_dict
 
-            # Update base catalogs of experiments and workflows with links
+            # Update base catalogs of experiments with links
             file_dict["experiments/catalog.json"] = self._update_base_catalog(
                 catalog_path="experiments/catalog.json",
                 item_id=workflow_id,
                 self_href=EXPERIMENT_BASE_CATALOG_SELF_HREF,
             )
 
-            file_dict["workflows/catalog.json"] = self._update_base_catalog(
-                catalog_path="workflows/catalog.json",
-                item_id=workflow_id,
-                self_href=WORKFLOW_BASE_CATALOG_SELF_HREF,
-            )
         # Write to files if testing
         if write_to_file:
             for file_path, data in file_dict.items():
