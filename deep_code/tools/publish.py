@@ -62,6 +62,8 @@ class GitHubPublisher:
         commit_message: str,
         pr_title: str,
         pr_body: str,
+        base_branch: str = "main",
+        sync_strategy: str = "merge",  # 'ff' | 'rebase' | 'merge'
     ) -> str:
         """Publish multiple files to a new branch and open a PR.
 
@@ -71,12 +73,21 @@ class GitHubPublisher:
             commit_message: Commit message for all changes.
             pr_title: Title of the pull request.
             pr_body: Description/body of the pull request.
+            base_branch: base branch, default main
+            sync_strategy: git sync strategy
 
         Returns:
             URL of the created pull request.
         """
         try:
-            self.github_automation.create_branch(branch_name)
+            # Ensure local clone and remotes are ready
+            self.github_automation.clone_sync_repository()
+            # *** Sync fork with upstream before creating the branch/committing ***
+            self.github_automation.sync_fork_with_upstream(
+                base_branch=base_branch, strategy=sync_strategy
+            )
+
+            self.github_automation.create_branch(branch_name, from_branch=base_branch)
 
             # Add each file to the branch
             for file_path, content in file_dict.items():

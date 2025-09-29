@@ -48,3 +48,6 @@
 
 - Contacts in OGC API records no longer include default or empty fields, only 
   properties explicitly defined in the workflow configuration will now be generated.
+
+- Enhanced GitHub automation to automatically fork synchronize with upstream before 
+  committing and opening a PR to ensure branches are always up-to-date.
