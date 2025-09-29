@@ -1,8 +1,7 @@
-# tests/test_github_automation.py
 import logging
 import unittest
 from pathlib import Path
-from unittest.mock import ANY, MagicMock, call, patch
+from unittest.mock import MagicMock, call, patch
 
 from deep_code.utils.github_automation import GitHubAutomation
 
