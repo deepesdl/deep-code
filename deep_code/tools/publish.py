@@ -333,15 +333,15 @@ class Publisher:
     def _update_base_catalog(
         self, catalog_path: str, item_id: str, self_href: str
     ) -> Catalog:
-        """Update a base catalog by adding a link to a new item.
+        """Update a base catalog by adding a unique item link and a single self link.
 
         Args:
-            catalog_path: Path to the base catalog JSON file.
-            item_id: ID of the new item (experiment or workflow).
-            self_href: Self-href for the base catalog.
+            catalog_path: Path to the base catalog JSON file, relative to the repo root.
+            item_id: ID (directory name) of the new item (workflow/experiment).
+            self_href: Absolute self-href for the base catalog.
 
         Returns:
-            Updated Catalog object.
+            The updated PySTAC Catalog object (in-memory).
         """
         base_catalog = Catalog.from_file(
             Path(self.gh_publisher.github_automation.local_clone_dir) / catalog_path
@@ -349,18 +349,18 @@ class Publisher:
 
         item_href = f"./{item_id}/record.json"
 
-        # Ensure the "item" link is unique
-        def link_href(link: Link) -> str | None:
-            # PySTAC Link may store href in .target or .href; .get_href() resolves if base HREF set
+        def resolve_href(link: Link) -> str | None:
+            # PySTAC keeps raw targets; get_href() may resolve relative paths if a base HREF is set
             return (
                 getattr(link, "href", None)
                 or getattr(link, "target", None)
                 or (link.get_href() if hasattr(link, "get_href") else None)
             )
 
+        # 1) Add the "item" link only if it's not already present
         has_item = any(
-            (l.rel == "item") and (link_href(l) == item_href)
-            for l in base_catalog.links
+            (link.rel == "item") and (resolve_href(link) == item_href)
+            for link in base_catalog.links
         )
         if not has_item:
             base_catalog.add_link(
@@ -372,17 +372,17 @@ class Publisher:
                 )
             )
 
-        # Ensure there is exactly one "self" link
-        base_catalog.links = [l for l in base_catalog.links if l.rel != "self"]
+        # 2) Ensure there is exactly one "self" link
+        base_catalog.links = [link for link in base_catalog.links if link.rel != "self"]
         base_catalog.set_self_href(self_href)
 
-        # deduplicate by (rel, href)
-        seen = set()
-        unique_links = []
-        for l in base_catalog.links:
-            key = (l.rel, link_href(l))
+        # 3) Defense-in-depth: deduplicate by (rel, href)
+        seen: set[tuple[str, str | None]] = set()
+        unique_links: list[Link] = []
+        for link in base_catalog.links:
+            key = (link.rel, resolve_href(link))
             if key not in seen:
-                unique_links.append(l)
+                unique_links.append(link)
                 seen.add(key)
         base_catalog.links = unique_links
 
