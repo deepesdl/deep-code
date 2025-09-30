@@ -2,11 +2,11 @@
 # Copyright (c) 2025 by Brockmann Consult GmbH
 # Permissions are hereby granted under the terms of the MIT License:
 # https://opensource.org/licenses/MIT.
-
 import copy
 import logging
 from datetime import datetime
 from pathlib import Path
+from typing import Any, Literal
 
 import fsspec
 import jsonpickle
@@ -61,6 +61,10 @@ class GitHubPublisher:
         commit_message: str,
         pr_title: str,
         pr_body: str,
+        base_branch: str = "main",
+        sync_strategy: Literal[
+            "ff", "rebase", "merge"
+        ] = "merge",  # 'ff' | 'rebase' | 'merge'
     ) -> str:
         """Publish multiple files to a new branch and open a PR.
 
@@ -70,12 +74,34 @@ class GitHubPublisher:
             commit_message: Commit message for all changes.
             pr_title: Title of the pull request.
             pr_body: Description/body of the pull request.
+            base_branch: Base branch to branch from and open the PR against (default: "main")
+            sync_strategy: How to sync local with the remote base before pushing:
+            - "ff":     Fast-forward only (no merge commits; fails if FF not possible).
+            - "rebase": Rebase local changes onto the updated base branch.
+            - "merge":  Create a merge commit (default).
 
         Returns:
             URL of the created pull request.
+
+        Raises:
+            ValueError: If an unsupported sync_strategy is provided.
         """
+
+        if sync_strategy not in {"ff", "rebase", "merge"}:
+            raise ValueError(
+                f'Invalid sync_strategy="{sync_strategy}". '
+                'Accepted values are "ff", "rebase", "merge".'
+            )
+
         try:
-            self.github_automation.create_branch(branch_name)
+            # Ensure local clone and remotes are ready
+            self.github_automation.clone_sync_repository()
+            # Sync fork with upstream before creating the branch/committing
+            self.github_automation.sync_fork_with_upstream(
+                base_branch=base_branch, strategy=sync_strategy
+            )
+
+            self.github_automation.create_branch(branch_name, from_branch=base_branch)
 
             # Add each file to the branch
             for file_path, content in file_dict.items():
@@ -98,13 +124,14 @@ class GitHubPublisher:
 
 
 class Publisher:
-    """Publishes products (datasets) to the OSC GitHub repository.
+    """Publishes products (datasets), workflows and experiments to the OSC GitHub
+    repository.
     """
 
     def __init__(
         self,
-        dataset_config_path: str,
-        workflow_config_path: str,
+        dataset_config_path: str | None = None,
+        workflow_config_path: str | None = None,
         environment: str = "production",
     ):
         self.environment = environment
@@ -121,24 +148,37 @@ class Publisher:
         self.collection_id = ""
         self.workflow_title = ""
 
-        # Paths to configuration files
+        # Paths to configuration files, can be optional
         self.dataset_config_path = dataset_config_path
         self.workflow_config_path = workflow_config_path
 
+        # Config dicts (loaded lazily)
+        self.dataset_config: dict[str, Any] = {}
+        self.workflow_config: dict[str, Any] = {}
+
+        # Values that may be set from configs
+        self.collection_id: str | None = None
+        self.workflow_title: str | None = None
+        self.workflow_id: str | None = None
+
         # Load configuration files
         self._read_config_files()
-        self.collection_id = self.dataset_config.get("collection_id")
-        self.workflow_title = self.workflow_config.get("properties", {}).get("title")
-        self.workflow_id = self.workflow_config.get("workflow_id")
 
-        if not self.collection_id:
-            raise ValueError("collection_id is missing in dataset config.")
+        if self.dataset_config:
+            self.collection_id = self.dataset_config.get("collection_id")
+        if self.workflow_config:
+            self.workflow_title = self.workflow_config.get("properties", {}).get(
+                "title"
+            )
+            self.workflow_id = self.workflow_config.get("workflow_id")
 
     def _read_config_files(self) -> None:
-        with fsspec.open(self.dataset_config_path, "r") as file:
-            self.dataset_config = yaml.safe_load(file) or {}
-        with fsspec.open(self.workflow_config_path, "r") as file:
-            self.workflow_config = yaml.safe_load(file) or {}
+        if self.dataset_config_path:
+            with fsspec.open(self.dataset_config_path, "r") as file:
+                self.dataset_config = yaml.safe_load(file) or {}
+        if self.workflow_config_path:
+            with fsspec.open(self.workflow_config_path, "r") as file:
+                self.workflow_config = yaml.safe_load(file) or {}
 
     @staticmethod
     def _write_to_file(file_path: str, data: dict):
@@ -206,10 +246,18 @@ class Publisher:
                 )
                 file_dict[var_file_path] = updated_catalog.to_dict()
 
-    def publish_dataset(self, write_to_file: bool = False):
+    def publish_dataset(
+        self,
+        write_to_file: bool = False,
+        mode: Literal["all", "dataset", "workflow"] = "all",
+    ) -> dict[str, Any]:
         """Prepare dataset/product collection for publishing to the specified GitHub
         repository."""
 
+        if not self.dataset_config:
+            raise ValueError(
+                "No dataset config loaded. Provide dataset_config_path to publish dataset."
+            )
         dataset_id = self.dataset_config.get("dataset_id")
         self.collection_id = self.dataset_config.get("collection_id")
         documentation_link = self.dataset_config.get("documentation_link")
@@ -240,7 +288,7 @@ class Publisher:
         )
 
         variable_ids = generator.get_variable_ids()
-        ds_collection = generator.build_dataset_stac_collection()
+        ds_collection = generator.build_dataset_stac_collection(mode=mode)
 
         # Prepare a dictionary of file paths and content
         file_dict = {}
@@ -285,39 +333,74 @@ class Publisher:
     def _update_base_catalog(
         self, catalog_path: str, item_id: str, self_href: str
     ) -> Catalog:
-        """Update a base catalog by adding a link to a new item.
+        """Update a base catalog by adding a unique item link and a single self link.
 
         Args:
-            catalog_path: Path to the base catalog JSON file.
-            item_id: ID of the new item (experiment or workflow).
-            self_href: Self-href for the base catalog.
+            catalog_path: Path to the base catalog JSON file, relative to the repo root.
+            item_id: ID (directory name) of the new item (workflow/experiment).
+            self_href: Absolute self-href for the base catalog.
 
         Returns:
-            Updated Catalog object.
+            The updated PySTAC Catalog object (in-memory).
         """
-        # Load the base catalog
         base_catalog = Catalog.from_file(
             Path(self.gh_publisher.github_automation.local_clone_dir) / catalog_path
         )
 
-        # Add a link to the new item
-        base_catalog.add_link(
-            Link(
-                rel="item",
-                target=f"./{item_id}/record.json",
-                media_type="application/json",
-                title=f"{self.workflow_title}",
-            )
-        )
+        item_href = f"./{item_id}/record.json"
 
-        # Set the self-href for the base catalog
+        def resolve_href(link: Link) -> str | None:
+            # PySTAC keeps raw targets; get_href() may resolve relative paths if a base HREF is set
+            return (
+                getattr(link, "href", None)
+                or getattr(link, "target", None)
+                or (link.get_href() if hasattr(link, "get_href") else None)
+            )
+
+        # 1) Add the "item" link only if it's not already present
+        has_item = any(
+            (link.rel == "item") and (resolve_href(link) == item_href)
+            for link in base_catalog.links
+        )
+        if not has_item:
+            base_catalog.add_link(
+                Link(
+                    rel="item",
+                    target=item_href,
+                    media_type="application/json",
+                    title=self.workflow_title,
+                )
+            )
+
+        # 2) Ensure there is exactly one "self" link
+        base_catalog.links = [link for link in base_catalog.links if link.rel != "self"]
         base_catalog.set_self_href(self_href)
+
+        # 3) Defense-in-depth: deduplicate by (rel, href)
+        seen: set[tuple[str, str | None]] = set()
+        unique_links: list[Link] = []
+        for link in base_catalog.links:
+            key = (link.rel, resolve_href(link))
+            if key not in seen:
+                unique_links.append(link)
+                seen.add(key)
+        base_catalog.links = unique_links
 
         return base_catalog
 
-    def generate_workflow_experiment_records(self, write_to_file: bool = False) -> None:
+    def generate_workflow_experiment_records(
+        self,
+        write_to_file: bool = False,
+        mode: Literal["all", "dataset", "workflow"] = "all",
+    ) -> dict[str, Any]:
         """prepare workflow and experiment as ogc api record to publish it to the
         specified GitHub repository."""
+
+        file_dict = {}
+
+        if mode not in {"workflow", "all"}:
+            return file_dict  # nothing to do for mode="dataset"
+
         workflow_id = self._normalize_name(self.workflow_config.get("workflow_id"))
         if not workflow_id:
             raise ValueError("workflow_id is missing in workflow config.")
@@ -353,6 +436,8 @@ class Publisher:
             jupyter_notebook_url=jupyter_notebook_url,
             themes=osc_themes,
         )
+        if mode == "all":
+            link_builder.build_child_link_to_related_experiment()
         # Convert to dictionary and cleanup
         workflow_dict = workflow_record.to_dict()
         if "jupyter_notebook_url" in workflow_dict:
@@ -367,41 +452,50 @@ class Publisher:
         exp_record_properties.type = "experiment"
         exp_record_properties.osc_workflow = workflow_id
 
-        dataset_link = link_builder.build_link_to_dataset(self.collection_id)
-
-        experiment_record = ExperimentAsOgcRecord(
-            id=workflow_id,
-            title=self.workflow_title,
-            type="Feature",
-            jupyter_notebook_url=jupyter_notebook_url,
-            collection_id=self.collection_id,
-            properties=exp_record_properties,
-            links=links + theme_links + dataset_link,
-        )
-        # Convert to dictionary and cleanup
-        experiment_dict = experiment_record.to_dict()
-        if "jupyter_notebook_url" in experiment_dict:
-            del experiment_dict["jupyter_notebook_url"]
-        if "collection_id" in experiment_dict:
-            del experiment_dict["collection_id"]
-        if "osc:project" in experiment_dict["properties"]:
-            del experiment_dict["properties"]["osc:project"]
-        # add experiment record to file_dict
-        exp_file_path = f"experiments/{workflow_id}/record.json"
-        file_dict[exp_file_path] = experiment_dict
-
-        # Update base catalogs of experiments and workflows with links
-        file_dict["experiments/catalog.json"] = self._update_base_catalog(
-            catalog_path="experiments/catalog.json",
-            item_id=workflow_id,
-            self_href=EXPERIMENT_BASE_CATALOG_SELF_HREF,
-        )
-
+        # Update base catalogs of workflows with links
         file_dict["workflows/catalog.json"] = self._update_base_catalog(
             catalog_path="workflows/catalog.json",
             item_id=workflow_id,
             self_href=WORKFLOW_BASE_CATALOG_SELF_HREF,
         )
+
+        if mode in ["all"]:
+            if not getattr(self, "collection_id", None):
+                raise ValueError(
+                    "collection_id is required to generate the experiment record when mode='all' "
+                    "(the experiment links to the output dataset)."
+                )
+            # generate experiment record only if there is an output dataset
+            dataset_link = link_builder.build_link_to_dataset(self.collection_id)
+
+            experiment_record = ExperimentAsOgcRecord(
+                id=workflow_id,
+                title=self.workflow_title,
+                type="Feature",
+                jupyter_notebook_url=jupyter_notebook_url,
+                collection_id=self.collection_id,
+                properties=exp_record_properties,
+                links=links + theme_links + dataset_link,
+            )
+            # Convert to dictionary and cleanup
+            experiment_dict = experiment_record.to_dict()
+            if "jupyter_notebook_url" in experiment_dict:
+                del experiment_dict["jupyter_notebook_url"]
+            if "collection_id" in experiment_dict:
+                del experiment_dict["collection_id"]
+            if "osc:project" in experiment_dict["properties"]:
+                del experiment_dict["properties"]["osc:project"]
+            # add experiment record to file_dict
+            exp_file_path = f"experiments/{workflow_id}/record.json"
+            file_dict[exp_file_path] = experiment_dict
+
+            # Update base catalogs of experiments with links
+            file_dict["experiments/catalog.json"] = self._update_base_catalog(
+                catalog_path="experiments/catalog.json",
+                item_id=workflow_id,
+                self_href=EXPERIMENT_BASE_CATALOG_SELF_HREF,
+            )
+
         # Write to files if testing
         if write_to_file:
             for file_path, data in file_dict.items():
@@ -409,43 +503,70 @@ class Publisher:
             return {}
         return file_dict
 
-    def publish_all(self, write_to_file: bool = False):
-        """Publish both dataset and workflow/experiment in a single PR."""
-        # Get file dictionaries from both methods
-        dataset_files = self.publish_dataset(write_to_file=write_to_file)
-        workflow_files = self.generate_workflow_experiment_records(
-            write_to_file=write_to_file
+    def publish(
+        self,
+        write_to_file: bool = False,
+        mode: Literal["all", "dataset", "workflow"] = "all",
+    ) -> dict[str, Any] | str:
+        """
+        Publish both dataset and workflow/experiment in a single PR.
+        Args:
+            write_to_file: If True, write JSON files locally and return the generated dict(s).
+                           If False, open a PR and return the PR URL.
+            mode: Select which artifacts to publish:
+                  - "dataset": only dataset collection & related catalogs
+                  - "workflow": only workflow records
+                  - "all": both
+        Returns:
+            dict[str, Any] when write_to_file=True (the files written),
+            or str when write_to_file=False (the PR URL).
+        """
+
+        files: dict[str, Any] = {}
+
+        if mode in ("dataset", "all"):
+            ds_files = self.publish_dataset(write_to_file=False, mode=mode)
+            files.update(ds_files)
+
+        if mode in ("workflow", "all"):
+            wf_files = self.generate_workflow_experiment_records(
+                write_to_file=False, mode=mode
+            )
+            files.update(wf_files)
+
+        if not files:
+            raise ValueError(
+                "Nothing to publish. Choose mode='dataset', 'workflow', or 'all'."
+            )
+
+        if write_to_file:
+            for file_path, data in files.items():
+                # file_path might be a Path (from _update_and_add_to_file_dict) – normalize to str
+                out_path = str(file_path)
+                self._write_to_file(out_path, data)
+            return {}  # consistent with existing write_to_file behavior
+
+        # Prepare PR
+        mode_label = {
+            "dataset": f"dataset: {self.collection_id or 'unknown'}",
+            "workflow": f"workflow: {self.workflow_id or 'unknown'}",
+            "all": f"dataset: {self.collection_id or 'unknown'} + workflow/experiment: {self.workflow_id or 'unknown'}",
+        }[mode]
+
+        branch_name = (
+            f"{OSC_BRANCH_NAME}-{(self.collection_id or self.workflow_id or 'osc')}"
+            f"-{datetime.now().strftime('%Y%m%d%H%M%S')}"
         )
+        commit_message = f"Publish {mode_label}"
+        pr_title = f"Publish {mode_label}"
+        pr_body = f"This PR publishes {mode_label} to the repository."
 
-        # Combine the file dictionaries
-        combined_files = {**dataset_files, **workflow_files}
-
-        if not write_to_file:
-            # Create branch name, commit message, PR info
-            branch_name = (
-                f"{OSC_BRANCH_NAME}-{self.collection_id}"
-                f"-{datetime.now().strftime('%Y%m%d%H%M%S')}"
-            )
-            commit_message = (
-                f"Add new dataset collection: {self.collection_id} and "
-                f"workflow/experiment: {self.workflow_config.get('workflow_id')}"
-            )
-            pr_title = (
-                f"Add new dataset collection: {self.collection_id} and "
-                f"workflow/experiment: {self.workflow_config.get('workflow_id')}"
-            )
-            pr_body = (
-                f"This PR adds a new dataset collection: {self.collection_id} and "
-                f"its corresponding workflow/experiment to the repository."
-            )
-
-            # Publish all files in one go
-            pr_url = self.gh_publisher.publish_files(
-                branch_name=branch_name,
-                file_dict=combined_files,
-                commit_message=commit_message,
-                pr_title=pr_title,
-                pr_body=pr_body,
-            )
-
-            logger.info(f"Pull request created: {pr_url}")
+        pr_url = self.gh_publisher.publish_files(
+            branch_name=branch_name,
+            file_dict=files,
+            commit_message=commit_message,
+            pr_title=pr_title,
+            pr_body=pr_body,
+        )
+        logger.info(f"Pull request created: {pr_url}")
+        return pr_url

@@ -1,4 +1,4 @@
-from typing import Any, Optional, Tuple, List, Dict
+from typing import Any, Dict, List, Optional, Tuple
 from urllib.parse import quote, urlencode, urlparse
 
 from xrlint.util.constructible import MappingConstructible
@@ -17,19 +17,32 @@ from deep_code.constants import (
 class Contact(MappingConstructible["Contact"], JsonSerializable):
     def __init__(
         self,
-        name: str,
-        organization: str,
-        position: str | None = "",
+        name: str | None = None,
+        organization: str | None = None,
+        position: str | None = None,
         links: list[dict[str, Any]] | None = None,
-        contactInstructions: str | None = "",
-        roles: list[str] = None,
+        contactInstructions: str | None = None,
+        roles: list[str] | None = None,
     ):
         self.name = name
         self.organization = organization
         self.position = position
-        self.links = links or []
+        self.links = links
         self.contactInstructions = contactInstructions
-        self.roles = roles or ["principal investigator"]
+        self.roles = roles
+
+    def to_dict(self, value_name: str | None = None) -> dict[str, JsonValue]:
+        """Serialize to JSON, dropping None values."""
+        data = {
+            "name": self.name,
+            "organization": self.organization,
+            "position": self.position,
+            "links": self.links,
+            "contactInstructions": self.contactInstructions,
+            "roles": self.roles,
+        }
+        # keep only explicitly set fields
+        return {k: v for k, v in data.items() if v is not None}
 
 
 class ThemeConcept(MappingConstructible["ThemeConcept"], JsonSerializable):
@@ -115,13 +128,24 @@ class LinksBuilder:
         return self.theme_links
 
     @staticmethod
-    def build_link_to_dataset(collection_id):
+    def build_link_to_dataset(collection_id) -> list[dict[str, str]]:
         return [
             {
                 "rel": "child",
                 "href": f"../../products/{collection_id}/collection.json",
                 "type": "application/json",
                 "title": f"{collection_id}",
+            }
+        ]
+
+    def build_child_link_to_related_experiment(self) -> list[dict[str, str]]:
+        """Build a link to the related experiment record if publishing mode is 'all'."""
+        return [
+            {
+                "rel": "child",
+                "href": f"../../experiments/{self.id}/record.json",
+                "type": "application/json",
+                "title": self.title,
             }
         ]
 
@@ -264,12 +288,6 @@ class WorkflowAsOgcRecord(MappingConstructible["OgcRecord"], JsonSerializable):
                 "href": "../catalog.json",
                 "type": "application/json",
                 "title": "Workflows",
-            },
-            {
-                "rel": "child",
-                "href": f"../../experiments/{self.id}/record.json",
-                "type": "application/json",
-                "title": f"{self.title}",
             },
             {
                 "rel": "jupyter-notebook",

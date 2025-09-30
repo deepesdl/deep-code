@@ -34,3 +34,23 @@
   metadata on kernel, environment, and containerization.
 - Added originating application platform metadata to generated OGC API records for 
   DeepESDL experiments and workflows.
+
+## Changes in 0.1.6
+
+- Publisher now supports `mode` parameter, This allows more flexible publishing:
+  - `"dataset"` → publish dataset only
+  - `"workflow"` → publish workflow only
+  - `"all"` → publish both (default)
+
+- CLI: the `publish` command now auto-detects dataset vs workflow configs and also accepts 
+  --dataset-config / --workflow-config; single-file calls use -m to disambiguate 
+  (e.g., deep-code publish workflow.yaml -m workflow).
+
+- Contacts in OGC API records no longer include default or empty fields, only 
+  properties explicitly defined in the workflow configuration will now be generated.
+
+- Enhanced GitHub automation to automatically fork synchronize with upstream before 
+  committing and opening a PR to ensure branches are always up-to-date.
+
+- Prevented duplicate item and self links when updating base catalogs of workflows and 
+  experiments.

@@ -377,7 +377,7 @@ class OscDatasetStacGenerator:
         concepts = [ThemeConcept(id=theme_str) for theme_str in osc_themes]
         return Theme(concepts=concepts, scheme=OSC_THEME_SCHEME)
 
-    def build_dataset_stac_collection(self) -> Collection:
+    def build_dataset_stac_collection(self, mode: str) -> Collection:
         """Build an OSC STAC Collection for the dataset.
 
         Returns:
@@ -484,14 +484,15 @@ class OscDatasetStacGenerator:
             )
         )
 
-        collection.add_link(
-            Link(
-                rel="related",
-                target=f"../../experiments/{self.workflow_id}/record.json",
-                media_type="application/json",
-                title=f"Experiment: {self.workflow_title}",
+        if mode in "all":
+            collection.add_link(
+                Link(
+                    rel="related",
+                    target=f"../../experiments/{self.workflow_id}/record.json",
+                    media_type="application/json",
+                    title=f"Experiment: {self.workflow_title}",
+                )
             )
-        )
 
         collection.license = self.license_type
 
