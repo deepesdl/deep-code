@@ -46,7 +46,7 @@ def _validate_inputs(
         if path is None:
             raise click.UsageError(f"{label} is required but was not provided.")
         if not Path(path).is_file():
-            raise click.UsageError(f"{label} not found: {path}")
+            raise click.UsageError(f"{label} not found: {path} is not a file")
 
     if mode == "dataset":
         ensure_file(dataset_config, "DATASET_CONFIG")
