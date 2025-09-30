@@ -42,7 +42,7 @@
   - `"workflow"` → publish workflow only
   - `"all"` → publish both (default)
 
-- CLI: publish now auto-detects dataset vs workflow configs and also accepts 
+- CLI: the `publish` command now auto-detects dataset vs workflow configs and also accepts 
   --dataset-config / --workflow-config; single-file calls use -m to disambiguate 
   (e.g., deep-code publish workflow.yaml -m workflow).
 
