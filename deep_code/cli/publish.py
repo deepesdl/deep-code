@@ -5,7 +5,7 @@
 # https://opensource.org/licenses/MIT.
 
 from pathlib import Path
-from typing import Literal, Optional, Tuple
+from typing import Literal
 
 import click
 import yaml
@@ -38,11 +38,11 @@ WORKFLOW_MARKERS = {
 
 
 def _validate_inputs(
-    dataset_config: Optional[str], workflow_config: Optional[str], mode: str
+    dataset_config: str | None, workflow_config: str | None, mode: str
 ):
     mode = mode.lower()
 
-    def ensure_file(path: Optional[str], label: str):
+    def ensure_file(path: str | None, label: str):
         if path is None:
             raise click.UsageError(f"{label} is required but was not provided.")
         if not Path(path).is_file():
@@ -96,12 +96,12 @@ def _detect_config_type(path: Path) -> Literal["dataset", "workflow"]:
 
 
 def _assign_configs(
-    pos_first: Optional[str],
-    pos_second: Optional[str],
+    pos_first: str | None,
+    pos_second: str | None,
     mode: Mode,
-    explicit_dataset: Optional[str],
-    explicit_workflow: Optional[str],
-) -> Tuple[Optional[str], Optional[str]]:
+    explicit_dataset: str | None,
+    explicit_workflow: str | None,
+) -> tuple[str | None, str | None]:
     """
     Decide which file is dataset vs workflow.
     Precedence: explicit flags > positional + detection.
@@ -121,7 +121,7 @@ def _assign_configs(
         return ds, wf
 
     # Helper to assign a single positional file to the missing slot
-    def _assign_single(p: str):
+    def _assign_single(p: str) -> tuple[str | None, str | None]:
         nonlocal ds, wf
         if ds and wf:
             raise click.UsageError(

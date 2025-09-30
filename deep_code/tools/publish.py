@@ -2,7 +2,6 @@
 # Copyright (c) 2025 by Brockmann Consult GmbH
 # Permissions are hereby granted under the terms of the MIT License:
 # https://opensource.org/licenses/MIT.
-
 import copy
 import logging
 from datetime import datetime
@@ -63,7 +62,9 @@ class GitHubPublisher:
         pr_title: str,
         pr_body: str,
         base_branch: str = "main",
-        sync_strategy: str = "merge",  # 'ff' | 'rebase' | 'merge'
+        sync_strategy: Literal[
+            "ff", "rebase", "merge"
+        ] = "merge",  # 'ff' | 'rebase' | 'merge'
     ) -> str:
         """Publish multiple files to a new branch and open a PR.
 
@@ -73,16 +74,29 @@ class GitHubPublisher:
             commit_message: Commit message for all changes.
             pr_title: Title of the pull request.
             pr_body: Description/body of the pull request.
-            base_branch: base branch, default main
-            sync_strategy: git sync strategy
+            base_branch: Base branch to branch from and open the PR against (default: "main")
+            sync_strategy: How to sync local with the remote base before pushing:
+            - "ff":     Fast-forward only (no merge commits; fails if FF not possible).
+            - "rebase": Rebase local changes onto the updated base branch.
+            - "merge":  Create a merge commit (default).
 
         Returns:
             URL of the created pull request.
+
+        Raises:
+            ValueError: If an unsupported sync_strategy is provided.
         """
+
+        if sync_strategy not in {"ff", "rebase", "merge"}:
+            raise ValueError(
+                f'Invalid sync_strategy="{sync_strategy}". '
+                'Accepted values are "ff", "rebase", "merge".'
+            )
+
         try:
             # Ensure local clone and remotes are ready
             self.github_automation.clone_sync_repository()
-            # *** Sync fork with upstream before creating the branch/committing ***
+            # Sync fork with upstream before creating the branch/committing
             self.github_automation.sync_fork_with_upstream(
                 base_branch=base_branch, strategy=sync_strategy
             )
@@ -134,7 +148,7 @@ class Publisher:
         self.collection_id = ""
         self.workflow_title = ""
 
-        # Paths to configuration files, may be optional
+        # Paths to configuration files, can be optional
         self.dataset_config_path = dataset_config_path
         self.workflow_config_path = workflow_config_path
 
@@ -142,7 +156,7 @@ class Publisher:
         self.dataset_config: dict[str, Any] = {}
         self.workflow_config: dict[str, Any] = {}
 
-        # Values that may be set from configs (lazy)
+        # Values that may be set from configs
         self.collection_id: str | None = None
         self.workflow_title: str | None = None
         self.workflow_id: str | None = None
