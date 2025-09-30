@@ -343,23 +343,48 @@ class Publisher:
         Returns:
             Updated Catalog object.
         """
-        # Load the base catalog
         base_catalog = Catalog.from_file(
             Path(self.gh_publisher.github_automation.local_clone_dir) / catalog_path
         )
 
-        # Add a link to the new item
-        base_catalog.add_link(
-            Link(
-                rel="item",
-                target=f"./{item_id}/record.json",
-                media_type="application/json",
-                title=f"{self.workflow_title}",
-            )
-        )
+        item_href = f"./{item_id}/record.json"
 
-        # Set the self-href for the base catalog
+        # Ensure the "item" link is unique
+        def link_href(link: Link) -> str | None:
+            # PySTAC Link may store href in .target or .href; .get_href() resolves if base HREF set
+            return (
+                getattr(link, "href", None)
+                or getattr(link, "target", None)
+                or (link.get_href() if hasattr(link, "get_href") else None)
+            )
+
+        has_item = any(
+            (l.rel == "item") and (link_href(l) == item_href)
+            for l in base_catalog.links
+        )
+        if not has_item:
+            base_catalog.add_link(
+                Link(
+                    rel="item",
+                    target=item_href,
+                    media_type="application/json",
+                    title=self.workflow_title,
+                )
+            )
+
+        # Ensure there is exactly one "self" link
+        base_catalog.links = [l for l in base_catalog.links if l.rel != "self"]
         base_catalog.set_self_href(self_href)
+
+        # deduplicate by (rel, href)
+        seen = set()
+        unique_links = []
+        for l in base_catalog.links:
+            key = (l.rel, link_href(l))
+            if key not in seen:
+                unique_links.append(l)
+                seen.add(key)
+        base_catalog.links = unique_links
 
         return base_catalog
 

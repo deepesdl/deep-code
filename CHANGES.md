@@ -51,3 +51,6 @@
 
 - Enhanced GitHub automation to automatically fork synchronize with upstream before 
   committing and opening a PR to ensure branches are always up-to-date.
+
+- Prevented duplicate item and self links when updating base catalogs of workflows and 
+  experiments.
