@@ -133,9 +133,9 @@ deep-code publish --dataset-config dataset.yaml -m dataset
 ```
 5. Publish Workflow only
 ```
-deep-code publish dataset-config.yaml -m workflow
+deep-code publish workflow-config.yaml -m workflow
 
-deep-code publish --workflow-config workflow.yaml -m dataset
+deep-code publish --workflow-config workflow.yaml -m workflow
 ```
 #### dataset-config.yaml example
 
