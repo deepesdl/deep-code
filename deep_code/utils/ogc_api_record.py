@@ -138,14 +138,17 @@ class LinksBuilder:
             }
         ]
 
-    def build_child_link_to_related_experiment(self) -> list[dict[str, str]]:
+    @staticmethod
+    def build_child_link_to_related_experiment(
+        collection_id, title
+    ) -> list[dict[str, str]]:
         """Build a link to the related experiment record if publishing mode is 'all'."""
         return [
             {
                 "rel": "child",
-                "href": f"../../experiments/{self.id}/record.json",
+                "href": f"../../experiments/{collection_id}/record.json",
                 "type": "application/json",
-                "title": self.title,
+                "title": f"{title}",
             }
         ]
 

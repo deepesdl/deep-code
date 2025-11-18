@@ -437,7 +437,9 @@ class Publisher:
             themes=osc_themes,
         )
         if mode == "all":
-            link_builder.build_child_link_to_related_experiment()
+            link_builder.build_child_link_to_related_experiment(
+                self.collection_id, self.workflow_title
+            )
         # Convert to dictionary and cleanup
         workflow_dict = workflow_record.to_dict()
         if "jupyter_notebook_url" in workflow_dict:
