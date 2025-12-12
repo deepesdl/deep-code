@@ -1,0 +1,31 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">
+    <url>
+         <loc>https://deepesdl.github.io/deep-code/</loc>
+         <lastmod>2025-12-12</lastmod>
+    </url>
+    <url>
+         <loc>https://deepesdl.github.io/deep-code/about/</loc>
+         <lastmod>2025-12-12</lastmod>
+    </url>
+    <url>
+         <loc>https://deepesdl.github.io/deep-code/cli/</loc>
+         <lastmod>2025-12-12</lastmod>
+    </url>
+    <url>
+         <loc>https://deepesdl.github.io/deep-code/configuration/</loc>
+         <lastmod>2025-12-12</lastmod>
+    </url>
+    <url>
+         <loc>https://deepesdl.github.io/deep-code/examples/</loc>
+         <lastmod>2025-12-12</lastmod>
+    </url>
+    <url>
+         <loc>https://deepesdl.github.io/deep-code/getting-started/</loc>
+         <lastmod>2025-12-12</lastmod>
+    </url>
+    <url>
+         <loc>https://deepesdl.github.io/deep-code/python-api/</loc>
+         <lastmod>2025-12-12</lastmod>
+    </url>
+</urlset>
