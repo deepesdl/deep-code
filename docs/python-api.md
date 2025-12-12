@@ -18,6 +18,3 @@ publisher.publish(write_to_file=True, mode="all")
 publisher.publish(write_to_file=False, mode="dataset")
 ```
 
-Other utilities:
-- `deep_code.tools.new.TemplateGenerator` for programmatic template generation.
-- `deep_code.utils.dataset_stac_generator.OscDatasetStacGenerator` and `deep_code.utils.ogc_record_generator.OSCWorkflowOGCApiRecordGenerator` for lower-level metadata building.
