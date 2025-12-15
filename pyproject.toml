@@ -50,6 +50,13 @@ dev = [
   "pytest-cov",
   "pytest-recording"
 ]
+docs = [
+  "mkdocs>=1.5",
+  "mkdocs-autorefs",
+  "mkdocs-material>=9.5",
+  "mkdocstrings",
+  "mkdocstrings-python"
+]
 
 # entry point CLI
 [project.scripts]

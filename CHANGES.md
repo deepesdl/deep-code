@@ -55,6 +55,8 @@
 - Prevented duplicate item and self links when updating base catalogs of workflows and 
   experiments.
 
-## Changes in 0.1.7 (in development)
+## Changes in 0.1.7
 
 - Fixed a bug in build_child_link_to_related_experiment for the publish mode `"all"`.
+
+## Changes in 0.1.8 (in Development)
