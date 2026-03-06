@@ -73,8 +73,10 @@
     `zarr-consolidated-metadata` (`.zmetadata`).
   - The S3 STAC catalog and item are written directly to S3 via `fsspec`/`s3fs`
     independently of the GitHub PR.
-  - The OSC STAC Collection gains a `child` link pointing to the S3 catalog root,
-    connecting the two levels of the hierarchy.
+  - The OSC STAC Collection gains a `via` link pointing to the S3 catalog root,
+    connecting the two levels of the hierarchy. (`child` is intentionally avoided
+    because the OSC validator requires every `child` link to resolve to a file inside
+    the metadata repository.)
   - Opt-in via the new `stac_catalog_s3_root` field in `dataset_config.yaml`
     (e.g. `stac_catalog_s3_root: s3://my-bucket/stac/my-collection/`).
   - S3 write credentials are resolved from `S3_USER_STORAGE_KEY`/`S3_USER_STORAGE_SECRET`,

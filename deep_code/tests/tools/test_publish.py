@@ -190,10 +190,10 @@ class TestPublisher(unittest.TestCase):
             opts = self.publisher._get_stac_s3_storage_options()
         self.assertEqual(opts["key"], "xcube-key")
         self.assertEqual(opts["secret"], "xcube-secret")
+        self.assertEqual(opts["s3_additional_kwargs"], {"ACL": ""})
 
     def test_get_stac_s3_storage_options_falls_back_to_aws_env_vars(self):
         env = {"AWS_ACCESS_KEY_ID": "aws-key", "AWS_SECRET_ACCESS_KEY": "aws-secret"}
-        # Ensure xcube vars are absent
         patched_env = {
             k: v
             for k, v in os.environ.items()
@@ -204,8 +204,9 @@ class TestPublisher(unittest.TestCase):
             opts = self.publisher._get_stac_s3_storage_options()
         self.assertEqual(opts["key"], "aws-key")
         self.assertEqual(opts["secret"], "aws-secret")
+        self.assertEqual(opts["s3_additional_kwargs"], {"ACL": ""})
 
-    def test_get_stac_s3_storage_options_returns_empty_for_boto3_chain(self):
+    def test_get_stac_s3_storage_options_returns_acl_suppression_for_boto3_chain(self):
         no_cred_env = {
             k: v
             for k, v in os.environ.items()
@@ -219,7 +220,7 @@ class TestPublisher(unittest.TestCase):
         }
         with patch.dict(os.environ, no_cred_env, clear=True):
             opts = self.publisher._get_stac_s3_storage_options()
-        self.assertEqual(opts, {})
+        self.assertEqual(opts, {"s3_additional_kwargs": {"ACL": ""}})
 
     # ------------------------------------------------------------------
     # S3 write helper

@@ -8,7 +8,7 @@ from datetime import datetime
 from unittest.mock import MagicMock, patch
 
 import numpy as np
-from pystac import Catalog, Collection, Item
+from pystac import Catalog, Item
 from xarray import DataArray, Dataset
 
 from deep_code.constants import (
@@ -141,42 +141,115 @@ class TestOSCProductSTACGenerator(unittest.TestCase):
         # Self href ends with var1/catalog.json
         self.assertTrue(catalog.self_href.endswith("/var1/catalog.json"))
 
-    @patch("pystac.Catalog.from_file")
-    def test_update_product_base_catalog(self, mock_from_file):
-        """Test linking product catalog."""
-        mock_cat = MagicMock(spec=Catalog)
-        mock_from_file.return_value = mock_cat
+    def test_update_product_base_catalog(self):
+        """Child link is appended; existing links (including self) are untouched."""
+        base = {
+            "type": "Catalog",
+            "id": "products",
+            "stac_version": "1.0.0",
+            "description": "Products",
+            "links": [
+                {
+                    "rel": "self",
+                    "href": PRODUCT_BASE_CATALOG_SELF_HREF,
+                    "type": "application/json",
+                }
+            ],
+        }
+        import tempfile, json as _json
 
-        result = self.generator.update_product_base_catalog("path.json")
-        self.assertIs(result, mock_cat)
-        mock_cat.add_link.assert_called_once()
-        mock_cat.set_self_href.assert_called_once_with(PRODUCT_BASE_CATALOG_SELF_HREF)
+        with tempfile.NamedTemporaryFile(
+            mode="w", suffix=".json", delete=False
+        ) as tmp:
+            _json.dump(base, tmp)
+            tmp_path = tmp.name
 
-    @patch("pystac.Catalog.from_file")
-    def test_update_variable_base_catalog(self, mock_from_file):
-        """Test linking variable base catalog."""
-        mock_cat = MagicMock(spec=Catalog)
-        mock_from_file.return_value = mock_cat
+        result = self.generator.update_product_base_catalog(tmp_path)
+
+        import os
+
+        os.unlink(tmp_path)
+
+        self.assertIsInstance(result, dict)
+        rels = [lnk["rel"] for lnk in result["links"]]
+        # self link must still be present and still first
+        self.assertEqual(result["links"][0]["rel"], "self")
+        self.assertEqual(result["links"][0]["href"], PRODUCT_BASE_CATALOG_SELF_HREF)
+        self.assertIn("child", rels)
+        child = next(lnk for lnk in result["links"] if lnk["rel"] == "child")
+        self.assertIn("mock-collection-id", child["href"])
+
+    def test_update_variable_base_catalog(self):
+        """Child links for each variable are appended."""
+        base = {
+            "type": "Catalog",
+            "id": "variables",
+            "stac_version": "1.0.0",
+            "description": "Variables",
+            "links": [
+                {
+                    "rel": "self",
+                    "href": VARIABLE_BASE_CATALOG_SELF_HREF,
+                    "type": "application/json",
+                }
+            ],
+        }
+        import tempfile, json as _json, os
+
+        with tempfile.NamedTemporaryFile(
+            mode="w", suffix=".json", delete=False
+        ) as tmp:
+            _json.dump(base, tmp)
+            tmp_path = tmp.name
 
         vars_ = ["v1", "v2"]
-        result = self.generator.update_variable_base_catalog("vars.json", vars_)
-        self.assertIs(result, mock_cat)
-        # Expect one add_link per variable
-        self.assertEqual(mock_cat.add_link.call_count, len(vars_))
-        mock_cat.set_self_href.assert_called_once_with(VARIABLE_BASE_CATALOG_SELF_HREF)
+        result = self.generator.update_variable_base_catalog(tmp_path, vars_)
+        os.unlink(tmp_path)
 
-    @patch("pystac.Collection.from_file")
-    def test_update_deepesdl_collection(self, mock_from_file):
-        """Test updating DeepESDL collection."""
-        mock_coll = MagicMock(spec=Collection)
-        mock_from_file.return_value = mock_coll
+        self.assertIsInstance(result, dict)
+        child_hrefs = [
+            lnk["href"] for lnk in result["links"] if lnk["rel"] == "child"
+        ]
+        self.assertEqual(len(child_hrefs), len(vars_))
+        # self link must remain in place
+        self.assertEqual(result["links"][0]["rel"], "self")
 
-        result = self.generator.update_deepesdl_collection("deep.json")
-        self.assertIs(result, mock_coll)
-        # Expect child and theme related links for each theme
-        calls = mock_coll.add_link.call_count
-        self.assertGreaterEqual(calls, 1 + len(self.generator.osc_themes))
-        mock_coll.set_self_href.assert_called_once_with(DEEPESDL_COLLECTION_SELF_HREF)
+    def test_update_deepesdl_collection(self):
+        """Child and theme-related links are appended; existing links kept."""
+        base = {
+            "type": "Collection",
+            "id": "deep-esdl",
+            "stac_version": "1.0.0",
+            "description": "DeepESDL",
+            "extent": {},
+            "links": [
+                {
+                    "rel": "self",
+                    "href": DEEPESDL_COLLECTION_SELF_HREF,
+                    "type": "application/json",
+                }
+            ],
+        }
+        import tempfile, json as _json, os
+
+        with tempfile.NamedTemporaryFile(
+            mode="w", suffix=".json", delete=False
+        ) as tmp:
+            _json.dump(base, tmp)
+            tmp_path = tmp.name
+
+        result = self.generator.update_deepesdl_collection(tmp_path)
+        os.unlink(tmp_path)
+
+        self.assertIsInstance(result, dict)
+        rels = [lnk["rel"] for lnk in result["links"]]
+        # child link added
+        self.assertIn("child", rels)
+        # one related link per theme
+        related = [lnk for lnk in result["links"] if lnk["rel"] == "related"]
+        self.assertGreaterEqual(len(related), len(self.generator.osc_themes))
+        # self link still present
+        self.assertEqual(result["links"][0]["rel"], "self")
 
     # ------------------------------------------------------------------
     # Zarr STAC Item / Catalog generation
@@ -280,31 +353,39 @@ class TestOSCProductSTACGenerator(unittest.TestCase):
         self.assertIn("zarr-data", item_dict["assets"])
         self.assertIn("zarr-consolidated-metadata", item_dict["assets"])
 
-    def test_build_dataset_stac_collection_adds_s3_catalog_child_link(self):
-        """Child link to S3 catalog is added when stac_catalog_s3_root is provided."""
+    def test_build_dataset_stac_collection_adds_s3_catalog_via_link(self):
+        """A 'via' link to the S3 catalog is added when stac_catalog_s3_root is provided.
+
+        rel='via' is used (not 'child') because the OSC validator requires every
+        'child' link to resolve to a file inside the metadata repository.
+        """
         s3_root = "s3://test-bucket/stac/my-collection/"
         collection = self.generator.build_dataset_stac_collection(
             mode="dataset", stac_catalog_s3_root=s3_root
         )
-        child_links = [lnk for lnk in collection.links if lnk.rel == "child"]
-        s3_child = next(
-            (lnk for lnk in child_links if "s3://" in str(lnk.target)), None
+        s3_via = next(
+            (
+                lnk
+                for lnk in collection.links
+                if lnk.rel == "via" and "catalog.json" in str(lnk.target)
+            ),
+            None,
         )
-        self.assertIsNotNone(s3_child, "Expected a child link pointing to S3 catalog")
+        self.assertIsNotNone(s3_via, "Expected a 'via' link pointing to S3 catalog")
         self.assertEqual(
-            s3_child.target,
+            s3_via.target,
             "s3://test-bucket/stac/my-collection/catalog.json",
         )
 
-    def test_build_dataset_stac_collection_no_s3_child_link_by_default(self):
-        """No S3 child link is added when stac_catalog_s3_root is absent."""
+    def test_build_dataset_stac_collection_no_s3_via_link_by_default(self):
+        """No S3 catalog 'via' link is added when stac_catalog_s3_root is absent."""
         collection = self.generator.build_dataset_stac_collection(mode="dataset")
-        s3_child_links = [
+        s3_catalog_links = [
             lnk
             for lnk in collection.links
-            if lnk.rel == "child" and "s3://" in str(getattr(lnk, "target", ""))
+            if lnk.rel == "via" and "catalog.json" in str(getattr(lnk, "target", ""))
         ]
-        self.assertEqual(len(s3_child_links), 0)
+        self.assertEqual(len(s3_catalog_links), 0)
 
 
 class TestFormatString(unittest.TestCase):

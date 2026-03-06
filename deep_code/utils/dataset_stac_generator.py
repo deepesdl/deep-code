@@ -3,6 +3,7 @@
 # Permissions are hereby granted under the terms of the MIT License:
 # https://opensource.org/licenses/MIT.
 
+import json
 import logging
 from datetime import datetime, timezone
 
@@ -272,38 +273,50 @@ class OscDatasetStacGenerator:
 
         return var_catalog
 
-    def update_product_base_catalog(self, product_catalog_path) -> Catalog:
-        """Link product to base product catalog"""
-        product_base_catalog = Catalog.from_file(product_catalog_path)
-        product_base_catalog.add_link(
-            Link(
-                rel="child",
-                target=f"./{self.collection_id}/collection.json",
-                media_type="application/json",
-                title=self.collection_id,
-            )
+    @staticmethod
+    def _append_link_if_absent(links: list, new_link: dict) -> None:
+        """Append *new_link* to *links* only when no existing entry has the
+        same ``rel`` and ``href`` (prevents duplicates on repeated publishes)."""
+        if not any(
+            lnk.get("rel") == new_link["rel"] and lnk.get("href") == new_link["href"]
+            for lnk in links
+        ):
+            links.append(new_link)
+
+    def update_product_base_catalog(self, product_catalog_path) -> dict:
+        """Append a child link to the products base catalog and return the
+        modified JSON dict without touching any existing links."""
+        with open(product_catalog_path, encoding="utf-8") as f:
+            data = json.load(f)
+        self._append_link_if_absent(
+            data.setdefault("links", []),
+            {
+                "rel": "child",
+                "href": f"./{self.collection_id}/collection.json",
+                "type": "application/json",
+                "title": self.collection_id,
+            },
         )
-        # 'self' link: the direct URL where this JSON is hosted
-        product_base_catalog.set_self_href(PRODUCT_BASE_CATALOG_SELF_HREF)
-        return product_base_catalog
+        return data
 
     def update_variable_base_catalog(
         self, variable_base_catalog_path, variable_ids
-    ) -> (Catalog):
-        """Link product to base product catalog"""
-        variable_base_catalog = Catalog.from_file(variable_base_catalog_path)
+    ) -> dict:
+        """Append child links for each variable to the variables base catalog."""
+        with open(variable_base_catalog_path, encoding="utf-8") as f:
+            data = json.load(f)
+        links = data.setdefault("links", [])
         for var_id in variable_ids:
-            variable_base_catalog.add_link(
-                Link(
-                    rel="child",
-                    target=f"./{var_id}/catalog.json",
-                    media_type="application/json",
-                    title=self.format_string(var_id),
-                )
+            self._append_link_if_absent(
+                links,
+                {
+                    "rel": "child",
+                    "href": f"./{var_id}/catalog.json",
+                    "type": "application/json",
+                    "title": self.format_string(var_id),
+                },
             )
-        # 'self' link: the direct URL where this JSON is hosted
-        variable_base_catalog.set_self_href(VARIABLE_BASE_CATALOG_SELF_HREF)
-        return variable_base_catalog
+        return data
 
     def add_themes_as_related_links_var_catalog(self, var_catalog):
         """Add themes as related links to variable catalog"""
@@ -317,52 +330,58 @@ class OscDatasetStacGenerator:
                 )
             )
 
-    def update_deepesdl_collection(self, deepesdl_collection_full_path):
-        deepesdl_collection = Collection.from_file(deepesdl_collection_full_path)
-        deepesdl_collection.add_link(
-            Link(
-                rel="child",
-                target=f"../../products/{self.collection_id}/collection.json",
-                media_type="application/json",
-                title=self.collection_id,
-            )
+    def update_deepesdl_collection(self, deepesdl_collection_full_path) -> dict:
+        """Append child and theme-related links to the DeepESDL collection."""
+        with open(deepesdl_collection_full_path, encoding="utf-8") as f:
+            data = json.load(f)
+        links = data.setdefault("links", [])
+        self._append_link_if_absent(
+            links,
+            {
+                "rel": "child",
+                "href": f"../../products/{self.collection_id}/collection.json",
+                "type": "application/json",
+                "title": self.collection_id,
+            },
         )
-        # add themes to deepesdl
         for theme in self.osc_themes:
-            deepesdl_collection.add_link(
-                Link(
-                    rel="related",
-                    target=f"../../themes/{theme}/catalog.json",
-                    media_type="application/json",
-                    title=f"Theme: {self.format_string(theme)}",
-                )
+            self._append_link_if_absent(
+                links,
+                {
+                    "rel": "related",
+                    "href": f"../../themes/{theme}/catalog.json",
+                    "type": "application/json",
+                    "title": f"Theme: {self.format_string(theme)}",
+                },
             )
-        deepesdl_collection.set_self_href(DEEPESDL_COLLECTION_SELF_HREF)
-        return deepesdl_collection
+        return data
 
-    def update_existing_variable_catalog(self, var_file_path, var_id) -> Catalog:
-        existing_catalog = Catalog.from_file(var_file_path)
-        now_iso = datetime.now(timezone.utc).isoformat()
-        existing_catalog.extra_fields["updated"] = now_iso
-
-        # add 'child' link as the product
-        existing_catalog.add_link(
-            Link(
-                rel="child",
-                target=f"../../products/{self.collection_id}/collection.json",
-                media_type="application/json",
-                title=self.collection_id,
+    def update_existing_variable_catalog(self, var_file_path, var_id) -> dict:
+        """Append child and theme links to an existing variable catalog."""
+        with open(var_file_path, encoding="utf-8") as f:
+            data = json.load(f)
+        data["updated"] = datetime.now(timezone.utc).isoformat()
+        links = data.setdefault("links", [])
+        self._append_link_if_absent(
+            links,
+            {
+                "rel": "child",
+                "href": f"../../products/{self.collection_id}/collection.json",
+                "type": "application/json",
+                "title": self.collection_id,
+            },
+        )
+        for theme in self.osc_themes:
+            self._append_link_if_absent(
+                links,
+                {
+                    "rel": "related",
+                    "href": f"../../themes/{theme}/catalog.json",
+                    "type": "application/json",
+                    "title": f"Theme: {self.format_string(theme)}",
+                },
             )
-        )
-        self.add_themes_as_related_links_var_catalog(existing_catalog)
-        self_href = (
-            f"https://esa-earthcode.github.io/open-science-catalog-metadata/variables"
-            f"/{var_id}/catalog.json"
-        )
-        # 'self' link: the direct URL where this JSON is hosted
-        existing_catalog.set_self_href(self_href)
-
-        return existing_catalog
+        return data
 
     @staticmethod
     def format_string(s: str) -> str:
@@ -622,11 +641,14 @@ class OscDatasetStacGenerator:
 
         collection.license = self.license_type
 
-        # Link to the S3-hosted STAC catalog when provided
+        # Link to the S3-hosted STAC catalog when provided.
+        # Uses rel="via" (not "child") because the OSC validator requires every
+        # "child" link to resolve to a file inside the metadata repository;
+        # the S3 catalog lives outside the repo and would fail that check.
         if stac_catalog_s3_root:
             catalog_href = stac_catalog_s3_root.rstrip("/") + "/catalog.json"
             collection.add_link(Link(
-                rel="child",
+                rel="via",
                 target=catalog_href,
                 media_type="application/json",
                 title="STAC Catalog",

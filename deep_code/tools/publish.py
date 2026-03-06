@@ -215,8 +215,7 @@ class Publisher:
         full_path = (
             Path(self.gh_publisher.github_automation.local_clone_dir) / catalog_path
         )
-        updated_catalog = update_method(full_path, *args)
-        file_dict[full_path] = updated_catalog.to_dict()
+        file_dict[full_path] = update_method(full_path, *args)
 
     def _update_variable_catalogs(self, generator, file_dict, variable_ids):
         """Update or create variable catalogs and add them to file_dict.
@@ -243,10 +242,9 @@ class Publisher:
                     Path(self.gh_publisher.github_automation.local_clone_dir)
                     / var_file_path
                 )
-                updated_catalog = generator.update_existing_variable_catalog(
+                file_dict[var_file_path] = generator.update_existing_variable_catalog(
                     full_path, var_id
                 )
-                file_dict[var_file_path] = updated_catalog.to_dict()
 
     def publish_dataset(
         self,
@@ -545,10 +543,14 @@ class Publisher:
         secret = os.environ.get("S3_USER_STORAGE_SECRET") or os.environ.get(
             "AWS_SECRET_ACCESS_KEY"
         )
+        # s3_additional_kwargs={"ACL": ""} suppresses the ACL header that s3fs
+        # adds by default; required when Object Ownership is set to
+        # BucketOwnerEnforced (ACLs disabled) to avoid AccessDenied errors.
+        base = {"s3_additional_kwargs": {"ACL": ""}}
         if key and secret:
-            return {"key": key, "secret": secret}
+            return {"key": key, "secret": secret, **base}
         # Fall through to boto3 chain (IAM role / ~/.aws/credentials)
-        return {}
+        return base
 
     def _write_stac_catalog_to_s3(
         self, file_dict: dict[str, dict], storage_options: dict
