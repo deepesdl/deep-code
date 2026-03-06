@@ -7,13 +7,15 @@ import logging
 from datetime import datetime, timezone
 
 import pandas as pd
-from pystac import Catalog, Collection, Extent, Link, SpatialExtent, TemporalExtent
+import pystac
+from pystac import Catalog, Collection, Extent, Item, Asset, Link, SpatialExtent, TemporalExtent
 
 from deep_code.constants import (
     DEEPESDL_COLLECTION_SELF_HREF,
     OSC_THEME_SCHEME,
     PRODUCT_BASE_CATALOG_SELF_HREF,
     VARIABLE_BASE_CATALOG_SELF_HREF,
+    ZARR_MEDIA_TYPE,
 )
 from deep_code.utils.helper import open_dataset
 from deep_code.utils.ogc_api_record import Theme, ThemeConcept
@@ -377,7 +379,132 @@ class OscDatasetStacGenerator:
         concepts = [ThemeConcept(id=theme_str) for theme_str in osc_themes]
         return Theme(concepts=concepts, scheme=OSC_THEME_SCHEME)
 
-    def build_dataset_stac_collection(self, mode: str) -> Collection:
+    def build_zarr_stac_item(self, stac_catalog_s3_root: str) -> Item:
+        """Build a single STAC Item representing the entire Zarr store.
+
+        One item covers the full spatiotemporal extent of the dataset.
+        Assets point to the Zarr store and its consolidated metadata.
+
+        Args:
+            stac_catalog_s3_root: S3 root URL where the STAC catalog will be hosted
+                (e.g. ``s3://my-bucket/stac/``). Used to build self/root/parent hrefs.
+
+        Returns:
+            A :class:`pystac.Item` ready to be serialised to S3.
+        """
+        spatial_extent = self._get_spatial_extent()
+        temporal_extent = self._get_temporal_extent()
+        general_metadata = self._get_general_metadata()
+
+        bbox = spatial_extent.bboxes[0]  # [lon_min, lat_min, lon_max, lat_max]
+        lon_min, lat_min, lon_max, lat_max = bbox
+        geometry = {
+            "type": "Polygon",
+            "coordinates": [[
+                [lon_min, lat_min],
+                [lon_max, lat_min],
+                [lon_max, lat_max],
+                [lon_min, lat_max],
+                [lon_min, lat_min],
+            ]],
+        }
+
+        start_dt, end_dt = temporal_extent.intervals[0]
+        # Ensure UTC timezone so ISO strings are STAC-compliant
+        if start_dt is not None and start_dt.tzinfo is None:
+            start_dt = start_dt.replace(tzinfo=timezone.utc)
+        if end_dt is not None and end_dt.tzinfo is None:
+            end_dt = end_dt.replace(tzinfo=timezone.utc)
+
+        now_iso = datetime.now(timezone.utc).isoformat()
+        root = stac_catalog_s3_root.rstrip("/")
+        catalog_href = f"{root}/catalog.json"
+        item_href = f"{root}/{self.collection_id}/item.json"
+        osc_collection_href = (
+            "https://esa-earthcode.github.io/open-science-catalog-metadata"
+            f"/products/{self.collection_id}/collection.json"
+        )
+
+        item = Item(
+            id=self.collection_id,
+            geometry=geometry,
+            bbox=bbox,
+            datetime=None,
+            properties={
+                "start_datetime": start_dt.isoformat() if start_dt else None,
+                "end_datetime": end_dt.isoformat() if end_dt else None,
+                "description": general_metadata.get("description", ""),
+                "created": now_iso,
+                "updated": now_iso,
+            },
+        )
+        item.collection_id = self.collection_id
+        item.set_self_href(item_href)
+        item.add_link(Link(rel="root", target=catalog_href, media_type="application/json"))
+        item.add_link(Link(rel="parent", target=catalog_href, media_type="application/json"))
+        item.add_link(Link(
+            rel="collection",
+            target=osc_collection_href,
+            media_type="application/json",
+            title=self.collection_id,
+        ))
+        item.add_asset("zarr-data", Asset(
+            href=self.access_link,
+            media_type=ZARR_MEDIA_TYPE,
+            title="Zarr Data Store",
+            roles=["data"],
+        ))
+        item.add_asset("zarr-consolidated-metadata", Asset(
+            href=f"{self.access_link}/.zmetadata",
+            media_type="application/json",
+            title="Consolidated Zarr Metadata",
+            roles=["metadata"],
+        ))
+        return item
+
+    def build_zarr_stac_catalog_file_dict(
+        self, stac_catalog_s3_root: str
+    ) -> dict[str, dict]:
+        """Generate the STAC Catalog and Item JSON for the Zarr store.
+
+        The catalog acts as the root for the dataset-level STAC hierarchy
+        that lives on S3 alongside the data::
+
+            {stac_catalog_s3_root}/
+            ├── catalog.json                   # STAC Catalog (root)
+            └── {collection_id}/
+                └── item.json                  # STAC Item (whole Zarr)
+
+        Args:
+            stac_catalog_s3_root: S3 root URL (e.g. ``s3://my-bucket/stac/``).
+
+        Returns:
+            ``{s3_path: content_dict}`` for every file to be written to S3.
+        """
+        root = stac_catalog_s3_root.rstrip("/")
+        catalog_href = f"{root}/catalog.json"
+
+        item = self.build_zarr_stac_item(stac_catalog_s3_root)
+
+        catalog = Catalog(
+            id=f"{self.collection_id}-stac-catalog",
+            description=f"STAC Catalog for {self.collection_id}",
+        )
+        catalog.set_self_href(catalog_href)
+        catalog.add_link(Link(rel="root", target=catalog_href, media_type="application/json"))
+        catalog.add_link(Link(
+            rel="item",
+            target=f"./{self.collection_id}/item.json",
+            media_type="application/json",
+            title=self.collection_id,
+        ))
+
+        return {
+            catalog_href: catalog.to_dict(transform_hrefs=False),
+            f"{root}/{self.collection_id}/item.json": item.to_dict(transform_hrefs=False),
+        }
+
+    def build_dataset_stac_collection(self, mode: str, stac_catalog_s3_root: str | None = None) -> Collection:
         """Build an OSC STAC Collection for the dataset.
 
         Returns:
@@ -495,6 +622,16 @@ class OscDatasetStacGenerator:
             )
 
         collection.license = self.license_type
+
+        # Link to the S3-hosted STAC catalog when provided
+        if stac_catalog_s3_root:
+            catalog_href = stac_catalog_s3_root.rstrip("/") + "/catalog.json"
+            collection.add_link(Link(
+                rel="child",
+                target=catalog_href,
+                media_type="application/json",
+                title="STAC Catalog",
+            ))
 
         # Validate OSC extension fields
         try:

@@ -3,7 +3,9 @@
 # Permissions are hereby granted under the terms of the MIT License:
 # https://opensource.org/licenses/MIT.
 import copy
+import json
 import logging
+import os
 from datetime import datetime
 from pathlib import Path
 from typing import Any, Literal
@@ -286,9 +288,14 @@ class Publisher:
             osc_themes=osc_themes,
             cf_params=cf_params,
         )
+        # Store so publish() can reuse it for zarr STAC catalog generation
+        self._last_generator = generator
 
+        stac_catalog_s3_root = self.dataset_config.get("stac_catalog_s3_root")
         variable_ids = generator.get_variable_ids()
-        ds_collection = generator.build_dataset_stac_collection(mode=mode)
+        ds_collection = generator.build_dataset_stac_collection(
+            mode=mode, stac_catalog_s3_root=stac_catalog_s3_root
+        )
 
         # Prepare a dictionary of file paths and content
         file_dict = {}
@@ -416,17 +423,21 @@ class Publisher:
         wf_record_properties = rg.build_record_properties(properties_list, contacts)
         # make a copy for experiment record
         exp_record_properties = copy.deepcopy(wf_record_properties)
-        jupyter_kernel_info = wf_record_properties.jupyter_kernel_info.to_dict()
+        jupyter_kernel_info = {}
+        if jupyter_notebook_url:
+            jupyter_kernel_info = wf_record_properties.jupyter_kernel_info.to_dict()
 
         link_builder = LinksBuilder(osc_themes, jupyter_kernel_info)
         theme_links = link_builder.build_theme_links_for_records()
-        application_link = link_builder.build_link_to_jnb(
-            self.workflow_title, jupyter_notebook_url
-        )
-        jnb_open_link = link_builder.make_related_link_for_opening_jnb_from_github(
-            jupyter_notebook_url=jupyter_notebook_url
-        )
-
+        application_link = []
+        jnb_open_link = []
+        if jupyter_notebook_url:
+            jnb_open_link = link_builder.make_related_link_for_opening_jnb_from_github(
+                jupyter_notebook_url=jupyter_notebook_url
+            )
+            application_link = link_builder.build_link_to_jnb(
+                self.workflow_title, jupyter_notebook_url
+            )
         workflow_record = WorkflowAsOgcRecord(
             id=workflow_id,
             type="Feature",
@@ -505,6 +516,49 @@ class Publisher:
             return {}
         return file_dict
 
+    def _get_stac_s3_storage_options(self) -> dict:
+        """Resolve S3 credentials for writing the STAC catalog.
+
+        Priority (first match wins):
+
+        1. xcube user-storage env vars — ``S3_USER_STORAGE_KEY`` /
+           ``S3_USER_STORAGE_SECRET`` (already used by :func:`open_dataset`).
+        2. Standard AWS env vars — ``AWS_ACCESS_KEY_ID`` /
+           ``AWS_SECRET_ACCESS_KEY``.
+        3. boto3 default credential chain — IAM role attached to the
+           JupyterHub pod, ``~/.aws/credentials`` profile, etc.
+           An empty ``storage_options`` dict lets ``s3fs`` fall through
+           to this chain automatically; no secrets are required in code.
+
+        .. note::
+           **JupyterHub best practice**: prefer IAM roles (instance / pod
+           identity) over env-var credentials.  IAM roles are scoped to the
+           specific S3 prefix the user owns, require no secret rotation, and
+           are never visible to other users on the hub.  Per-user env vars
+           set by the JupyterHub spawner (not server-wide) are an acceptable
+           fallback — they are private to each user's server process.
+           Avoid hard-coding credentials in YAML config files.
+        """
+        key = os.environ.get("S3_USER_STORAGE_KEY") or os.environ.get(
+            "AWS_ACCESS_KEY_ID"
+        )
+        secret = os.environ.get("S3_USER_STORAGE_SECRET") or os.environ.get(
+            "AWS_SECRET_ACCESS_KEY"
+        )
+        if key and secret:
+            return {"key": key, "secret": secret}
+        # Fall through to boto3 chain (IAM role / ~/.aws/credentials)
+        return {}
+
+    def _write_stac_catalog_to_s3(
+        self, file_dict: dict[str, dict], storage_options: dict
+    ) -> None:
+        """Write STAC catalog and item JSON files to S3 via fsspec/s3fs."""
+        for s3_path, content in file_dict.items():
+            logger.info(f"Writing STAC file to {s3_path}")
+            with fsspec.open(s3_path, "w", **storage_options) as f:
+                json.dump(content, f, indent=2)
+
     def publish(
         self,
         write_to_file: bool = False,
@@ -529,6 +583,21 @@ class Publisher:
         if mode in ("dataset", "all"):
             ds_files = self.publish_dataset(write_to_file=False, mode=mode)
             files.update(ds_files)
+
+            # Publish STAC catalog + item to S3 when stac_catalog_s3_root is configured.
+            # This is independent of the GitHub PR and happens immediately.
+            stac_catalog_s3_root = self.dataset_config.get("stac_catalog_s3_root")
+            if stac_catalog_s3_root and hasattr(self, "_last_generator"):
+                logger.info(
+                    f"Publishing STAC catalog to S3: {stac_catalog_s3_root}"
+                )
+                zarr_stac_files = self._last_generator.build_zarr_stac_catalog_file_dict(
+                    stac_catalog_s3_root
+                )
+                self._write_stac_catalog_to_s3(
+                    zarr_stac_files, self._get_stac_s3_storage_options()
+                )
+                logger.info("STAC catalog written to S3.")
 
         if mode in ("workflow", "all"):
             wf_files = self.generate_workflow_experiment_records(

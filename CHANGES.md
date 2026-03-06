@@ -60,3 +60,23 @@
 - Fixed a bug in build_child_link_to_related_experiment for the publish mode `"all"`.
 
 ## Changes in 0.1.8 (in Development)
+
+- Fixed a crash in workflow publishing when `jupyter_notebook_url` is not provided in
+  the workflow config. `jupyter_kernel_info`, `application_link`, and `jnb_open_link`
+  are now only computed when a notebook URL is present, making the field truly optional.
+
+- Added STAC Item and S3-hosted STAC Catalog generation for Zarr datasets, enabling
+  a richer `STAC Collection → STAC Catalog (S3) → STAC Item` hierarchy alongside the
+  existing OSC metadata.
+  - A single STAC Item is generated per Zarr store, covering the full spatiotemporal
+    extent with two assets: `zarr-data` (`application/vnd+zarr`) and
+    `zarr-consolidated-metadata` (`.zmetadata`).
+  - The S3 STAC catalog and item are written directly to S3 via `fsspec`/`s3fs`
+    independently of the GitHub PR.
+  - The OSC STAC Collection gains a `child` link pointing to the S3 catalog root,
+    connecting the two levels of the hierarchy.
+  - Opt-in via the new `stac_catalog_s3_root` field in `dataset_config.yaml`
+    (e.g. `stac_catalog_s3_root: s3://my-bucket/stac/my-collection/`).
+  - S3 write credentials are resolved from `S3_USER_STORAGE_KEY`/`S3_USER_STORAGE_SECRET`,
+    `AWS_ACCESS_KEY_ID`/`AWS_SECRET_ACCESS_KEY`, or the boto3 default chain
+    (IAM role, `~/.aws/credentials`) — no secrets in config files.

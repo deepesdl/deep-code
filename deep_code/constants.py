@@ -39,3 +39,4 @@ APPLICATION_TYPE_JUPYTER_SPEC = (
 APPLICATION_STAC_EXTENSION_SPEC = (
     "https://stac-extensions.github.io/application/v0.1.0/schema.json"
 )
+ZARR_MEDIA_TYPE = "application/vnd+zarr"

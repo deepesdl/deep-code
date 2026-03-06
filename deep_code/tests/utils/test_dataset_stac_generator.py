@@ -8,7 +8,7 @@ from datetime import datetime
 from unittest.mock import MagicMock, patch
 
 import numpy as np
-from pystac import Catalog, Collection
+from pystac import Catalog, Collection, Item
 from xarray import DataArray, Dataset
 
 from deep_code.constants import (
@@ -16,6 +16,7 @@ from deep_code.constants import (
     OSC_THEME_SCHEME,
     PRODUCT_BASE_CATALOG_SELF_HREF,
     VARIABLE_BASE_CATALOG_SELF_HREF,
+    ZARR_MEDIA_TYPE,
 )
 from deep_code.utils.dataset_stac_generator import OscDatasetStacGenerator, Theme
 
@@ -176,6 +177,134 @@ class TestOSCProductSTACGenerator(unittest.TestCase):
         calls = mock_coll.add_link.call_count
         self.assertGreaterEqual(calls, 1 + len(self.generator.osc_themes))
         mock_coll.set_self_href.assert_called_once_with(DEEPESDL_COLLECTION_SELF_HREF)
+
+    # ------------------------------------------------------------------
+    # Zarr STAC Item / Catalog generation
+    # ------------------------------------------------------------------
+
+    def test_build_zarr_stac_item_structure(self):
+        """Item has correct geometry, bbox, datetime range, assets, and links."""
+        s3_root = "s3://test-bucket/stac/my-collection/"
+        item = self.generator.build_zarr_stac_item(s3_root)
+
+        self.assertIsInstance(item, Item)
+        self.assertEqual(item.id, "mock-collection-id")
+
+        # Spatial
+        self.assertEqual(item.bbox, [-180.0, -90.0, 180.0, 90.0])
+        self.assertEqual(item.geometry["type"], "Polygon")
+        coords = item.geometry["coordinates"][0]
+        self.assertEqual(len(coords), 5)  # closed ring
+
+        # Temporal — datetime must be null; start/end in properties
+        self.assertIsNone(item.datetime)
+        self.assertIn("start_datetime", item.properties)
+        self.assertIn("end_datetime", item.properties)
+        # Timezone-aware ISO strings
+        self.assertTrue(item.properties["start_datetime"].endswith("+00:00"))
+        self.assertTrue(item.properties["end_datetime"].endswith("+00:00"))
+
+        # Assets
+        self.assertIn("zarr-data", item.assets)
+        self.assertIn("zarr-consolidated-metadata", item.assets)
+
+        zarr_asset = item.assets["zarr-data"]
+        self.assertEqual(zarr_asset.href, "s3://mock-bucket/mock-dataset")
+        self.assertEqual(zarr_asset.media_type, ZARR_MEDIA_TYPE)
+        self.assertIn("data", zarr_asset.roles)
+
+        meta_asset = item.assets["zarr-consolidated-metadata"]
+        self.assertEqual(
+            meta_asset.href, "s3://mock-bucket/mock-dataset/.zmetadata"
+        )
+        self.assertIn("metadata", meta_asset.roles)
+
+        # Self href
+        self.assertEqual(
+            item.self_href,
+            "s3://test-bucket/stac/my-collection/mock-collection-id/item.json",
+        )
+
+        # Required link rels
+        link_rels = {link.rel for link in item.links}
+        self.assertIn("root", link_rels)
+        self.assertIn("parent", link_rels)
+        self.assertIn("collection", link_rels)
+
+        # root and parent point to the S3 catalog
+        root_link = next(l for l in item.links if l.rel == "root")
+        self.assertEqual(
+            root_link.target,
+            "s3://test-bucket/stac/my-collection/catalog.json",
+        )
+
+        # collection link points to the OSC GitHub collection
+        coll_link = next(l for l in item.links if l.rel == "collection")
+        self.assertIn("open-science-catalog-metadata", coll_link.target)
+        self.assertIn("mock-collection-id", coll_link.target)
+
+    def test_build_zarr_stac_item_trailing_slash_normalised(self):
+        """Trailing slash on s3_root should not produce double slashes."""
+        item_with = self.generator.build_zarr_stac_item("s3://bucket/stac/")
+        item_without = self.generator.build_zarr_stac_item("s3://bucket/stac")
+        self.assertEqual(item_with.self_href, item_without.self_href)
+
+    def test_build_zarr_stac_catalog_file_dict_keys(self):
+        """file_dict contains exactly the catalog and item S3 paths."""
+        s3_root = "s3://test-bucket/stac/my-collection/"
+        file_dict = self.generator.build_zarr_stac_catalog_file_dict(s3_root)
+
+        catalog_path = "s3://test-bucket/stac/my-collection/catalog.json"
+        item_path = (
+            "s3://test-bucket/stac/my-collection/mock-collection-id/item.json"
+        )
+        self.assertIn(catalog_path, file_dict)
+        self.assertIn(item_path, file_dict)
+        self.assertEqual(len(file_dict), 2)
+
+    def test_build_zarr_stac_catalog_file_dict_content(self):
+        """Catalog dict is type Catalog; item dict is type Feature with assets."""
+        s3_root = "s3://test-bucket/stac/my-collection/"
+        file_dict = self.generator.build_zarr_stac_catalog_file_dict(s3_root)
+
+        catalog_dict = file_dict["s3://test-bucket/stac/my-collection/catalog.json"]
+        self.assertEqual(catalog_dict["type"], "Catalog")
+        self.assertEqual(catalog_dict["id"], "mock-collection-id-stac-catalog")
+
+        item_dict = file_dict[
+            "s3://test-bucket/stac/my-collection/mock-collection-id/item.json"
+        ]
+        self.assertEqual(item_dict["type"], "Feature")
+        self.assertEqual(item_dict["id"], "mock-collection-id")
+        self.assertIn("assets", item_dict)
+        self.assertIn("zarr-data", item_dict["assets"])
+        self.assertIn("zarr-consolidated-metadata", item_dict["assets"])
+
+    def test_build_dataset_stac_collection_adds_s3_catalog_child_link(self):
+        """Child link to S3 catalog is added when stac_catalog_s3_root is provided."""
+        s3_root = "s3://test-bucket/stac/my-collection/"
+        collection = self.generator.build_dataset_stac_collection(
+            mode="dataset", stac_catalog_s3_root=s3_root
+        )
+        child_links = [l for l in collection.links if l.rel == "child"]
+        s3_child = next(
+            (l for l in child_links if "s3://" in str(l.target)), None
+        )
+        self.assertIsNotNone(s3_child, "Expected a child link pointing to S3 catalog")
+        self.assertEqual(
+            s3_child.target,
+            "s3://test-bucket/stac/my-collection/catalog.json",
+        )
+
+    def test_build_dataset_stac_collection_no_s3_child_link_by_default(self):
+        """No S3 child link is added when stac_catalog_s3_root is absent."""
+        collection = self.generator.build_dataset_stac_collection(mode="dataset")
+        s3_child_links = [
+            l
+            for l in collection.links
+            if l.rel == "child" and "s3://" in str(getattr(l, "target", ""))
+        ]
+        self.assertEqual(len(s3_child_links), 0)
 
 
 class TestFormatString(unittest.TestCase):

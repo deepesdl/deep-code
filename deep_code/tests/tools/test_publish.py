@@ -1,4 +1,5 @@
 import json
+import os
 import tempfile
 import unittest
 from pathlib import Path
@@ -172,6 +173,131 @@ class TestPublisher(unittest.TestCase):
         assert "workflow/experiment: wf" in kwargs["commit_message"]
         assert "dataset: col" in kwargs["pr_title"]
         assert "workflow/experiment: wf" in kwargs["pr_title"]
+
+
+    # ------------------------------------------------------------------
+    # S3 credential resolution
+    # ------------------------------------------------------------------
+
+    def test_get_stac_s3_storage_options_prefers_xcube_env_vars(self):
+        env = {
+            "S3_USER_STORAGE_KEY": "xcube-key",
+            "S3_USER_STORAGE_SECRET": "xcube-secret",
+            "AWS_ACCESS_KEY_ID": "aws-key",
+            "AWS_SECRET_ACCESS_KEY": "aws-secret",
+        }
+        with patch.dict(os.environ, env):
+            opts = self.publisher._get_stac_s3_storage_options()
+        self.assertEqual(opts["key"], "xcube-key")
+        self.assertEqual(opts["secret"], "xcube-secret")
+
+    def test_get_stac_s3_storage_options_falls_back_to_aws_env_vars(self):
+        env = {"AWS_ACCESS_KEY_ID": "aws-key", "AWS_SECRET_ACCESS_KEY": "aws-secret"}
+        # Ensure xcube vars are absent
+        patched_env = {
+            k: v
+            for k, v in os.environ.items()
+            if k not in ("S3_USER_STORAGE_KEY", "S3_USER_STORAGE_SECRET")
+        }
+        patched_env.update(env)
+        with patch.dict(os.environ, patched_env, clear=True):
+            opts = self.publisher._get_stac_s3_storage_options()
+        self.assertEqual(opts["key"], "aws-key")
+        self.assertEqual(opts["secret"], "aws-secret")
+
+    def test_get_stac_s3_storage_options_returns_empty_for_boto3_chain(self):
+        no_cred_env = {
+            k: v
+            for k, v in os.environ.items()
+            if k
+            not in (
+                "S3_USER_STORAGE_KEY",
+                "S3_USER_STORAGE_SECRET",
+                "AWS_ACCESS_KEY_ID",
+                "AWS_SECRET_ACCESS_KEY",
+            )
+        }
+        with patch.dict(os.environ, no_cred_env, clear=True):
+            opts = self.publisher._get_stac_s3_storage_options()
+        self.assertEqual(opts, {})
+
+    # ------------------------------------------------------------------
+    # S3 write helper
+    # ------------------------------------------------------------------
+
+    @patch("deep_code.tools.publish.fsspec.open")
+    def test_write_stac_catalog_to_s3(self, mock_fsspec_open):
+        mock_file = MagicMock()
+        mock_ctx = MagicMock()
+        mock_ctx.__enter__ = MagicMock(return_value=mock_file)
+        mock_ctx.__exit__ = MagicMock(return_value=False)
+        mock_fsspec_open.return_value = mock_ctx
+
+        file_dict = {
+            "s3://bucket/catalog.json": {"type": "Catalog", "id": "test"},
+            "s3://bucket/col/item.json": {"type": "Feature", "id": "item"},
+        }
+        self.publisher._write_stac_catalog_to_s3(
+            file_dict, {"key": "k", "secret": "s"}
+        )
+
+        self.assertEqual(mock_fsspec_open.call_count, 2)
+        mock_fsspec_open.assert_any_call(
+            "s3://bucket/catalog.json", "w", key="k", secret="s"
+        )
+        mock_fsspec_open.assert_any_call(
+            "s3://bucket/col/item.json", "w", key="k", secret="s"
+        )
+
+    # ------------------------------------------------------------------
+    # End-to-end zarr STAC publishing wired into publish()
+    # ------------------------------------------------------------------
+
+    @patch("deep_code.tools.publish.fsspec.open")
+    @patch.object(Publisher, "publish_dataset", return_value={"github_file.json": {}})
+    def test_publish_writes_zarr_stac_to_s3_when_configured(
+        self, mock_publish_ds, mock_fsspec_open
+    ):
+        self.publisher.dataset_config["stac_catalog_s3_root"] = (
+            "s3://test-bucket/stac/"
+        )
+
+        mock_ctx = MagicMock()
+        mock_ctx.__enter__ = MagicMock(return_value=MagicMock())
+        mock_ctx.__exit__ = MagicMock(return_value=False)
+        mock_fsspec_open.return_value = mock_ctx
+
+        mock_generator = MagicMock()
+        mock_generator.build_zarr_stac_catalog_file_dict.return_value = {
+            "s3://test-bucket/stac/catalog.json": {"type": "Catalog"},
+            "s3://test-bucket/stac/test-collection/item.json": {"type": "Feature"},
+        }
+        # Simulate what publish_dataset() normally does: store the generator
+        self.publisher._last_generator = mock_generator
+        self.publisher.gh_publisher.publish_files.return_value = "PR_URL"
+
+        self.publisher.publish(mode="dataset")
+
+        mock_generator.build_zarr_stac_catalog_file_dict.assert_called_once_with(
+            "s3://test-bucket/stac/"
+        )
+        # Two S3 files written: catalog.json + item.json
+        self.assertEqual(mock_fsspec_open.call_count, 2)
+
+    @patch.object(Publisher, "publish_dataset", return_value={"github_file.json": {}})
+    def test_publish_skips_zarr_stac_when_not_configured(self, mock_publish_ds):
+        # No stac_catalog_s3_root in config
+        self.publisher.dataset_config = {
+            "collection_id": "test-collection",
+            "dataset_id": "test-dataset",
+        }
+        self.publisher.gh_publisher.publish_files.return_value = "PR_URL"
+
+        with patch.object(
+            self.publisher, "_write_stac_catalog_to_s3"
+        ) as mock_write:
+            self.publisher.publish(mode="dataset")
+            mock_write.assert_not_called()
 
 
 class TestParseGithubNotebookUrl:
