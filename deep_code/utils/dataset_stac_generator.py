@@ -7,7 +7,6 @@ import logging
 from datetime import datetime, timezone
 
 import pandas as pd
-import pystac
 from pystac import Catalog, Collection, Extent, Item, Asset, Link, SpatialExtent, TemporalExtent
 
 from deep_code.constants import (

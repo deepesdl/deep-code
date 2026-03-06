@@ -232,14 +232,14 @@ class TestOSCProductSTACGenerator(unittest.TestCase):
         self.assertIn("collection", link_rels)
 
         # root and parent point to the S3 catalog
-        root_link = next(l for l in item.links if l.rel == "root")
+        root_link = next(lnk for lnk in item.links if lnk.rel == "root")
         self.assertEqual(
             root_link.target,
             "s3://test-bucket/stac/my-collection/catalog.json",
         )
 
         # collection link points to the OSC GitHub collection
-        coll_link = next(l for l in item.links if l.rel == "collection")
+        coll_link = next(lnk for lnk in item.links if lnk.rel == "collection")
         self.assertIn("open-science-catalog-metadata", coll_link.target)
         self.assertIn("mock-collection-id", coll_link.target)
 
@@ -286,9 +286,9 @@ class TestOSCProductSTACGenerator(unittest.TestCase):
         collection = self.generator.build_dataset_stac_collection(
             mode="dataset", stac_catalog_s3_root=s3_root
         )
-        child_links = [l for l in collection.links if l.rel == "child"]
+        child_links = [lnk for lnk in collection.links if lnk.rel == "child"]
         s3_child = next(
-            (l for l in child_links if "s3://" in str(l.target)), None
+            (lnk for lnk in child_links if "s3://" in str(lnk.target)), None
         )
         self.assertIsNotNone(s3_child, "Expected a child link pointing to S3 catalog")
         self.assertEqual(
@@ -300,9 +300,9 @@ class TestOSCProductSTACGenerator(unittest.TestCase):
         """No S3 child link is added when stac_catalog_s3_root is absent."""
         collection = self.generator.build_dataset_stac_collection(mode="dataset")
         s3_child_links = [
-            l
-            for l in collection.links
-            if l.rel == "child" and "s3://" in str(getattr(l, "target", ""))
+            lnk
+            for lnk in collection.links
+            if lnk.rel == "child" and "s3://" in str(getattr(lnk, "target", ""))
         ]
         self.assertEqual(len(s3_child_links), 0)
 
