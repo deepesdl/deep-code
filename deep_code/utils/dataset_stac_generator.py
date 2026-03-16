@@ -11,10 +11,7 @@ import pandas as pd
 from pystac import Catalog, Collection, Extent, Item, Asset, Link, SpatialExtent, TemporalExtent
 
 from deep_code.constants import (
-    DEEPESDL_COLLECTION_SELF_HREF,
     OSC_THEME_SCHEME,
-    PRODUCT_BASE_CATALOG_SELF_HREF,
-    VARIABLE_BASE_CATALOG_SELF_HREF,
     ZARR_MEDIA_TYPE,
 )
 from deep_code.utils.helper import open_dataset
@@ -35,6 +32,7 @@ class OscDatasetStacGenerator:
         osc_themes: List of themes related to the dataset (e.g., ["climate"]).
         osc_missions: List of satellite missions associated with the dataset.
         cf_params: CF metadata parameters for the dataset.
+        osc_project: OSC project identifier (default: "deep-earth-system-data-lab").
     """
 
     def __init__(
@@ -51,12 +49,14 @@ class OscDatasetStacGenerator:
         osc_themes: list[str] | None = None,
         osc_missions: list[str] | None = None,
         cf_params: list[dict[str]] | None = None,
+        osc_project: str = "deep-earth-system-data-lab",
     ):
         self.dataset_id = dataset_id
         self.collection_id = collection_id
         self.workflow_id = workflow_id
         self.workflow_title = workflow_title
         self.license_type = license_type
+        self.osc_project = osc_project
         self.access_link = access_link or f"s3://deep-esdl-public/{dataset_id}"
         self.documentation_link = documentation_link
         self.osc_status = osc_status
@@ -330,6 +330,70 @@ class OscDatasetStacGenerator:
                 )
             )
 
+    def build_project_collection(self) -> dict:
+        """Build a minimal STAC Collection JSON dict for the OSC project.
+
+        Used when the project collection does not yet exist in the catalog.
+
+        Returns:
+            A plain dict representing the STAC Collection.
+        """
+        now_iso = datetime.now(timezone.utc).isoformat()
+        self_href = (
+            "https://esa-earthcode.github.io/open-science-catalog-metadata"
+            f"/projects/{self.osc_project}/collection.json"
+        )
+        return {
+            "type": "Collection",
+            "id": self.osc_project,
+            "stac_version": "1.0.0",
+            "stac_extensions": [],
+            "title": self.format_string(self.osc_project),
+            "description": self.format_string(self.osc_project),
+            "keywords": [],
+            "license": "various",
+            "extent": {
+                "spatial": {"bbox": [[-180, -90, 180, 90]]},
+                "temporal": {"interval": [[None, None]]},
+            },
+            "created": now_iso,
+            "updated": now_iso,
+            "links": [
+                {
+                    "rel": "self",
+                    "href": self_href,
+                    "type": "application/json",
+                },
+                {
+                    "rel": "root",
+                    "href": "../../catalog.json",
+                    "type": "application/json",
+                    "title": "Open Science Catalog",
+                },
+                {
+                    "rel": "parent",
+                    "href": "../catalog.json",
+                    "type": "application/json",
+                    "title": "Projects",
+                },
+            ],
+        }
+
+    def update_project_base_catalog(self, project_base_catalog_path) -> dict:
+        """Append a child link for the project to the projects base catalog."""
+        with open(project_base_catalog_path, encoding="utf-8") as f:
+            data = json.load(f)
+        self._append_link_if_absent(
+            data.setdefault("links", []),
+            {
+                "rel": "child",
+                "href": f"./{self.osc_project}/collection.json",
+                "type": "application/json",
+                "title": self.format_string(self.osc_project),
+            },
+        )
+        return data
+
     def update_deepesdl_collection(self, deepesdl_collection_full_path) -> dict:
         """Append child and theme-related links to the DeepESDL collection."""
         with open(deepesdl_collection_full_path, encoding="utf-8") as f:
@@ -546,7 +610,7 @@ class OscDatasetStacGenerator:
         # Add OSC extension metadata
         osc_extension = OscExtension.add_to(collection)
         # osc_project and osc_type are fixed constant values
-        osc_extension.osc_project = "deep-earth-system-data-lab"
+        osc_extension.osc_project = self.osc_project
         osc_extension.osc_type = "product"
         osc_extension.osc_status = self.osc_status
         osc_extension.osc_region = self.osc_region
@@ -623,9 +687,9 @@ class OscDatasetStacGenerator:
         collection.add_link(
             Link(
                 rel="related",
-                target="../../projects/deep-earth-system-data-lab/collection.json",
+                target=f"../../projects/{self.osc_project}/collection.json",
                 media_type="application/json",
-                title="Project: DeepESDL",
+                title=f"Project: {self.format_string(self.osc_project)}",
             )
         )
 

@@ -285,6 +285,80 @@ class TestPublisher(unittest.TestCase):
         # Two S3 files written: catalog.json + item.json
         self.assertEqual(mock_fsspec_open.call_count, 2)
 
+    # ------------------------------------------------------------------
+    # Project collection create-vs-update branching
+    # ------------------------------------------------------------------
+
+    @patch("deep_code.tools.publish.OscDatasetStacGenerator")
+    def test_publish_dataset_creates_project_collection_when_missing(
+        self, MockGenerator
+    ):
+        """When the project collection does not exist, build_project_collection is
+        called and projects/catalog.json is updated via _update_and_add_to_file_dict."""
+        mock_gen = MagicMock()
+        mock_gen.osc_project = "test-project"
+        mock_gen.get_variable_ids.return_value = []
+        mock_gen.build_dataset_stac_collection.return_value.to_dict.return_value = {}
+        mock_gen.build_project_collection.return_value = {
+            "type": "Collection",
+            "id": "test-project",
+        }
+        MockGenerator.return_value = mock_gen
+
+        self.publisher.dataset_config = {
+            "dataset_id": "test-dataset",
+            "collection_id": "test-collection",
+            "license_type": "CC-BY-4.0",
+        }
+        self.publisher.collection_id = "test-collection"
+
+        # Project collection is missing; all other file_exists calls return True
+        self.publisher.gh_publisher.github_automation.file_exists.return_value = False
+
+        with patch.object(self.publisher, "_update_and_add_to_file_dict") as mock_update, \
+                patch.object(self.publisher, "_update_variable_catalogs"):
+            file_dict = self.publisher.publish_dataset(write_to_file=False)
+
+        mock_gen.build_project_collection.assert_called_once()
+        self.assertIn("projects/test-project/collection.json", file_dict)
+        mock_gen.update_deepesdl_collection.assert_not_called()
+
+        # projects/catalog.json must be updated
+        updated_paths = [call.args[1] for call in mock_update.call_args_list]
+        self.assertIn("projects/catalog.json", updated_paths)
+
+    @patch("deep_code.tools.publish.OscDatasetStacGenerator")
+    def test_publish_dataset_updates_project_collection_when_exists(
+        self, MockGenerator
+    ):
+        """When the project collection exists, update_deepesdl_collection is called
+        via _update_and_add_to_file_dict and build_project_collection is not called."""
+        mock_gen = MagicMock()
+        mock_gen.osc_project = "test-project"
+        mock_gen.get_variable_ids.return_value = []
+        mock_gen.build_dataset_stac_collection.return_value.to_dict.return_value = {}
+        MockGenerator.return_value = mock_gen
+
+        self.publisher.dataset_config = {
+            "dataset_id": "test-dataset",
+            "collection_id": "test-collection",
+            "license_type": "CC-BY-4.0",
+        }
+        self.publisher.collection_id = "test-collection"
+
+        # Project collection already exists
+        self.publisher.gh_publisher.github_automation.file_exists.return_value = True
+
+        with patch.object(self.publisher, "_update_and_add_to_file_dict") as mock_update, \
+                patch.object(self.publisher, "_update_variable_catalogs"):
+            self.publisher.publish_dataset(write_to_file=False)
+
+        mock_gen.build_project_collection.assert_not_called()
+
+        # update_deepesdl_collection passed to _update_and_add_to_file_dict
+        update_methods = [call.args[2] for call in mock_update.call_args_list]
+        self.assertIn(mock_gen.update_deepesdl_collection, update_methods)
+
     @patch.object(Publisher, "publish_dataset", return_value={"github_file.json": {}})
     def test_publish_skips_zarr_stac_when_not_configured(self, mock_publish_ds):
         # No stac_catalog_s3_root in config

@@ -214,6 +214,145 @@ class TestOSCProductSTACGenerator(unittest.TestCase):
         # self link must remain in place
         self.assertEqual(result["links"][0]["rel"], "self")
 
+    # ------------------------------------------------------------------
+    # osc_project parameter
+    # ------------------------------------------------------------------
+
+    def test_osc_project_default(self):
+        """Default osc_project is 'deep-earth-system-data-lab'."""
+        self.assertEqual(self.generator.osc_project, "deep-earth-system-data-lab")
+
+    @patch("deep_code.utils.dataset_stac_generator.open_dataset")
+    def test_osc_project_custom(self, mock_open_ds):
+        """A custom osc_project is stored on the generator."""
+        mock_open_ds.return_value = self.mock_dataset
+        gen = OscDatasetStacGenerator(
+            dataset_id="mock-dataset-id",
+            collection_id="mock-collection-id",
+            workflow_id="dummy",
+            workflow_title="test",
+            license_type="proprietary",
+            osc_project="my-custom-project",
+        )
+        self.assertEqual(gen.osc_project, "my-custom-project")
+
+    def test_build_dataset_stac_collection_osc_project_in_related_link(self):
+        """The project-related link in the collection uses the configured osc_project."""
+        collection = self.generator.build_dataset_stac_collection(mode="dataset")
+        project_links = [
+            lnk
+            for lnk in collection.links
+            if lnk.rel == "related" and "projects" in str(lnk.target)
+        ]
+        self.assertEqual(len(project_links), 1)
+        self.assertIn("deep-earth-system-data-lab", project_links[0].target)
+
+    # ------------------------------------------------------------------
+    # build_project_collection
+    # ------------------------------------------------------------------
+
+    def test_build_project_collection_structure(self):
+        """build_project_collection returns a minimal valid STAC Collection dict."""
+        result = self.generator.build_project_collection()
+
+        self.assertIsInstance(result, dict)
+        self.assertEqual(result["type"], "Collection")
+        self.assertEqual(result["id"], "deep-earth-system-data-lab")
+        self.assertEqual(result["stac_version"], "1.0.0")
+        self.assertIn("extent", result)
+
+        rels = [lnk["rel"] for lnk in result["links"]]
+        self.assertIn("self", rels)
+        self.assertIn("root", rels)
+        self.assertIn("parent", rels)
+
+        self_link = next(lnk for lnk in result["links"] if lnk["rel"] == "self")
+        self.assertIn("deep-earth-system-data-lab", self_link["href"])
+        self.assertTrue(self_link["href"].endswith("collection.json"))
+
+    @patch("deep_code.utils.dataset_stac_generator.open_dataset")
+    def test_build_project_collection_custom_project(self, mock_open_ds):
+        """build_project_collection reflects a custom osc_project."""
+        mock_open_ds.return_value = self.mock_dataset
+        gen = OscDatasetStacGenerator(
+            dataset_id="mock-dataset-id",
+            collection_id="mock-collection-id",
+            workflow_id="dummy",
+            workflow_title="test",
+            license_type="proprietary",
+            osc_project="my-project",
+        )
+        result = gen.build_project_collection()
+
+        self.assertEqual(result["id"], "my-project")
+        self_link = next(lnk for lnk in result["links"] if lnk["rel"] == "self")
+        self.assertIn("my-project", self_link["href"])
+
+    # ------------------------------------------------------------------
+    # update_project_base_catalog
+    # ------------------------------------------------------------------
+
+    def test_update_project_base_catalog(self):
+        """Child link for the project is appended to the projects base catalog."""
+        import json as _json, os, tempfile
+
+        base = {
+            "type": "Catalog",
+            "id": "projects",
+            "stac_version": "1.0.0",
+            "description": "Projects",
+            "links": [
+                {
+                    "rel": "self",
+                    "href": "https://esa-earthcode.github.io/open-science-catalog-metadata/projects/catalog.json",
+                    "type": "application/json",
+                }
+            ],
+        }
+        with tempfile.NamedTemporaryFile(mode="w", suffix=".json", delete=False) as tmp:
+            _json.dump(base, tmp)
+            tmp_path = tmp.name
+
+        result = self.generator.update_project_base_catalog(tmp_path)
+        os.unlink(tmp_path)
+
+        self.assertIsInstance(result, dict)
+        child_links = [lnk for lnk in result["links"] if lnk["rel"] == "child"]
+        self.assertEqual(len(child_links), 1)
+        self.assertIn("deep-earth-system-data-lab", child_links[0]["href"])
+        self.assertTrue(child_links[0]["href"].endswith("collection.json"))
+        # existing self link is preserved
+        self.assertEqual(result["links"][0]["rel"], "self")
+
+    def test_update_project_base_catalog_no_duplicate(self):
+        """Calling update_project_base_catalog when the child link already exists
+        does not produce a duplicate."""
+        import json as _json, os, tempfile
+
+        base = {
+            "type": "Catalog",
+            "id": "projects",
+            "stac_version": "1.0.0",
+            "description": "Projects",
+            "links": [
+                {
+                    "rel": "child",
+                    "href": "./deep-earth-system-data-lab/collection.json",
+                    "type": "application/json",
+                    "title": "Deep Earth System Data Lab",
+                }
+            ],
+        }
+        with tempfile.NamedTemporaryFile(mode="w", suffix=".json", delete=False) as tmp:
+            _json.dump(base, tmp)
+            tmp_path = tmp.name
+
+        result = self.generator.update_project_base_catalog(tmp_path)
+        os.unlink(tmp_path)
+
+        child_links = [lnk for lnk in result["links"] if lnk["rel"] == "child"]
+        self.assertEqual(len(child_links), 1)
+
     def test_update_deepesdl_collection(self):
         """Child and theme-related links are appended; existing links kept."""
         base = {

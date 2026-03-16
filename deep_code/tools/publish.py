@@ -318,11 +318,21 @@ class Publisher:
             file_dict, product_catalog_path, generator.update_product_base_catalog
         )
 
-        # Update DeepESDL collection
-        deepesdl_collection_path = "projects/deep-earth-system-data-lab/collection.json"
-        self._update_and_add_to_file_dict(
-            file_dict, deepesdl_collection_path, generator.update_deepesdl_collection
-        )
+        # Update or create project collection
+        project_collection_path = f"projects/{generator.osc_project}/collection.json"
+        if not self.gh_publisher.github_automation.file_exists(project_collection_path):
+            logger.info(
+                f"Project collection for {generator.osc_project} does not exist. Creating..."
+            )
+            file_dict[project_collection_path] = generator.build_project_collection()
+            # Add child link in the projects base catalog
+            self._update_and_add_to_file_dict(
+                file_dict, "projects/catalog.json", generator.update_project_base_catalog
+            )
+        else:
+            self._update_and_add_to_file_dict(
+                file_dict, project_collection_path, generator.update_deepesdl_collection
+            )
 
         # Write to files if testing
         if write_to_file:
