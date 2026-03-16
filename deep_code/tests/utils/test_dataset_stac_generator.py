@@ -156,7 +156,8 @@ class TestOSCProductSTACGenerator(unittest.TestCase):
                 }
             ],
         }
-        import tempfile, json as _json
+        import tempfile
+        import json as _json
 
         with tempfile.NamedTemporaryFile(
             mode="w", suffix=".json", delete=False
@@ -194,7 +195,9 @@ class TestOSCProductSTACGenerator(unittest.TestCase):
                 }
             ],
         }
-        import tempfile, json as _json, os
+        import tempfile
+        import json as _json
+        import os
 
         with tempfile.NamedTemporaryFile(
             mode="w", suffix=".json", delete=False
@@ -294,7 +297,9 @@ class TestOSCProductSTACGenerator(unittest.TestCase):
 
     def test_update_project_base_catalog(self):
         """Child link for the project is appended to the projects base catalog."""
-        import json as _json, os, tempfile
+        import json as _json
+        import os
+        import tempfile
 
         base = {
             "type": "Catalog",
@@ -327,7 +332,9 @@ class TestOSCProductSTACGenerator(unittest.TestCase):
     def test_update_project_base_catalog_no_duplicate(self):
         """Calling update_project_base_catalog when the child link already exists
         does not produce a duplicate."""
-        import json as _json, os, tempfile
+        import json as _json
+        import os
+        import tempfile
 
         base = {
             "type": "Catalog",
@@ -369,7 +376,9 @@ class TestOSCProductSTACGenerator(unittest.TestCase):
                 }
             ],
         }
-        import tempfile, json as _json, os
+        import tempfile
+        import json as _json
+        import os
 
         with tempfile.NamedTemporaryFile(
             mode="w", suffix=".json", delete=False
