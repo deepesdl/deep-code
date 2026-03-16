@@ -61,39 +61,7 @@
 
 ## Changes in 0.1.8 (in Development)
 
-- Fixed a crash in workflow publishing when `jupyter_notebook_url` is not provided in
-  the workflow config. `jupyter_kernel_info`, `application_link`, and `jnb_open_link`
-  are now only computed when a notebook URL is present, making the field truly optional.
-
-- Added STAC Item and S3-hosted STAC Catalog generation for Zarr datasets, enabling
-  a richer `STAC Collection → STAC Catalog (S3) → STAC Item` hierarchy alongside the
-  existing OSC metadata.
-  - A single STAC Item is generated per Zarr store, covering the full spatiotemporal
-    extent with two assets: `zarr-data` (`application/vnd+zarr`) and
-    `zarr-consolidated-metadata` (`.zmetadata`).
-  - The S3 STAC catalog and item are written directly to S3 via `fsspec`/`s3fs`
-    independently of the GitHub PR.
-  - The OSC STAC Collection gains a `via` link pointing to the S3 catalog root,
-    connecting the two levels of the hierarchy. (`child` is intentionally avoided
-    because the OSC validator requires every `child` link to resolve to a file inside
-    the metadata repository.)
-  - Opt-in via the new `stac_catalog_s3_root` field in `dataset_config.yaml`
-    (e.g. `stac_catalog_s3_root: s3://my-bucket/stac/my-collection/`).
-  - S3 write credentials are resolved from `S3_USER_STORAGE_KEY`/`S3_USER_STORAGE_SECRET`,
-    `AWS_ACCESS_KEY_ID`/`AWS_SECRET_ACCESS_KEY`, or the boto3 default chain
-    (IAM role, `~/.aws/credentials`) — no secrets in config files.
-
-- Made `osc_project` a configurable parameter on `OscDatasetStacGenerator` (default:
-  `"deep-earth-system-data-lab"`), replacing the previously hardcoded value.
-  - The project identifier is now used dynamically when setting `osc:project` on the
-    OSC extension, generating the `related` link to the project collection, and
-    resolving the project collection file path during publishing.
-
-- Publisher now creates the OSC project collection automatically when it does not yet
-  exist in the catalog repository, instead of failing or silently skipping.
-  - A minimal but valid STAC Collection is generated for the project with `self`,
-    `root`, and `parent` links.
-  - A `child` link for the new project is appended to `projects/catalog.json` so the
-    project is reachable from the catalog root.
-  - If the project collection already exists, the existing update path (appending
-    product `child` and theme `related` links) is used unchanged.
+- Fixed a crash in workflow publishing when `jupyter_notebook_url` is absent in the config.
+- Added STAC Item and S3-hosted STAC Catalog generation for Zarr datasets (opt-in via `stac_catalog_s3_root` in dataset config).
+- `osc_project` is now a configurable parameter on `OscDatasetStacGenerator` (default: `"deep-earth-system-data-lab"`).
+- Publisher automatically creates the OSC project collection and registers it in `projects/catalog.json` when it does not yet exist.
