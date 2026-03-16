@@ -537,16 +537,8 @@ class Publisher:
            JupyterHub pod, ``~/.aws/credentials`` profile, etc.
            An empty ``storage_options`` dict lets ``s3fs`` fall through
            to this chain automatically; no secrets are required in code.
-
-        .. note::
-           **JupyterHub best practice**: prefer IAM roles (instance / pod
-           identity) over env-var credentials.  IAM roles are scoped to the
-           specific S3 prefix the user owns, require no secret rotation, and
-           are never visible to other users on the hub.  Per-user env vars
-           set by the JupyterHub spawner (not server-wide) are an acceptable
-           fallback — they are private to each user's server process.
-           Avoid hard-coding credentials in YAML config files.
         """
+
         key = os.environ.get("S3_USER_STORAGE_KEY") or os.environ.get(
             "AWS_ACCESS_KEY_ID"
         )
