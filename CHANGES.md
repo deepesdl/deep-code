@@ -82,3 +82,18 @@
   - S3 write credentials are resolved from `S3_USER_STORAGE_KEY`/`S3_USER_STORAGE_SECRET`,
     `AWS_ACCESS_KEY_ID`/`AWS_SECRET_ACCESS_KEY`, or the boto3 default chain
     (IAM role, `~/.aws/credentials`) — no secrets in config files.
+
+- Made `osc_project` a configurable parameter on `OscDatasetStacGenerator` (default:
+  `"deep-earth-system-data-lab"`), replacing the previously hardcoded value.
+  - The project identifier is now used dynamically when setting `osc:project` on the
+    OSC extension, generating the `related` link to the project collection, and
+    resolving the project collection file path during publishing.
+
+- Publisher now creates the OSC project collection automatically when it does not yet
+  exist in the catalog repository, instead of failing or silently skipping.
+  - A minimal but valid STAC Collection is generated for the project with `self`,
+    `root`, and `parent` links.
+  - A `child` link for the new project is appended to `projects/catalog.json` so the
+    project is reachable from the catalog root.
+  - If the project collection already exists, the existing update path (appending
+    product `child` and theme `related` links) is used unchanged.
