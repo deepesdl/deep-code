@@ -1,5 +1,18 @@
 # Configuration
 
+The quickest way to get started is to generate starter templates with the CLI:
+
+```bash
+deep-code generate-config              # writes to current directory
+deep-code generate-config -o ./configs # custom output folder
+```
+
+This creates `dataset_config.yaml` and `workflow_config.yaml` with all supported fields and placeholder values. Fill them in, then run [`deep-code publish`](cli.md#publish-metadata).
+
+The sections below document every field in those templates.
+
+---
+
 ## Dataset config (YAML)
 ```yaml
 # Required
@@ -80,6 +93,7 @@ properties:
   keywords: ["Earth Science"]
   themes: ["cryosphere"]
   license: proprietary
+  # jupyter_kernel_info is optional — only published when jupyter_notebook_url is set
   jupyter_kernel_info:
     name: deepesdl-xcube-1.8.3
     python_version: 3.11
@@ -111,8 +125,8 @@ links:
 | `properties.keywords` | No | List of keyword strings. |
 | `properties.themes` | No | List of OSC theme slugs. |
 | `properties.license` | No | License identifier (e.g. `proprietary`, `CC-BY-4.0`). |
-| `properties.jupyter_kernel_info` | No | Kernel name, Python version, and environment file URL. |
 | `jupyter_notebook_url` | No | Link to the source notebook on GitHub. When omitted, kernel and application links are skipped. |
+| `properties.jupyter_kernel_info` | No | Kernel name, Python version, and environment file URL. Only published when `jupyter_notebook_url` is set. |
 | `contact` | No | List of contact objects with `name`, `organization`, and `links`. |
 | `links` | No | Additional OGC API record links (e.g. `related`, `describedby`). |
 
