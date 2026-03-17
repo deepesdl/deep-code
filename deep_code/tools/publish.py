@@ -529,8 +529,9 @@ class Publisher:
 
         Priority (first match wins):
 
-        1. xcube user-storage env vars — ``S3_USER_STORAGE_KEY`` /
-           ``S3_USER_STORAGE_SECRET`` (already used by :func:`open_dataset`).
+        1. STAC-specific env vars — ``STAC_S3_KEY`` / ``STAC_S3_SECRET``.
+           Use these to target any S3 bucket independently of the xcube
+           user-storage bucket.
         2. Standard AWS env vars — ``AWS_ACCESS_KEY_ID`` /
            ``AWS_SECRET_ACCESS_KEY``.
         3. boto3 default credential chain — IAM role attached to the
@@ -539,10 +540,8 @@ class Publisher:
            to this chain automatically; no secrets are required in code.
         """
 
-        key = os.environ.get("S3_USER_STORAGE_KEY") or os.environ.get(
-            "AWS_ACCESS_KEY_ID"
-        )
-        secret = os.environ.get("S3_USER_STORAGE_SECRET") or os.environ.get(
+        key = os.environ.get("STAC_S3_KEY") or os.environ.get("AWS_ACCESS_KEY_ID")
+        secret = os.environ.get("STAC_S3_SECRET") or os.environ.get(
             "AWS_SECRET_ACCESS_KEY"
         )
         # s3_additional_kwargs={"ACL": ""} suppresses the ACL header that s3fs

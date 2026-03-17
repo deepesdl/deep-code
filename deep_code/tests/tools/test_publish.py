@@ -179,17 +179,17 @@ class TestPublisher(unittest.TestCase):
     # S3 credential resolution
     # ------------------------------------------------------------------
 
-    def test_get_stac_s3_storage_options_prefers_xcube_env_vars(self):
+    def test_get_stac_s3_storage_options_prefers_stac_env_vars(self):
         env = {
-            "S3_USER_STORAGE_KEY": "xcube-key",
-            "S3_USER_STORAGE_SECRET": "xcube-secret",
+            "STAC_S3_KEY": "stac-key",
+            "STAC_S3_SECRET": "stac-secret",
             "AWS_ACCESS_KEY_ID": "aws-key",
             "AWS_SECRET_ACCESS_KEY": "aws-secret",
         }
         with patch.dict(os.environ, env):
             opts = self.publisher._get_stac_s3_storage_options()
-        self.assertEqual(opts["key"], "xcube-key")
-        self.assertEqual(opts["secret"], "xcube-secret")
+        self.assertEqual(opts["key"], "stac-key")
+        self.assertEqual(opts["secret"], "stac-secret")
         self.assertEqual(opts["s3_additional_kwargs"], {"ACL": ""})
 
     def test_get_stac_s3_storage_options_falls_back_to_aws_env_vars(self):
@@ -197,7 +197,7 @@ class TestPublisher(unittest.TestCase):
         patched_env = {
             k: v
             for k, v in os.environ.items()
-            if k not in ("S3_USER_STORAGE_KEY", "S3_USER_STORAGE_SECRET")
+            if k not in ("STAC_S3_KEY", "STAC_S3_SECRET")
         }
         patched_env.update(env)
         with patch.dict(os.environ, patched_env, clear=True):
@@ -212,8 +212,8 @@ class TestPublisher(unittest.TestCase):
             for k, v in os.environ.items()
             if k
             not in (
-                "S3_USER_STORAGE_KEY",
-                "S3_USER_STORAGE_SECRET",
+                "STAC_S3_KEY",
+                "STAC_S3_SECRET",
                 "AWS_ACCESS_KEY_ID",
                 "AWS_SECRET_ACCESS_KEY",
             )

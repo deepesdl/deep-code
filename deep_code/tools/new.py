@@ -86,7 +86,7 @@ class TemplateGenerator:
             "#   {stac_catalog_s3_root}/{collection_id}/item.json  (STAC Item for the whole Zarr)\n"
             "# and adds a 'child' link from the OSC Collection to this S3 catalog.\n"
             "# S3 write credentials are resolved in order from:\n"
-            "#   1. S3_USER_STORAGE_KEY / S3_USER_STORAGE_SECRET env vars\n"
+            "#   1. STAC_S3_KEY / STAC_S3_SECRET env vars (STAC-specific, any bucket)\n"
             "#   2. AWS_ACCESS_KEY_ID / AWS_SECRET_ACCESS_KEY env vars\n"
             "#   3. boto3 default chain (IAM role, ~/.aws/credentials)\n"
             "# stac_catalog_s3_root: s3://[YOUR-BUCKET]/stac/[collection-id]/\n"
