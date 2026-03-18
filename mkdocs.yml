@@ -1,0 +1,49 @@
+site_name: deep-code
+site_description: Publish DeepESDL datasets and workflows to the EarthCODE Open Science Catalog.
+site_url: https://deepesdl.github.io/deep-code/
+repo_url: https://github.com/deepesdl/deep-code
+repo_name: deepesdl/deep-code
+
+copyright: Copyright &copy; 2025 Brockmann Consult
+
+theme:
+  name: material
+  palette:
+    # Palette toggle for light mode
+    - scheme: default
+      primary: blue grey
+      toggle:
+        icon: material/brightness-7
+        name: Switch to dark mode
+    # Palette toggle for dark mode
+    - scheme: slate
+      primary: blue grey
+      toggle:
+        icon: material/brightness-4
+        name: Switch to light mode
+
+markdown_extensions:
+  - attr_list
+  - admonition
+  - pymdownx.details
+  - pymdownx.superfences:
+      custom_fences:
+        - name: mermaid
+          class: mermaid
+          format: !!python/name:pymdownx.superfences.fence_code_format
+
+extra:
+  social:
+    - icon: fontawesome/brands/github
+      link: https://github.com/deepesdl/deep-code
+    - icon: fontawesome/brands/python
+      link: https://pypi.org/project/deep-code/
+nav:
+  - Home: index.md
+  - Getting Started: getting-started.md
+  - Configuration: configuration.md
+  - CLI: cli.md
+  - Python API: python-api.md
+  - Examples: examples.md
+  - About: about.md
+docs_dir: docs
