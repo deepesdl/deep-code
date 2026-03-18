@@ -59,7 +59,7 @@
 
 - Fixed a bug in build_child_link_to_related_experiment for the publish mode `"all"`.
 
-## Changes in 0.1.8 (in Development)
+## Changes in 0.1.8
 
 - Fixed a crash in workflow publishing when `jupyter_notebook_url` is absent in the config.
 - Added STAC Item and S3-hosted STAC Catalog generation for Zarr datasets (opt-in via `stac_catalog_s3_root` in dataset config).
