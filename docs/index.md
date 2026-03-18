@@ -6,6 +6,7 @@
 - Generate starter dataset and workflow YAML templates.
 - Publish dataset collections, workflows, and experiments via a single command.
 - Build STAC collections and catalogs for Datasets and their corresponding variables automatically from the dataset metadata.
+- Generate STAC catalog and item for the product (Zarr store) and publish them to S3.
 - Build OGC API records for Workflows and Experiments from your configs.
 - Flexible publishling targets i.e production/staging/testing EarthCODE metadata repositories with GitHub automation.
 
