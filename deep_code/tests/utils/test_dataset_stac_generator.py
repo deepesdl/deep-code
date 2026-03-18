@@ -165,11 +165,12 @@ class TestOSCProductSTACGenerator(unittest.TestCase):
             _json.dump(base, tmp)
             tmp_path = tmp.name
 
-        result = self.generator.update_product_base_catalog(tmp_path)
-
         import os
 
-        os.unlink(tmp_path)
+        try:
+            result = self.generator.update_product_base_catalog(tmp_path)
+        finally:
+            os.unlink(tmp_path)
 
         self.assertIsInstance(result, dict)
         rels = [lnk["rel"] for lnk in result["links"]]
@@ -206,8 +207,10 @@ class TestOSCProductSTACGenerator(unittest.TestCase):
             tmp_path = tmp.name
 
         vars_ = ["v1", "v2"]
-        result = self.generator.update_variable_base_catalog(tmp_path, vars_)
-        os.unlink(tmp_path)
+        try:
+            result = self.generator.update_variable_base_catalog(tmp_path, vars_)
+        finally:
+            os.unlink(tmp_path)
 
         self.assertIsInstance(result, dict)
         child_hrefs = [
@@ -318,8 +321,10 @@ class TestOSCProductSTACGenerator(unittest.TestCase):
             _json.dump(base, tmp)
             tmp_path = tmp.name
 
-        result = self.generator.update_project_base_catalog(tmp_path)
-        os.unlink(tmp_path)
+        try:
+            result = self.generator.update_project_base_catalog(tmp_path)
+        finally:
+            os.unlink(tmp_path)
 
         self.assertIsInstance(result, dict)
         child_links = [lnk for lnk in result["links"] if lnk["rel"] == "child"]
@@ -354,8 +359,10 @@ class TestOSCProductSTACGenerator(unittest.TestCase):
             _json.dump(base, tmp)
             tmp_path = tmp.name
 
-        result = self.generator.update_project_base_catalog(tmp_path)
-        os.unlink(tmp_path)
+        try:
+            result = self.generator.update_project_base_catalog(tmp_path)
+        finally:
+            os.unlink(tmp_path)
 
         child_links = [lnk for lnk in result["links"] if lnk["rel"] == "child"]
         self.assertEqual(len(child_links), 1)
