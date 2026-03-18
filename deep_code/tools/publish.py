@@ -590,7 +590,7 @@ class Publisher:
             # Publish STAC catalog + item to S3 when stac_catalog_s3_root is configured.
             # This is independent of the GitHub PR and happens immediately.
             stac_catalog_s3_root = self.dataset_config.get("stac_catalog_s3_root")
-            if stac_catalog_s3_root and hasattr(self, "_last_generator"):
+            if stac_catalog_s3_root:
                 logger.info(
                     f"Publishing STAC catalog to S3: {stac_catalog_s3_root}"
                 )
