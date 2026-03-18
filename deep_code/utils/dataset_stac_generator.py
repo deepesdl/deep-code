@@ -3,17 +3,16 @@
 # Permissions are hereby granted under the terms of the MIT License:
 # https://opensource.org/licenses/MIT.
 
+import json
 import logging
 from datetime import datetime, timezone
 
 import pandas as pd
-from pystac import Catalog, Collection, Extent, Link, SpatialExtent, TemporalExtent
+from pystac import Catalog, Collection, Extent, Item, Asset, Link, SpatialExtent, TemporalExtent
 
 from deep_code.constants import (
-    DEEPESDL_COLLECTION_SELF_HREF,
     OSC_THEME_SCHEME,
-    PRODUCT_BASE_CATALOG_SELF_HREF,
-    VARIABLE_BASE_CATALOG_SELF_HREF,
+    ZARR_MEDIA_TYPE,
 )
 from deep_code.utils.helper import open_dataset
 from deep_code.utils.ogc_api_record import Theme, ThemeConcept
@@ -33,6 +32,7 @@ class OscDatasetStacGenerator:
         osc_themes: List of themes related to the dataset (e.g., ["climate"]).
         osc_missions: List of satellite missions associated with the dataset.
         cf_params: CF metadata parameters for the dataset.
+        osc_project: OSC project identifier (default: "deep-earth-system-data-lab").
     """
 
     def __init__(
@@ -49,12 +49,14 @@ class OscDatasetStacGenerator:
         osc_themes: list[str] | None = None,
         osc_missions: list[str] | None = None,
         cf_params: list[dict[str]] | None = None,
+        osc_project: str = "deep-earth-system-data-lab",
     ):
         self.dataset_id = dataset_id
         self.collection_id = collection_id
         self.workflow_id = workflow_id
         self.workflow_title = workflow_title
         self.license_type = license_type
+        self.osc_project = osc_project
         self.access_link = access_link or f"s3://deep-esdl-public/{dataset_id}"
         self.documentation_link = documentation_link
         self.osc_status = osc_status
@@ -271,38 +273,50 @@ class OscDatasetStacGenerator:
 
         return var_catalog
 
-    def update_product_base_catalog(self, product_catalog_path) -> Catalog:
-        """Link product to base product catalog"""
-        product_base_catalog = Catalog.from_file(product_catalog_path)
-        product_base_catalog.add_link(
-            Link(
-                rel="child",
-                target=f"./{self.collection_id}/collection.json",
-                media_type="application/json",
-                title=self.collection_id,
-            )
+    @staticmethod
+    def _append_link_if_absent(links: list, new_link: dict) -> None:
+        """Append *new_link* to *links* only when no existing entry has the
+        same ``rel`` and ``href`` (prevents duplicates on repeated publishes)."""
+        if not any(
+            lnk.get("rel") == new_link["rel"] and lnk.get("href") == new_link["href"]
+            for lnk in links
+        ):
+            links.append(new_link)
+
+    def update_product_base_catalog(self, product_catalog_path) -> dict:
+        """Append a child link to the products base catalog and return the
+        modified JSON dict without touching any existing links."""
+        with open(product_catalog_path, encoding="utf-8") as f:
+            data = json.load(f)
+        self._append_link_if_absent(
+            data.setdefault("links", []),
+            {
+                "rel": "child",
+                "href": f"./{self.collection_id}/collection.json",
+                "type": "application/json",
+                "title": self.collection_id,
+            },
         )
-        # 'self' link: the direct URL where this JSON is hosted
-        product_base_catalog.set_self_href(PRODUCT_BASE_CATALOG_SELF_HREF)
-        return product_base_catalog
+        return data
 
     def update_variable_base_catalog(
         self, variable_base_catalog_path, variable_ids
-    ) -> (Catalog):
-        """Link product to base product catalog"""
-        variable_base_catalog = Catalog.from_file(variable_base_catalog_path)
+    ) -> dict:
+        """Append child links for each variable to the variables base catalog."""
+        with open(variable_base_catalog_path, encoding="utf-8") as f:
+            data = json.load(f)
+        links = data.setdefault("links", [])
         for var_id in variable_ids:
-            variable_base_catalog.add_link(
-                Link(
-                    rel="child",
-                    target=f"./{var_id}/catalog.json",
-                    media_type="application/json",
-                    title=self.format_string(var_id),
-                )
+            self._append_link_if_absent(
+                links,
+                {
+                    "rel": "child",
+                    "href": f"./{var_id}/catalog.json",
+                    "type": "application/json",
+                    "title": self.format_string(var_id),
+                },
             )
-        # 'self' link: the direct URL where this JSON is hosted
-        variable_base_catalog.set_self_href(VARIABLE_BASE_CATALOG_SELF_HREF)
-        return variable_base_catalog
+        return data
 
     def add_themes_as_related_links_var_catalog(self, var_catalog):
         """Add themes as related links to variable catalog"""
@@ -316,52 +330,122 @@ class OscDatasetStacGenerator:
                 )
             )
 
-    def update_deepesdl_collection(self, deepesdl_collection_full_path):
-        deepesdl_collection = Collection.from_file(deepesdl_collection_full_path)
-        deepesdl_collection.add_link(
-            Link(
-                rel="child",
-                target=f"../../products/{self.collection_id}/collection.json",
-                media_type="application/json",
-                title=self.collection_id,
-            )
-        )
-        # add themes to deepesdl
-        for theme in self.osc_themes:
-            deepesdl_collection.add_link(
-                Link(
-                    rel="related",
-                    target=f"../../themes/{theme}/catalog.json",
-                    media_type="application/json",
-                    title=f"Theme: {self.format_string(theme)}",
-                )
-            )
-        deepesdl_collection.set_self_href(DEEPESDL_COLLECTION_SELF_HREF)
-        return deepesdl_collection
+    def build_project_collection(self) -> dict:
+        """Build a minimal STAC Collection JSON dict for the OSC project.
 
-    def update_existing_variable_catalog(self, var_file_path, var_id) -> Catalog:
-        existing_catalog = Catalog.from_file(var_file_path)
+        Used when the project collection does not yet exist in the catalog.
+
+        Returns:
+            A plain dict representing the STAC Collection.
+        """
         now_iso = datetime.now(timezone.utc).isoformat()
-        existing_catalog.extra_fields["updated"] = now_iso
-
-        # add 'child' link as the product
-        existing_catalog.add_link(
-            Link(
-                rel="child",
-                target=f"../../products/{self.collection_id}/collection.json",
-                media_type="application/json",
-                title=self.collection_id,
-            )
-        )
-        self.add_themes_as_related_links_var_catalog(existing_catalog)
         self_href = (
-            f"https://esa-earthcode.github.io/open-science-catalog-metadata/variables"
-            f"/{var_id}/catalog.json"
+            "https://esa-earthcode.github.io/open-science-catalog-metadata"
+            f"/projects/{self.osc_project}/collection.json"
         )
-        # 'self' link: the direct URL where this JSON is hosted
-        existing_catalog.set_self_href(self_href)
+        return {
+            "type": "Collection",
+            "id": self.osc_project,
+            "stac_version": "1.0.0",
+            "stac_extensions": [],
+            "title": self.format_string(self.osc_project),
+            "description": self.format_string(self.osc_project),
+            "keywords": [],
+            "license": "various",
+            "extent": {
+                "spatial": {"bbox": [[-180, -90, 180, 90]]},
+                "temporal": {"interval": [[None, None]]},
+            },
+            "created": now_iso,
+            "updated": now_iso,
+            "links": [
+                {
+                    "rel": "self",
+                    "href": self_href,
+                    "type": "application/json",
+                },
+                {
+                    "rel": "root",
+                    "href": "../../catalog.json",
+                    "type": "application/json",
+                    "title": "Open Science Catalog",
+                },
+                {
+                    "rel": "parent",
+                    "href": "../catalog.json",
+                    "type": "application/json",
+                    "title": "Projects",
+                },
+            ],
+        }
 
-        return existing_catalog
+    def update_project_base_catalog(self, project_base_catalog_path) -> dict:
+        """Append a child link for the project to the projects base catalog."""
+        with open(project_base_catalog_path, encoding="utf-8") as f:
+            data = json.load(f)
+        self._append_link_if_absent(
+            data.setdefault("links", []),
+            {
+                "rel": "child",
+                "href": f"./{self.osc_project}/collection.json",
+                "type": "application/json",
+                "title": self.format_string(self.osc_project),
+            },
+        )
+        return data
+
+    def update_deepesdl_collection(self, deepesdl_collection_full_path) -> dict:
+        """Append child and theme-related links to the DeepESDL collection."""
+        with open(deepesdl_collection_full_path, encoding="utf-8") as f:
+            data = json.load(f)
+        links = data.setdefault("links", [])
+        self._append_link_if_absent(
+            links,
+            {
+                "rel": "child",
+                "href": f"../../products/{self.collection_id}/collection.json",
+                "type": "application/json",
+                "title": self.collection_id,
+            },
+        )
+        for theme in self.osc_themes:
+            self._append_link_if_absent(
+                links,
+                {
+                    "rel": "related",
+                    "href": f"../../themes/{theme}/catalog.json",
+                    "type": "application/json",
+                    "title": f"Theme: {self.format_string(theme)}",
+                },
+            )
+        return data
+
+    def update_existing_variable_catalog(self, var_file_path, var_id) -> dict:
+        """Append child and theme links to an existing variable catalog."""
+        with open(var_file_path, encoding="utf-8") as f:
+            data = json.load(f)
+        data["updated"] = datetime.now(timezone.utc).isoformat()
+        links = data.setdefault("links", [])
+        self._append_link_if_absent(
+            links,
+            {
+                "rel": "child",
+                "href": f"../../products/{self.collection_id}/collection.json",
+                "type": "application/json",
+                "title": self.collection_id,
+            },
+        )
+        for theme in self.osc_themes:
+            self._append_link_if_absent(
+                links,
+                {
+                    "rel": "related",
+                    "href": f"../../themes/{theme}/catalog.json",
+                    "type": "application/json",
+                    "title": f"Theme: {self.format_string(theme)}",
+                },
+            )
+        return data
 
     @staticmethod
     def format_string(s: str) -> str:
@@ -377,7 +461,132 @@ class OscDatasetStacGenerator:
         concepts = [ThemeConcept(id=theme_str) for theme_str in osc_themes]
         return Theme(concepts=concepts, scheme=OSC_THEME_SCHEME)
 
-    def build_dataset_stac_collection(self, mode: str) -> Collection:
+    def build_zarr_stac_item(self, stac_catalog_s3_root: str) -> Item:
+        """Build a single STAC Item representing the entire Zarr store.
+
+        One item covers the full spatiotemporal extent of the dataset.
+        Assets point to the Zarr store and its consolidated metadata.
+
+        Args:
+            stac_catalog_s3_root: S3 root URL where the STAC catalog will be hosted
+                (e.g. ``s3://my-bucket/stac/``). Used to build self/root/parent hrefs.
+
+        Returns:
+            A :class:`pystac.Item` ready to be serialised to S3.
+        """
+        spatial_extent = self._get_spatial_extent()
+        temporal_extent = self._get_temporal_extent()
+        general_metadata = self._get_general_metadata()
+
+        bbox = spatial_extent.bboxes[0]  # [lon_min, lat_min, lon_max, lat_max]
+        lon_min, lat_min, lon_max, lat_max = bbox
+        geometry = {
+            "type": "Polygon",
+            "coordinates": [[
+                [lon_min, lat_min],
+                [lon_max, lat_min],
+                [lon_max, lat_max],
+                [lon_min, lat_max],
+                [lon_min, lat_min],
+            ]],
+        }
+
+        start_dt, end_dt = temporal_extent.intervals[0]
+        # Ensure UTC timezone so ISO strings are STAC-compliant
+        if start_dt is not None and start_dt.tzinfo is None:
+            start_dt = start_dt.replace(tzinfo=timezone.utc)
+        if end_dt is not None and end_dt.tzinfo is None:
+            end_dt = end_dt.replace(tzinfo=timezone.utc)
+
+        now_iso = datetime.now(timezone.utc).isoformat()
+        root = stac_catalog_s3_root.rstrip("/")
+        catalog_href = f"{root}/catalog.json"
+        item_href = f"{root}/{self.collection_id}/item.json"
+        osc_collection_href = (
+            "https://esa-earthcode.github.io/open-science-catalog-metadata"
+            f"/products/{self.collection_id}/collection.json"
+        )
+
+        item = Item(
+            id=self.collection_id,
+            geometry=geometry,
+            bbox=bbox,
+            datetime=None,
+            properties={
+                "start_datetime": start_dt.isoformat() if start_dt else None,
+                "end_datetime": end_dt.isoformat() if end_dt else None,
+                "description": general_metadata.get("description", ""),
+                "created": now_iso,
+                "updated": now_iso,
+            },
+        )
+        item.collection_id = self.collection_id
+        item.set_self_href(item_href)
+        item.add_link(Link(rel="root", target=catalog_href, media_type="application/json"))
+        item.add_link(Link(rel="parent", target=catalog_href, media_type="application/json"))
+        item.add_link(Link(
+            rel="collection",
+            target=osc_collection_href,
+            media_type="application/json",
+            title=self.collection_id,
+        ))
+        item.add_asset("zarr-data", Asset(
+            href=self.access_link,
+            media_type=ZARR_MEDIA_TYPE,
+            title="Zarr Data Store",
+            roles=["data"],
+        ))
+        item.add_asset("zarr-consolidated-metadata", Asset(
+            href=f"{self.access_link}/.zmetadata",
+            media_type="application/json",
+            title="Consolidated Zarr Metadata",
+            roles=["metadata"],
+        ))
+        return item
+
+    def build_zarr_stac_catalog_file_dict(
+        self, stac_catalog_s3_root: str
+    ) -> dict[str, dict]:
+        """Generate the STAC Catalog and Item JSON for the Zarr store.
+
+        The catalog acts as the root for the dataset-level STAC hierarchy
+        that lives on S3 alongside the data::
+
+            {stac_catalog_s3_root}/
+            ├── catalog.json                   # STAC Catalog (root)
+            └── {collection_id}/
+                └── item.json                  # STAC Item (whole Zarr)
+
+        Args:
+            stac_catalog_s3_root: S3 root URL (e.g. ``s3://my-bucket/stac/``).
+
+        Returns:
+            ``{s3_path: content_dict}`` for every file to be written to S3.
+        """
+        root = stac_catalog_s3_root.rstrip("/")
+        catalog_href = f"{root}/catalog.json"
+
+        item = self.build_zarr_stac_item(stac_catalog_s3_root)
+
+        catalog = Catalog(
+            id=f"{self.collection_id}-stac-catalog",
+            description=f"STAC Catalog for {self.collection_id}",
+        )
+        catalog.set_self_href(catalog_href)
+        catalog.add_link(Link(rel="root", target=catalog_href, media_type="application/json"))
+        catalog.add_link(Link(
+            rel="item",
+            target=f"./{self.collection_id}/item.json",
+            media_type="application/json",
+            title=self.collection_id,
+        ))
+
+        return {
+            catalog_href: catalog.to_dict(transform_hrefs=False),
+            f"{root}/{self.collection_id}/item.json": item.to_dict(transform_hrefs=False),
+        }
+
+    def build_dataset_stac_collection(self, mode: str, stac_catalog_s3_root: str | None = None) -> Collection:
         """Build an OSC STAC Collection for the dataset.
 
         Returns:
@@ -401,7 +610,7 @@ class OscDatasetStacGenerator:
         # Add OSC extension metadata
         osc_extension = OscExtension.add_to(collection)
         # osc_project and osc_type are fixed constant values
-        osc_extension.osc_project = "deep-earth-system-data-lab"
+        osc_extension.osc_project = self.osc_project
         osc_extension.osc_type = "product"
         osc_extension.osc_status = self.osc_status
         osc_extension.osc_region = self.osc_region
@@ -478,9 +687,9 @@ class OscDatasetStacGenerator:
         collection.add_link(
             Link(
                 rel="related",
-                target="../../projects/deep-earth-system-data-lab/collection.json",
+                target=f"../../projects/{self.osc_project}/collection.json",
                 media_type="application/json",
-                title="Project: DeepESDL",
+                title=f"Project: {self.format_string(self.osc_project)}",
             )
         )
 
@@ -495,6 +704,19 @@ class OscDatasetStacGenerator:
             )
 
         collection.license = self.license_type
+
+        # Link to the S3-hosted STAC catalog when provided.
+        # Uses rel="via" (not "child") because the OSC validator requires every
+        # "child" link to resolve to a file inside the metadata repository;
+        # the S3 catalog lives outside the repo and would fail that check.
+        if stac_catalog_s3_root:
+            catalog_href = stac_catalog_s3_root.rstrip("/") + "/catalog.json"
+            collection.add_link(Link(
+                rel="via",
+                target=catalog_href,
+                media_type="application/json",
+                title="STAC Catalog",
+            ))
 
         # Validate OSC extension fields
         try:

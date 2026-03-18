@@ -8,7 +8,7 @@ from datetime import datetime
 from unittest.mock import MagicMock, patch
 
 import numpy as np
-from pystac import Catalog, Collection
+from pystac import Catalog, Item
 from xarray import DataArray, Dataset
 
 from deep_code.constants import (
@@ -16,6 +16,7 @@ from deep_code.constants import (
     OSC_THEME_SCHEME,
     PRODUCT_BASE_CATALOG_SELF_HREF,
     VARIABLE_BASE_CATALOG_SELF_HREF,
+    ZARR_MEDIA_TYPE,
 )
 from deep_code.utils.dataset_stac_generator import OscDatasetStacGenerator, Theme
 
@@ -140,42 +141,406 @@ class TestOSCProductSTACGenerator(unittest.TestCase):
         # Self href ends with var1/catalog.json
         self.assertTrue(catalog.self_href.endswith("/var1/catalog.json"))
 
-    @patch("pystac.Catalog.from_file")
-    def test_update_product_base_catalog(self, mock_from_file):
-        """Test linking product catalog."""
-        mock_cat = MagicMock(spec=Catalog)
-        mock_from_file.return_value = mock_cat
+    def test_update_product_base_catalog(self):
+        """Child link is appended; existing links (including self) are untouched."""
+        base = {
+            "type": "Catalog",
+            "id": "products",
+            "stac_version": "1.0.0",
+            "description": "Products",
+            "links": [
+                {
+                    "rel": "self",
+                    "href": PRODUCT_BASE_CATALOG_SELF_HREF,
+                    "type": "application/json",
+                }
+            ],
+        }
+        import tempfile
+        import json as _json
 
-        result = self.generator.update_product_base_catalog("path.json")
-        self.assertIs(result, mock_cat)
-        mock_cat.add_link.assert_called_once()
-        mock_cat.set_self_href.assert_called_once_with(PRODUCT_BASE_CATALOG_SELF_HREF)
+        with tempfile.NamedTemporaryFile(
+            mode="w", suffix=".json", delete=False
+        ) as tmp:
+            _json.dump(base, tmp)
+            tmp_path = tmp.name
 
-    @patch("pystac.Catalog.from_file")
-    def test_update_variable_base_catalog(self, mock_from_file):
-        """Test linking variable base catalog."""
-        mock_cat = MagicMock(spec=Catalog)
-        mock_from_file.return_value = mock_cat
+        import os
+
+        try:
+            result = self.generator.update_product_base_catalog(tmp_path)
+        finally:
+            os.unlink(tmp_path)
+
+        self.assertIsInstance(result, dict)
+        rels = [lnk["rel"] for lnk in result["links"]]
+        # self link must still be present and still first
+        self.assertEqual(result["links"][0]["rel"], "self")
+        self.assertEqual(result["links"][0]["href"], PRODUCT_BASE_CATALOG_SELF_HREF)
+        self.assertIn("child", rels)
+        child = next(lnk for lnk in result["links"] if lnk["rel"] == "child")
+        self.assertIn("mock-collection-id", child["href"])
+
+    def test_update_variable_base_catalog(self):
+        """Child links for each variable are appended."""
+        base = {
+            "type": "Catalog",
+            "id": "variables",
+            "stac_version": "1.0.0",
+            "description": "Variables",
+            "links": [
+                {
+                    "rel": "self",
+                    "href": VARIABLE_BASE_CATALOG_SELF_HREF,
+                    "type": "application/json",
+                }
+            ],
+        }
+        import tempfile
+        import json as _json
+        import os
+
+        with tempfile.NamedTemporaryFile(
+            mode="w", suffix=".json", delete=False
+        ) as tmp:
+            _json.dump(base, tmp)
+            tmp_path = tmp.name
 
         vars_ = ["v1", "v2"]
-        result = self.generator.update_variable_base_catalog("vars.json", vars_)
-        self.assertIs(result, mock_cat)
-        # Expect one add_link per variable
-        self.assertEqual(mock_cat.add_link.call_count, len(vars_))
-        mock_cat.set_self_href.assert_called_once_with(VARIABLE_BASE_CATALOG_SELF_HREF)
+        try:
+            result = self.generator.update_variable_base_catalog(tmp_path, vars_)
+        finally:
+            os.unlink(tmp_path)
 
-    @patch("pystac.Collection.from_file")
-    def test_update_deepesdl_collection(self, mock_from_file):
-        """Test updating DeepESDL collection."""
-        mock_coll = MagicMock(spec=Collection)
-        mock_from_file.return_value = mock_coll
+        self.assertIsInstance(result, dict)
+        child_hrefs = [
+            lnk["href"] for lnk in result["links"] if lnk["rel"] == "child"
+        ]
+        self.assertEqual(len(child_hrefs), len(vars_))
+        # self link must remain in place
+        self.assertEqual(result["links"][0]["rel"], "self")
 
-        result = self.generator.update_deepesdl_collection("deep.json")
-        self.assertIs(result, mock_coll)
-        # Expect child and theme related links for each theme
-        calls = mock_coll.add_link.call_count
-        self.assertGreaterEqual(calls, 1 + len(self.generator.osc_themes))
-        mock_coll.set_self_href.assert_called_once_with(DEEPESDL_COLLECTION_SELF_HREF)
+    # ------------------------------------------------------------------
+    # osc_project parameter
+    # ------------------------------------------------------------------
+
+    def test_osc_project_default(self):
+        """Default osc_project is 'deep-earth-system-data-lab'."""
+        self.assertEqual(self.generator.osc_project, "deep-earth-system-data-lab")
+
+    @patch("deep_code.utils.dataset_stac_generator.open_dataset")
+    def test_osc_project_custom(self, mock_open_ds):
+        """A custom osc_project is stored on the generator."""
+        mock_open_ds.return_value = self.mock_dataset
+        gen = OscDatasetStacGenerator(
+            dataset_id="mock-dataset-id",
+            collection_id="mock-collection-id",
+            workflow_id="dummy",
+            workflow_title="test",
+            license_type="proprietary",
+            osc_project="my-custom-project",
+        )
+        self.assertEqual(gen.osc_project, "my-custom-project")
+
+    def test_build_dataset_stac_collection_osc_project_in_related_link(self):
+        """The project-related link in the collection uses the configured osc_project."""
+        collection = self.generator.build_dataset_stac_collection(mode="dataset")
+        project_links = [
+            lnk
+            for lnk in collection.links
+            if lnk.rel == "related" and "projects" in str(lnk.target)
+        ]
+        self.assertEqual(len(project_links), 1)
+        self.assertIn("deep-earth-system-data-lab", project_links[0].target)
+
+    # ------------------------------------------------------------------
+    # build_project_collection
+    # ------------------------------------------------------------------
+
+    def test_build_project_collection_structure(self):
+        """build_project_collection returns a minimal valid STAC Collection dict."""
+        result = self.generator.build_project_collection()
+
+        self.assertIsInstance(result, dict)
+        self.assertEqual(result["type"], "Collection")
+        self.assertEqual(result["id"], "deep-earth-system-data-lab")
+        self.assertEqual(result["stac_version"], "1.0.0")
+        self.assertIn("extent", result)
+
+        rels = [lnk["rel"] for lnk in result["links"]]
+        self.assertIn("self", rels)
+        self.assertIn("root", rels)
+        self.assertIn("parent", rels)
+
+        self_link = next(lnk for lnk in result["links"] if lnk["rel"] == "self")
+        self.assertIn("deep-earth-system-data-lab", self_link["href"])
+        self.assertTrue(self_link["href"].endswith("collection.json"))
+
+    @patch("deep_code.utils.dataset_stac_generator.open_dataset")
+    def test_build_project_collection_custom_project(self, mock_open_ds):
+        """build_project_collection reflects a custom osc_project."""
+        mock_open_ds.return_value = self.mock_dataset
+        gen = OscDatasetStacGenerator(
+            dataset_id="mock-dataset-id",
+            collection_id="mock-collection-id",
+            workflow_id="dummy",
+            workflow_title="test",
+            license_type="proprietary",
+            osc_project="my-project",
+        )
+        result = gen.build_project_collection()
+
+        self.assertEqual(result["id"], "my-project")
+        self_link = next(lnk for lnk in result["links"] if lnk["rel"] == "self")
+        self.assertIn("my-project", self_link["href"])
+
+    # ------------------------------------------------------------------
+    # update_project_base_catalog
+    # ------------------------------------------------------------------
+
+    def test_update_project_base_catalog(self):
+        """Child link for the project is appended to the projects base catalog."""
+        import json as _json
+        import os
+        import tempfile
+
+        base = {
+            "type": "Catalog",
+            "id": "projects",
+            "stac_version": "1.0.0",
+            "description": "Projects",
+            "links": [
+                {
+                    "rel": "self",
+                    "href": "https://esa-earthcode.github.io/open-science-catalog-metadata/projects/catalog.json",
+                    "type": "application/json",
+                }
+            ],
+        }
+        with tempfile.NamedTemporaryFile(mode="w", suffix=".json", delete=False) as tmp:
+            _json.dump(base, tmp)
+            tmp_path = tmp.name
+
+        try:
+            result = self.generator.update_project_base_catalog(tmp_path)
+        finally:
+            os.unlink(tmp_path)
+
+        self.assertIsInstance(result, dict)
+        child_links = [lnk for lnk in result["links"] if lnk["rel"] == "child"]
+        self.assertEqual(len(child_links), 1)
+        self.assertIn("deep-earth-system-data-lab", child_links[0]["href"])
+        self.assertTrue(child_links[0]["href"].endswith("collection.json"))
+        # existing self link is preserved
+        self.assertEqual(result["links"][0]["rel"], "self")
+
+    def test_update_project_base_catalog_no_duplicate(self):
+        """Calling update_project_base_catalog when the child link already exists
+        does not produce a duplicate."""
+        import json as _json
+        import os
+        import tempfile
+
+        base = {
+            "type": "Catalog",
+            "id": "projects",
+            "stac_version": "1.0.0",
+            "description": "Projects",
+            "links": [
+                {
+                    "rel": "child",
+                    "href": "./deep-earth-system-data-lab/collection.json",
+                    "type": "application/json",
+                    "title": "Deep Earth System Data Lab",
+                }
+            ],
+        }
+        with tempfile.NamedTemporaryFile(mode="w", suffix=".json", delete=False) as tmp:
+            _json.dump(base, tmp)
+            tmp_path = tmp.name
+
+        try:
+            result = self.generator.update_project_base_catalog(tmp_path)
+        finally:
+            os.unlink(tmp_path)
+
+        child_links = [lnk for lnk in result["links"] if lnk["rel"] == "child"]
+        self.assertEqual(len(child_links), 1)
+
+    def test_update_deepesdl_collection(self):
+        """Child and theme-related links are appended; existing links kept."""
+        base = {
+            "type": "Collection",
+            "id": "deep-esdl",
+            "stac_version": "1.0.0",
+            "description": "DeepESDL",
+            "extent": {},
+            "links": [
+                {
+                    "rel": "self",
+                    "href": DEEPESDL_COLLECTION_SELF_HREF,
+                    "type": "application/json",
+                }
+            ],
+        }
+        import tempfile
+        import json as _json
+        import os
+
+        with tempfile.NamedTemporaryFile(
+            mode="w", suffix=".json", delete=False
+        ) as tmp:
+            _json.dump(base, tmp)
+            tmp_path = tmp.name
+
+        result = self.generator.update_deepesdl_collection(tmp_path)
+        os.unlink(tmp_path)
+
+        self.assertIsInstance(result, dict)
+        rels = [lnk["rel"] for lnk in result["links"]]
+        # child link added
+        self.assertIn("child", rels)
+        # one related link per theme
+        related = [lnk for lnk in result["links"] if lnk["rel"] == "related"]
+        self.assertGreaterEqual(len(related), len(self.generator.osc_themes))
+        # self link still present
+        self.assertEqual(result["links"][0]["rel"], "self")
+
+    # ------------------------------------------------------------------
+    # Zarr STAC Item / Catalog generation
+    # ------------------------------------------------------------------
+
+    def test_build_zarr_stac_item_structure(self):
+        """Item has correct geometry, bbox, datetime range, assets, and links."""
+        s3_root = "s3://test-bucket/stac/my-collection/"
+        item = self.generator.build_zarr_stac_item(s3_root)
+
+        self.assertIsInstance(item, Item)
+        self.assertEqual(item.id, "mock-collection-id")
+
+        # Spatial
+        self.assertEqual(item.bbox, [-180.0, -90.0, 180.0, 90.0])
+        self.assertEqual(item.geometry["type"], "Polygon")
+        coords = item.geometry["coordinates"][0]
+        self.assertEqual(len(coords), 5)  # closed ring
+
+        # Temporal — datetime must be null; start/end in properties
+        self.assertIsNone(item.datetime)
+        self.assertIn("start_datetime", item.properties)
+        self.assertIn("end_datetime", item.properties)
+        # Timezone-aware ISO strings
+        self.assertTrue(item.properties["start_datetime"].endswith("+00:00"))
+        self.assertTrue(item.properties["end_datetime"].endswith("+00:00"))
+
+        # Assets
+        self.assertIn("zarr-data", item.assets)
+        self.assertIn("zarr-consolidated-metadata", item.assets)
+
+        zarr_asset = item.assets["zarr-data"]
+        self.assertEqual(zarr_asset.href, "s3://mock-bucket/mock-dataset")
+        self.assertEqual(zarr_asset.media_type, ZARR_MEDIA_TYPE)
+        self.assertIn("data", zarr_asset.roles)
+
+        meta_asset = item.assets["zarr-consolidated-metadata"]
+        self.assertEqual(
+            meta_asset.href, "s3://mock-bucket/mock-dataset/.zmetadata"
+        )
+        self.assertIn("metadata", meta_asset.roles)
+
+        # Self href
+        self.assertEqual(
+            item.self_href,
+            "s3://test-bucket/stac/my-collection/mock-collection-id/item.json",
+        )
+
+        # Required link rels
+        link_rels = {link.rel for link in item.links}
+        self.assertIn("root", link_rels)
+        self.assertIn("parent", link_rels)
+        self.assertIn("collection", link_rels)
+
+        # root and parent point to the S3 catalog
+        root_link = next(lnk for lnk in item.links if lnk.rel == "root")
+        self.assertEqual(
+            root_link.target,
+            "s3://test-bucket/stac/my-collection/catalog.json",
+        )
+
+        # collection link points to the OSC GitHub collection
+        coll_link = next(lnk for lnk in item.links if lnk.rel == "collection")
+        self.assertIn("open-science-catalog-metadata", coll_link.target)
+        self.assertIn("mock-collection-id", coll_link.target)
+
+    def test_build_zarr_stac_item_trailing_slash_normalised(self):
+        """Trailing slash on s3_root should not produce double slashes."""
+        item_with = self.generator.build_zarr_stac_item("s3://bucket/stac/")
+        item_without = self.generator.build_zarr_stac_item("s3://bucket/stac")
+        self.assertEqual(item_with.self_href, item_without.self_href)
+
+    def test_build_zarr_stac_catalog_file_dict_keys(self):
+        """file_dict contains exactly the catalog and item S3 paths."""
+        s3_root = "s3://test-bucket/stac/my-collection/"
+        file_dict = self.generator.build_zarr_stac_catalog_file_dict(s3_root)
+
+        catalog_path = "s3://test-bucket/stac/my-collection/catalog.json"
+        item_path = (
+            "s3://test-bucket/stac/my-collection/mock-collection-id/item.json"
+        )
+        self.assertIn(catalog_path, file_dict)
+        self.assertIn(item_path, file_dict)
+        self.assertEqual(len(file_dict), 2)
+
+    def test_build_zarr_stac_catalog_file_dict_content(self):
+        """Catalog dict is type Catalog; item dict is type Feature with assets."""
+        s3_root = "s3://test-bucket/stac/my-collection/"
+        file_dict = self.generator.build_zarr_stac_catalog_file_dict(s3_root)
+
+        catalog_dict = file_dict["s3://test-bucket/stac/my-collection/catalog.json"]
+        self.assertEqual(catalog_dict["type"], "Catalog")
+        self.assertEqual(catalog_dict["id"], "mock-collection-id-stac-catalog")
+
+        item_dict = file_dict[
+            "s3://test-bucket/stac/my-collection/mock-collection-id/item.json"
+        ]
+        self.assertEqual(item_dict["type"], "Feature")
+        self.assertEqual(item_dict["id"], "mock-collection-id")
+        self.assertIn("assets", item_dict)
+        self.assertIn("zarr-data", item_dict["assets"])
+        self.assertIn("zarr-consolidated-metadata", item_dict["assets"])
+
+    def test_build_dataset_stac_collection_adds_s3_catalog_via_link(self):
+        """A 'via' link to the S3 catalog is added when stac_catalog_s3_root is provided.
+
+        rel='via' is used (not 'child') because the OSC validator requires every
+        'child' link to resolve to a file inside the metadata repository.
+        """
+        s3_root = "s3://test-bucket/stac/my-collection/"
+        collection = self.generator.build_dataset_stac_collection(
+            mode="dataset", stac_catalog_s3_root=s3_root
+        )
+        s3_via = next(
+            (
+                lnk
+                for lnk in collection.links
+                if lnk.rel == "via" and "catalog.json" in str(lnk.target)
+            ),
+            None,
+        )
+        self.assertIsNotNone(s3_via, "Expected a 'via' link pointing to S3 catalog")
+        self.assertEqual(
+            s3_via.target,
+            "s3://test-bucket/stac/my-collection/catalog.json",
+        )
+
+    def test_build_dataset_stac_collection_no_s3_via_link_by_default(self):
+        """No S3 catalog 'via' link is added when stac_catalog_s3_root is absent."""
+        collection = self.generator.build_dataset_stac_collection(mode="dataset")
+        s3_catalog_links = [
+            lnk
+            for lnk in collection.links
+            if lnk.rel == "via" and "catalog.json" in str(getattr(lnk, "target", ""))
+        ]
+        self.assertEqual(len(s3_catalog_links), 0)
 
 
 class TestFormatString(unittest.TestCase):

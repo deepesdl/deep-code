@@ -79,8 +79,22 @@ class TemplateGenerator:
             template, sort_keys=False, width=1000, default_flow_style=False
         )
 
+        stac_catalog_comment = (
+            "\n# Optional: publish a STAC Catalog + Item to S3 alongside the Zarr.\n"
+            "# When set, deep-code writes:\n"
+            "#   {stac_catalog_s3_root}/catalog.json          (STAC Catalog root)\n"
+            "#   {stac_catalog_s3_root}/{collection_id}/item.json  (STAC Item for the whole Zarr)\n"
+            "# and adds a 'child' link from the OSC Collection to this S3 catalog.\n"
+            "# S3 write credentials are resolved in order from:\n"
+            "#   1. STAC_S3_KEY / STAC_S3_SECRET env vars (STAC-specific, any bucket)\n"
+            "#   2. AWS_ACCESS_KEY_ID / AWS_SECRET_ACCESS_KEY env vars\n"
+            "#   3. boto3 default chain (IAM role, ~/.aws/credentials)\n"
+            "# stac_catalog_s3_root: s3://[YOUR-BUCKET]/stac/[collection-id]/\n"
+        )
+
         if output_path:
             with open(output_path, "w") as f:
                 f.write("# Complete Dataset Configuration Template\n")
                 f.write("# Replace all [PLACEHOLDER] values with your actual data\n\n")
                 f.write(yaml_str)
+                f.write(stac_catalog_comment)

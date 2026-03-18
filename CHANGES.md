@@ -60,3 +60,8 @@
 - Fixed a bug in build_child_link_to_related_experiment for the publish mode `"all"`.
 
 ## Changes in 0.1.8 (in Development)
+
+- Fixed a crash in workflow publishing when `jupyter_notebook_url` is absent in the config.
+- Added STAC Item and S3-hosted STAC Catalog generation for Zarr datasets (opt-in via `stac_catalog_s3_root` in dataset config).
+- `osc_project` is now a configurable parameter on `OscDatasetStacGenerator` (default: `"deep-earth-system-data-lab"`).
+- Publisher automatically creates the OSC project collection and registers it in `projects/catalog.json` when it does not yet exist.
