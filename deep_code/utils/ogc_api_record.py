@@ -70,7 +70,7 @@ class RecordProperties(MappingConstructible["RecordProperties"], JsonSerializabl
         type: str,
         title: str,
         description: str,
-        jupyter_kernel_info: JupyterKernelInfo,
+        jupyter_kernel_info: JupyterKernelInfo = None,
         osc_project: str,
         osc_workflow: str = None,
         updated: str = None,

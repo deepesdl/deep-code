@@ -65,3 +65,9 @@
 - Added STAC Item and S3-hosted STAC Catalog generation for Zarr datasets (opt-in via `stac_catalog_s3_root` in dataset config).
 - `osc_project` is now a configurable parameter on `OscDatasetStacGenerator` (default: `"deep-earth-system-data-lab"`).
 - Publisher automatically creates the OSC project collection and registers it in `projects/catalog.json` when it does not yet exist.
+
+## Changes in 0.1.9
+
+- `jupyter_kernel_info` is now optional in `RecordProperties`; workflow configs without a notebook URL no longer require this field.
+- Removed redundant `hasattr` guard for `_last_generator` in `Publisher.publish()`.
+- Added automated MkDocs GitHub Pages deployment on release via a dedicated `docs.yml` workflow.
