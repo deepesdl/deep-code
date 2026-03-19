@@ -45,6 +45,7 @@ cf_parameter:
 | `osc_region` | No | Geographical region label (default: `Global`). |
 | `dataset_status` | No | One of `ongoing`, `completed`, or `planned` (default: `ongoing`). |
 | `access_link` | No | Public S3 URL of the Zarr store. Defaults to `s3://deep-esdl-public/{dataset_id}`. |
+| `description` | No | Human-readable description of the dataset. Overrides the `description` attribute in the Zarr store; falls back to `"No description available."` if neither is set. |
 | `documentation_link` | No | URL to dataset documentation. |
 | `visualisation_link` | No | URL to a visualisation of the dataset (e.g. xcube Viewer, WMS). Added as a `visualisation` link with title `"Dataset visualisation"`. |
 | `cf_parameter` | No | List of CF metadata dicts to override variable attributes (e.g. `name`, `units`). |
