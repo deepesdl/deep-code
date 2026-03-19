@@ -77,4 +77,8 @@
 - Variable catalog `description` now falls back to the title-cased variable ID when neither `description` nor `long_name` attrs are present on the zarr variable, preventing `null` description validation failures.
 - Pull requests opened by deep-code now include a "Generated with deep-code" note in the PR description.
 - `stac_catalog_s3_root` is now a mandatory field in the dataset config; publishing fails immediately with a descriptive error if it is absent.
-- Added optional `visualisation_link` field to the dataset config; when provided, a `related` link with title `"Dataset Visualisation"` is added to the generated OSC collection.
+- STAC catalog links in the OSC collection now follow the OSC convention: a `via` link to the STAC browser URL and a `child` link to the direct HTTPS catalog URL. The `s3://` URL is converted to HTTPS (AWS virtual-hosted style) to satisfy the `uri-reference` format check in the OSC products schema.
+- Added optional `visualisation_link` field to the dataset config; when provided, a `visualisation` link with title `"Dataset visualisation"` is added to the generated OSC collection.
+- Added optional `description` field to the dataset config; overrides the `description` attribute from the Zarr store when set.
+- Added optional `osc_project_title` field to the dataset config to correctly set the project link title (e.g. `"DeepESDL"`) instead of deriving it from the project ID.
+- Fixed `workflow_id` not being normalised (slugified) when stored on `Publisher`, causing spaces in experiment link hrefs and failing `uri-reference` format validation.
