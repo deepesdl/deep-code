@@ -52,6 +52,7 @@ class OscDatasetStacGenerator:
         osc_project: str = "deep-earth-system-data-lab",
         osc_project_title: str | None = None,
         visualisation_link: str | None = None,
+        description: str | None = None,
     ):
         if " " in collection_id:
             raise ValueError(
@@ -73,6 +74,7 @@ class OscDatasetStacGenerator:
         self.osc_missions = osc_missions or []
         self.cf_params = cf_params or {}
         self.visualisation_link = visualisation_link
+        self.description = description
         self.logger = logging.getLogger(__name__)
         self.dataset = open_dataset(dataset_id=dataset_id, logger=self.logger)
         self.variables_metadata = self.get_variables_metadata()
@@ -137,8 +139,10 @@ class OscDatasetStacGenerator:
 
     def _get_general_metadata(self) -> dict:
         return {
-            "description": self.dataset.attrs.get(
-                "description", "No description available."
+            "description": (
+                self.description
+                or self.dataset.attrs.get("description")
+                or "No description available."
             )
         }
 
@@ -457,6 +461,17 @@ class OscDatasetStacGenerator:
         return data
 
     @staticmethod
+    def _s3_to_https(s3_url: str) -> str:
+        """Convert an s3:// URL to its HTTPS equivalent using AWS virtual-hosted style.
+
+        Example:
+            s3://my-bucket/path/to/file → https://my-bucket.s3.amazonaws.com/path/to/file
+        """
+        without_scheme = s3_url[len("s3://"):]
+        bucket, _, key = without_scheme.partition("/")
+        return f"https://{bucket}.s3.amazonaws.com/{key}"
+
+    @staticmethod
     def format_string(s: str) -> str:
         # Strip leading/trailing spaces/underscores and replace underscores with spaces
         words = s.strip(" _").replace("_", " ").replace("-", " ").split()
@@ -726,17 +741,28 @@ class OscDatasetStacGenerator:
 
         collection.license = self.license_type
 
-        # Link to the S3-hosted STAC catalog when provided.
-        # Uses rel="via" (not "child") because the OSC validator requires every
-        # "child" link to resolve to a file inside the metadata repository;
-        # the S3 catalog lives outside the repo and would fail that check.
+        # Add links to the S3-hosted STAC catalog following the OSC convention:
+        #   via   → STAC browser URL (human-browsable, HTTPS)
+        #   child → direct HTTPS URL to catalog.json (machine-readable)
+        # The s3:// URL is never used directly in the collection as it fails the
+        # products/children.json uri-reference format check.
         if stac_catalog_s3_root:
-            catalog_href = stac_catalog_s3_root.rstrip("/") + "/catalog.json"
+            catalog_s3 = stac_catalog_s3_root.rstrip("/") + "/catalog.json"
+            catalog_https = self._s3_to_https(catalog_s3)
+            stac_browser_href = (
+                "https://opensciencedata.esa.int/stac-browser/#/external/"
+                + catalog_https[len("https://"):]
+            )
             collection.add_link(Link(
                 rel="via",
-                target=catalog_href,
+                target=stac_browser_href,
+                title="Access",
+            ))
+            collection.add_link(Link(
+                rel="child",
+                target=catalog_https,
                 media_type="application/json",
-                title="STAC Catalog",
+                title="Items",
             ))
 
         # Validate OSC extension fields
