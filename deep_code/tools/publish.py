@@ -172,7 +172,9 @@ class Publisher:
             self.workflow_title = self.workflow_config.get("properties", {}).get(
                 "title"
             )
-            self.workflow_id = self.workflow_config.get("workflow_id")
+            self.workflow_id = self._normalize_name(
+                self.workflow_config.get("workflow_id")
+            )
 
     def _read_config_files(self) -> None:
         if self.dataset_config_path:
@@ -269,6 +271,7 @@ class Publisher:
         license_type = self.dataset_config.get("license_type")
         visualisation_link = self.dataset_config.get("visualisation_link")
         osc_project_title = self.dataset_config.get("osc_project_title")
+        description = self.dataset_config.get("description")
 
         if not dataset_id or not self.collection_id:
             raise ValueError("Dataset ID or Collection ID missing in the config.")
@@ -303,6 +306,7 @@ class Publisher:
             cf_params=cf_params,
             visualisation_link=visualisation_link,
             osc_project_title=osc_project_title,
+            description=description,
         )
         # Store so publish() can reuse it for zarr STAC catalog generation
         self._last_generator = generator
