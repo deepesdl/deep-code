@@ -71,3 +71,10 @@
 - `jupyter_kernel_info` is now optional in `RecordProperties`; workflow configs without a notebook URL no longer require this field.
 - Removed redundant `hasattr` guard for `_last_generator` in `Publisher.publish()`.
 - Added automated MkDocs GitHub Pages deployment on release via a dedicated `docs.yml` workflow.
+- `osc_themes` values are now automatically lowercased, so `'Land'` and `'LAND'` are treated the same as `'land'`, preventing theme validation failures.
+- `collection_id` is now validated to contain no spaces; a clear error is raised with a hint to use hyphens instead.
+- `license_type` (dataset) and `properties.license` (workflow) are now mandatory fields; publishing fails immediately with a descriptive error if either is missing.
+- Variable catalog `description` now falls back to the title-cased variable ID when neither `description` nor `long_name` attrs are present on the zarr variable, preventing `null` description validation failures.
+- Pull requests opened by deep-code now include a "Generated with deep-code" note in the PR description.
+- `stac_catalog_s3_root` is now a mandatory field in the dataset config; publishing fails immediately with a descriptive error if it is absent.
+- Added optional `visualisation_link` field to the dataset config; when provided, a `related` link with title `"Dataset Visualisation"` is added to the generated OSC collection.
