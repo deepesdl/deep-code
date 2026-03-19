@@ -509,28 +509,36 @@ class TestOSCProductSTACGenerator(unittest.TestCase):
         self.assertIn("zarr-consolidated-metadata", item_dict["assets"])
 
     def test_build_dataset_stac_collection_adds_s3_catalog_via_link(self):
-        """A 'via' link to the S3 catalog is added when stac_catalog_s3_root is provided.
+        """A 'via' link (STAC browser) and a 'child' link (HTTPS catalog) are added
+        when stac_catalog_s3_root is provided.
 
-        rel='via' is used (not 'child') because the OSC validator requires every
-        'child' link to resolve to a file inside the metadata repository.
+        The OSC convention uses:
+          - rel='via' → STAC browser URL
+          - rel='child' → direct HTTPS catalog URL (s3:// converted to HTTPS)
         """
         s3_root = "s3://test-bucket/stac/my-collection/"
         collection = self.generator.build_dataset_stac_collection(
             mode="dataset", stac_catalog_s3_root=s3_root
         )
-        s3_via = next(
-            (
-                lnk
-                for lnk in collection.links
-                if lnk.rel == "via" and "catalog.json" in str(lnk.target)
-            ),
+        https_catalog = "https://test-bucket.s3.amazonaws.com/stac/my-collection/catalog.json"
+        stac_browser_href = (
+            "https://opensciencedata.esa.int/stac-browser/#/external/"
+            + https_catalog.replace("https://", "")
+        )
+
+        via_link = next(
+            (lnk for lnk in collection.links if lnk.rel == "via" and "stac-browser" in str(lnk.target)),
             None,
         )
-        self.assertIsNotNone(s3_via, "Expected a 'via' link pointing to S3 catalog")
-        self.assertEqual(
-            s3_via.target,
-            "s3://test-bucket/stac/my-collection/catalog.json",
+        self.assertIsNotNone(via_link, "Expected a 'via' STAC browser link")
+        self.assertEqual(via_link.target, stac_browser_href)
+
+        child_link = next(
+            (lnk for lnk in collection.links if lnk.rel == "child" and "catalog.json" in str(lnk.target)),
+            None,
         )
+        self.assertIsNotNone(child_link, "Expected a 'child' HTTPS catalog link")
+        self.assertEqual(child_link.target, https_catalog)
 
     def test_build_dataset_stac_collection_no_s3_via_link_by_default(self):
         """No S3 catalog 'via' link is added when stac_catalog_s3_root is absent."""

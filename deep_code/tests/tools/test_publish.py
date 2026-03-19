@@ -126,11 +126,22 @@ class TestPublisher(unittest.TestCase):
             == "open-science-catalog-metadata-testing"
         )
 
+    @patch.object(Publisher, "_write_stac_catalog_to_s3")
     @patch.object(Publisher, "publish_dataset", return_value={"a": {}})
     @patch.object(
         Publisher, "generate_workflow_experiment_records", return_value={"b": {}}
     )
-    def test_publish_mode_routing(self, mock_wf, mock_ds):
+    def test_publish_mode_routing(self, mock_wf, mock_ds, mock_s3):
+        mock_generator = MagicMock()
+        mock_generator.build_zarr_stac_catalog_file_dict.return_value = {}
+        self.publisher._last_generator = mock_generator
+        self.publisher.dataset_config = {
+            "stac_catalog_s3_root": "s3://bucket/stac/",
+            "collection_id": "test-collection",
+            "dataset_id": "test-dataset",
+        }
+        self.publisher.gh_publisher.publish_files.return_value = "PR_URL"
+
         # dataset only
         self.publisher.publish(write_to_file=True, mode="dataset")
         mock_ds.assert_called()
@@ -142,27 +153,40 @@ class TestPublisher(unittest.TestCase):
         mock_ds.assert_not_called()
         mock_wf.assert_called()
 
+    @patch.object(Publisher, "_write_stac_catalog_to_s3")
     @patch.object(Publisher, "generate_workflow_experiment_records", return_value={})
     @patch.object(Publisher, "publish_dataset", return_value={})
     def test_publish_nothing_to_publish_raises(
-        self, mock_publish_dataset, mock_generate_workflow_experiment_records
+        self, mock_publish_dataset, mock_generate_workflow_experiment_records, mock_s3
     ):
+        mock_generator = MagicMock()
+        mock_generator.build_zarr_stac_catalog_file_dict.return_value = {}
+        self.publisher._last_generator = mock_generator
+        self.publisher.dataset_config = {"stac_catalog_s3_root": "s3://bucket/stac/"}
+
         with pytest.raises(ValueError):
             self.publisher.publish(write_to_file=False, mode="dataset")
         mock_publish_dataset.assert_called_once()
         mock_generate_workflow_experiment_records.assert_not_called()
 
+    @patch.object(Publisher, "_write_stac_catalog_to_s3")
     @patch.object(Publisher, "publish_dataset", return_value={"x": {}})
     @patch.object(
         Publisher, "generate_workflow_experiment_records", return_value={"y": {}}
     )
-    def test_publish_builds_pr_params(self, mock_wf, mock_ds):
+    def test_publish_builds_pr_params(self, mock_wf, mock_ds, mock_s3):
         # Make PR creation return a fixed URL
         self.publisher.gh_publisher.publish_files.return_value = "PR_URL"
 
         # Provide IDs for commit/PR labels
         self.publisher.collection_id = "col"
         self.publisher.workflow_id = "wf"
+
+        # _last_generator is set by publish_dataset; since that's mocked, stub it
+        mock_generator = MagicMock()
+        mock_generator.build_zarr_stac_catalog_file_dict.return_value = {}
+        self.publisher._last_generator = mock_generator
+        self.publisher.dataset_config = {"stac_catalog_s3_root": "s3://bucket/stac/"}
 
         url = self.publisher.publish(write_to_file=False, mode="all")
         assert url == "PR_URL"
@@ -309,6 +333,7 @@ class TestPublisher(unittest.TestCase):
             "dataset_id": "test-dataset",
             "collection_id": "test-collection",
             "license_type": "CC-BY-4.0",
+            "stac_catalog_s3_root": "s3://bucket/stac/test-collection/",
         }
         self.publisher.collection_id = "test-collection"
 
@@ -343,6 +368,7 @@ class TestPublisher(unittest.TestCase):
             "dataset_id": "test-dataset",
             "collection_id": "test-collection",
             "license_type": "CC-BY-4.0",
+            "stac_catalog_s3_root": "s3://bucket/stac/test-collection/",
         }
         self.publisher.collection_id = "test-collection"
 
@@ -359,20 +385,15 @@ class TestPublisher(unittest.TestCase):
         update_methods = [call.args[2] for call in mock_update.call_args_list]
         self.assertIn(mock_gen.update_deepesdl_collection, update_methods)
 
-    @patch.object(Publisher, "publish_dataset", return_value={"github_file.json": {}})
-    def test_publish_skips_zarr_stac_when_not_configured(self, mock_publish_ds):
-        # No stac_catalog_s3_root in config
+    def test_publish_dataset_raises_when_stac_root_missing(self):
+        # stac_catalog_s3_root is mandatory; publish_dataset must raise ValueError
         self.publisher.dataset_config = {
             "collection_id": "test-collection",
             "dataset_id": "test-dataset",
+            "license_type": "CC-BY-4.0",
         }
-        self.publisher.gh_publisher.publish_files.return_value = "PR_URL"
-
-        with patch.object(
-            self.publisher, "_write_stac_catalog_to_s3"
-        ) as mock_write:
-            self.publisher.publish(mode="dataset")
-            mock_write.assert_not_called()
+        with pytest.raises(ValueError, match="stac_catalog_s3_root"):
+            self.publisher.publish_dataset(write_to_file=False)
 
 
 class TestParseGithubNotebookUrl:
