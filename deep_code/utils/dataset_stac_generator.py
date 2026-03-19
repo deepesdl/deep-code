@@ -50,20 +50,29 @@ class OscDatasetStacGenerator:
         osc_missions: list[str] | None = None,
         cf_params: list[dict[str]] | None = None,
         osc_project: str = "deep-earth-system-data-lab",
+        osc_project_title: str | None = None,
+        visualisation_link: str | None = None,
     ):
+        if " " in collection_id:
+            raise ValueError(
+                f"collection_id must not contain spaces: {collection_id!r}. "
+                "Use hyphens as word separators (e.g. 'My-Dataset-2024')."
+            )
         self.dataset_id = dataset_id
         self.collection_id = collection_id
         self.workflow_id = workflow_id
         self.workflow_title = workflow_title
         self.license_type = license_type
         self.osc_project = osc_project
+        self.osc_project_title = osc_project_title or self.format_string(osc_project)
         self.access_link = access_link or f"s3://deep-esdl-public/{dataset_id}"
         self.documentation_link = documentation_link
         self.osc_status = osc_status
         self.osc_region = osc_region
-        self.osc_themes = osc_themes or []
+        self.osc_themes = [t.lower() for t in (osc_themes or [])]
         self.osc_missions = osc_missions or []
         self.cf_params = cf_params or {}
+        self.visualisation_link = visualisation_link
         self.logger = logging.getLogger(__name__)
         self.dataset = open_dataset(dataset_id=dataset_id, logger=self.logger)
         self.variables_metadata = self.get_variables_metadata()
@@ -215,7 +224,7 @@ class OscDatasetStacGenerator:
         # Create a PySTAC Catalog object
         var_catalog = Catalog(
             id=var_id,
-            description=var_metadata.get("description"),
+            description=var_metadata.get("description") or self.format_string(var_id),
             title=self.format_string(var_id),
             stac_extensions=[
                 "https://stac-extensions.github.io/themes/v1.0.0/schema.json"
@@ -474,6 +483,7 @@ class OscDatasetStacGenerator:
         Returns:
             A :class:`pystac.Item` ready to be serialised to S3.
         """
+        self.logger.info(f"Building STAC Item for collection '{self.collection_id}'.")
         spatial_extent = self._get_spatial_extent()
         temporal_extent = self._get_temporal_extent()
         general_metadata = self._get_general_metadata()
@@ -542,6 +552,7 @@ class OscDatasetStacGenerator:
             title="Consolidated Zarr Metadata",
             roles=["metadata"],
         ))
+        self.logger.info(f"STAC Item built: {item_href}")
         return item
 
     def build_zarr_stac_catalog_file_dict(
@@ -563,6 +574,10 @@ class OscDatasetStacGenerator:
         Returns:
             ``{s3_path: content_dict}`` for every file to be written to S3.
         """
+        self.logger.info(
+            f"Building STAC Catalog file dict for collection '{self.collection_id}' "
+            f"at root '{stac_catalog_s3_root}'."
+        )
         root = stac_catalog_s3_root.rstrip("/")
         catalog_href = f"{root}/catalog.json"
 
@@ -581,9 +596,11 @@ class OscDatasetStacGenerator:
             title=self.collection_id,
         ))
 
+        item_href = f"{root}/{self.collection_id}/item.json"
+        self.logger.info(f"STAC Catalog file dict ready: {catalog_href}, {item_href}")
         return {
             catalog_href: catalog.to_dict(transform_hrefs=False),
-            f"{root}/{self.collection_id}/item.json": item.to_dict(transform_hrefs=False),
+            item_href: item.to_dict(transform_hrefs=False),
         }
 
     def build_dataset_stac_collection(self, mode: str, stac_catalog_s3_root: str | None = None) -> Collection:
@@ -642,6 +659,10 @@ class OscDatasetStacGenerator:
             collection.add_link(
                 Link(rel="via", target=self.documentation_link, title="Documentation")
             )
+        if self.visualisation_link:
+            collection.add_link(
+                Link(rel="visualisation", target=self.visualisation_link, title="Dataset visualisation")
+            )
         collection.add_link(
             Link(
                 rel="parent",
@@ -689,7 +710,7 @@ class OscDatasetStacGenerator:
                 rel="related",
                 target=f"../../projects/{self.osc_project}/collection.json",
                 media_type="application/json",
-                title=f"Project: {self.format_string(self.osc_project)}",
+                title=f"Project: {self.osc_project_title}",
             )
         )
 
