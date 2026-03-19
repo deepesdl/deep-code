@@ -386,7 +386,6 @@ class TestPublisher(unittest.TestCase):
         self.assertIn(mock_gen.update_deepesdl_collection, update_methods)
 
     def test_publish_dataset_raises_when_stac_root_missing(self):
-        # stac_catalog_s3_root is mandatory; publish_dataset must raise ValueError
         self.publisher.dataset_config = {
             "collection_id": "test-collection",
             "dataset_id": "test-dataset",
@@ -394,6 +393,166 @@ class TestPublisher(unittest.TestCase):
         }
         with pytest.raises(ValueError, match="stac_catalog_s3_root"):
             self.publisher.publish_dataset(write_to_file=False)
+
+    def test_publish_dataset_raises_when_no_dataset_config(self):
+        self.publisher.dataset_config = None
+        with pytest.raises(ValueError, match="No dataset config"):
+            self.publisher.publish_dataset(write_to_file=False)
+
+    def test_publish_dataset_raises_when_ids_missing(self):
+        self.publisher.dataset_config = {"collection_id": "", "dataset_id": ""}
+        with pytest.raises(ValueError, match="Dataset ID or Collection ID missing"):
+            self.publisher.publish_dataset(write_to_file=False)
+
+    def test_publish_dataset_raises_when_license_missing(self):
+        self.publisher.dataset_config = {
+            "collection_id": "test-collection",
+            "dataset_id": "test-dataset",
+        }
+        with pytest.raises(ValueError, match="license_type is required"):
+            self.publisher.publish_dataset(write_to_file=False)
+
+    def test_write_to_file_serializes_dict(self):
+        import json
+        import os
+        import tempfile
+
+        with tempfile.NamedTemporaryFile(delete=False, suffix=".json") as f:
+            path = f.name
+        try:
+            Publisher._write_to_file(path, {"a": 1})
+            with open(path) as f:
+                result = json.load(f)
+            self.assertEqual(result, {"a": 1})
+        finally:
+            os.unlink(path)
+
+    def test_update_and_add_to_file_dict(self):
+        file_dict = {}
+        self.publisher.gh_publisher.github_automation.local_clone_dir = "/tmp"
+        update_method = MagicMock(return_value={"key": "value"})
+        self.publisher._update_and_add_to_file_dict(file_dict, "some/catalog.json", update_method)
+        update_method.assert_called_once()
+        assert any("some/catalog.json" in str(k) for k in file_dict)
+
+    def test_update_variable_catalogs_creates_new_when_missing(self):
+        mock_gen = MagicMock()
+        mock_gen.variables_metadata = {"var1": {"variable_id": "var1"}}
+        mock_gen.build_variable_catalog.return_value.to_dict.return_value = {"id": "var1"}
+        self.publisher.gh_publisher.github_automation.file_exists.return_value = False
+
+        file_dict = {}
+        self.publisher._update_variable_catalogs(mock_gen, file_dict, ["var1"])
+
+        mock_gen.build_variable_catalog.assert_called_once()
+        assert "variables/var1/catalog.json" in file_dict
+
+    def test_update_variable_catalogs_updates_existing(self):
+        mock_gen = MagicMock()
+        self.publisher.gh_publisher.github_automation.file_exists.return_value = True
+        self.publisher.gh_publisher.github_automation.local_clone_dir = "/tmp"
+        mock_gen.update_existing_variable_catalog.return_value = {"id": "var1"}
+
+        file_dict = {}
+        self.publisher._update_variable_catalogs(mock_gen, file_dict, ["var1"])
+
+        mock_gen.update_existing_variable_catalog.assert_called_once()
+        assert "variables/var1/catalog.json" in file_dict
+
+    # ------------------------------------------------------------------
+    # generate_workflow_experiment_records
+    # ------------------------------------------------------------------
+
+    def _setup_workflow_mocks(self):
+        """Patch all internals of generate_workflow_experiment_records."""
+        mock_rg = MagicMock()
+        mock_props = MagicMock()
+        mock_props.jupyter_kernel_info.to_dict.return_value = {}
+        mock_rg.build_record_properties.return_value = mock_props
+
+        mock_wf_record = MagicMock()
+        mock_wf_record.to_dict.return_value = {"id": "wf", "properties": {}}
+
+        mock_exp_record = MagicMock()
+        mock_exp_record.to_dict.return_value = {
+            "id": "wf",
+            "properties": {},
+            "jupyter_notebook_url": "url",
+            "collection_id": "col",
+        }
+        return mock_rg, mock_props, mock_wf_record, mock_exp_record
+
+    @patch("deep_code.tools.publish.WorkflowAsOgcRecord")
+    @patch("deep_code.tools.publish.LinksBuilder")
+    @patch("deep_code.tools.publish.OSCWorkflowOGCApiRecordGenerator")
+    def test_generate_workflow_records_mode_workflow(self, MockRG, MockLinks, MockWF):
+        mock_rg, mock_props, mock_wf_record, _ = self._setup_workflow_mocks()
+        MockRG.return_value = mock_rg
+        MockWF.return_value = mock_wf_record
+
+        self.publisher.workflow_config = {
+            "workflow_id": "my-workflow",
+            "properties": {"title": "My WF", "license": "CC-BY-4.0"},
+        }
+        with patch.object(self.publisher, "_update_base_catalog", return_value={}):
+            result = self.publisher.generate_workflow_experiment_records(
+                write_to_file=False, mode="workflow"
+            )
+
+        self.assertIn("workflows/my-workflow/record.json", result)
+        self.assertIn("workflows/catalog.json", result)
+        self.assertNotIn("experiments/catalog.json", result)
+
+    @patch("deep_code.tools.publish.ExperimentAsOgcRecord")
+    @patch("deep_code.tools.publish.WorkflowAsOgcRecord")
+    @patch("deep_code.tools.publish.LinksBuilder")
+    @patch("deep_code.tools.publish.OSCWorkflowOGCApiRecordGenerator")
+    def test_generate_workflow_records_mode_all(self, MockRG, MockLinks, MockWF, MockExp):
+        mock_rg, mock_props, mock_wf_record, mock_exp_record = self._setup_workflow_mocks()
+        MockRG.return_value = mock_rg
+        MockWF.return_value = mock_wf_record
+        MockExp.return_value = mock_exp_record
+
+        self.publisher.workflow_config = {
+            "workflow_id": "my-workflow",
+            "properties": {"title": "My WF", "license": "CC-BY-4.0"},
+        }
+        self.publisher.collection_id = "my-collection"
+        with patch.object(self.publisher, "_update_base_catalog", return_value={}):
+            result = self.publisher.generate_workflow_experiment_records(
+                write_to_file=False, mode="all"
+            )
+
+        self.assertIn("workflows/my-workflow/record.json", result)
+        self.assertIn("workflows/catalog.json", result)
+        self.assertIn("experiments/catalog.json", result)
+
+    @patch("deep_code.tools.publish.OSCWorkflowOGCApiRecordGenerator")
+    def test_generate_workflow_records_raises_when_workflow_id_missing(self, MockRG):
+        self.publisher.workflow_config = {
+            "properties": {"title": "My WF", "license": "CC-BY-4.0"},
+        }
+        with pytest.raises(ValueError, match="workflow_id is missing"):
+            self.publisher.generate_workflow_experiment_records(
+                write_to_file=False, mode="workflow"
+            )
+
+    @patch("deep_code.tools.publish.OSCWorkflowOGCApiRecordGenerator")
+    def test_generate_workflow_records_raises_when_license_missing(self, MockRG):
+        self.publisher.workflow_config = {
+            "workflow_id": "my-wf",
+            "properties": {"title": "My WF"},
+        }
+        with pytest.raises(ValueError, match="license is required"):
+            self.publisher.generate_workflow_experiment_records(
+                write_to_file=False, mode="workflow"
+            )
+
+    def test_generate_workflow_records_returns_empty_for_dataset_mode(self):
+        result = self.publisher.generate_workflow_experiment_records(
+            write_to_file=False, mode="dataset"
+        )
+        self.assertEqual(result, {})
 
 
 class TestParseGithubNotebookUrl:

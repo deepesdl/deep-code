@@ -607,3 +607,159 @@ class TestFormatString(unittest.TestCase):
             OscDatasetStacGenerator.format_string("too   many   spaces"),
             "Too Many Spaces",
         )
+
+
+class TestOscDatasetStacGeneratorExtra(unittest.TestCase):
+    """Additional tests to cover branches not exercised by TestOSCProductSTACGenerator."""
+
+    def _make_generator(self, mock_ds, collection_id="my-collection", **kwargs):
+        with patch("deep_code.utils.dataset_stac_generator.open_dataset", return_value=mock_ds):
+            return OscDatasetStacGenerator(
+                dataset_id="test.zarr",
+                collection_id=collection_id,
+                workflow_id="wf",
+                workflow_title="WF",
+                license_type="CC-BY-4.0",
+                **kwargs,
+            )
+
+    def _make_dataset(self, coord_type="lon_lat"):
+        import numpy as np
+        from datetime import datetime
+        if coord_type == "lon_lat":
+            coords = {
+                "lon": ("lon", np.linspace(-10, 10, 3)),
+                "lat": ("lat", np.linspace(-5, 5, 2)),
+                "time": ("time", [np.datetime64(datetime(2020, 1, 1), "ns")]),
+            }
+        elif coord_type == "longitude_latitude":
+            coords = {
+                "longitude": ("longitude", np.linspace(-10, 10, 3)),
+                "latitude": ("latitude", np.linspace(-5, 5, 2)),
+                "time": ("time", [np.datetime64(datetime(2020, 1, 1), "ns")]),
+            }
+        elif coord_type == "x_y":
+            coords = {
+                "x": ("x", np.linspace(0, 100, 3)),
+                "y": ("y", np.linspace(0, 50, 2)),
+                "time": ("time", [np.datetime64(datetime(2020, 1, 1), "ns")]),
+            }
+        else:
+            coords = {}
+        from xarray import Dataset
+        return Dataset(coords=coords)
+
+    @patch("deep_code.utils.dataset_stac_generator.open_dataset")
+    def test_collection_id_with_space_raises(self, mock_open_ds):
+        mock_open_ds.return_value = self._make_dataset()
+        with self.assertRaisesRegex(ValueError, "must not contain spaces"):
+            OscDatasetStacGenerator(
+                dataset_id="test.zarr",
+                collection_id="bad id",
+                workflow_id="wf",
+                workflow_title="WF",
+                license_type="CC-BY-4.0",
+            )
+
+    @patch("deep_code.utils.dataset_stac_generator.open_dataset")
+    def test_spatial_extent_longitude_latitude(self, mock_open_ds):
+        ds = self._make_dataset("longitude_latitude")
+        mock_open_ds.return_value = ds
+        gen = self._make_generator(ds)
+        extent = gen._get_spatial_extent()
+        self.assertAlmostEqual(extent.bboxes[0][0], -10.0)
+        self.assertAlmostEqual(extent.bboxes[0][1], -5.0)
+
+    @patch("deep_code.utils.dataset_stac_generator.open_dataset")
+    def test_spatial_extent_x_y(self, mock_open_ds):
+        ds = self._make_dataset("x_y")
+        mock_open_ds.return_value = ds
+        gen = self._make_generator(ds)
+        extent = gen._get_spatial_extent()
+        self.assertAlmostEqual(extent.bboxes[0][0], 0.0)
+
+    @patch("deep_code.utils.dataset_stac_generator.open_dataset")
+    def test_spatial_extent_unknown_coords_raises(self, mock_open_ds):
+        ds = self._make_dataset("none")
+        mock_open_ds.return_value = ds
+        gen = self._make_generator(ds)
+        with self.assertRaisesRegex(ValueError, "recognized spatial coordinates"):
+            gen._get_spatial_extent()
+
+    @patch("deep_code.utils.dataset_stac_generator.open_dataset")
+    def test_temporal_extent_no_time_raises(self, mock_open_ds):
+        ds = self._make_dataset("none")
+        mock_open_ds.return_value = ds
+        gen = self._make_generator(ds)
+        with self.assertRaisesRegex(ValueError, "time"):
+            gen._get_temporal_extent()
+
+    @patch("deep_code.utils.dataset_stac_generator.open_dataset")
+    def test_normalize_name_none_returns_none(self, mock_open_ds):
+        ds = self._make_dataset()
+        mock_open_ds.return_value = ds
+        self.assertIsNone(OscDatasetStacGenerator._normalize_name(None))
+
+    @patch("deep_code.utils.dataset_stac_generator.open_dataset")
+    def test_build_collection_with_cf_params(self, mock_open_ds):
+        ds = self._make_dataset()
+        mock_open_ds.return_value = ds
+        gen = self._make_generator(ds, cf_params=[{"name": "temperature", "units": "K"}])
+        collection = gen.build_dataset_stac_collection(mode="dataset")
+        self.assertEqual(collection.extra_fields.get("cf:parameter"), [{"name": "temperature", "units": "K"}])
+
+    @patch("deep_code.utils.dataset_stac_generator.open_dataset")
+    def test_build_collection_with_visualisation_link(self, mock_open_ds):
+        ds = self._make_dataset()
+        mock_open_ds.return_value = ds
+        gen = self._make_generator(ds, visualisation_link="https://viewer.example.com/")
+        collection = gen.build_dataset_stac_collection(mode="dataset")
+        vis_links = [lnk for lnk in collection.links if lnk.rel == "visualisation"]
+        self.assertEqual(len(vis_links), 1)
+        self.assertEqual(vis_links[0].target, "https://viewer.example.com/")
+        self.assertEqual(vis_links[0].title, "Dataset visualisation")
+
+    @patch("deep_code.utils.dataset_stac_generator.open_dataset")
+    def test_build_collection_mode_all_adds_experiment_link(self, mock_open_ds):
+        ds = self._make_dataset()
+        mock_open_ds.return_value = ds
+        gen = self._make_generator(ds)
+        collection = gen.build_dataset_stac_collection(mode="all")
+        exp_links = [lnk for lnk in collection.links if "experiments" in str(lnk.target)]
+        self.assertEqual(len(exp_links), 1)
+
+    @patch("deep_code.utils.dataset_stac_generator.open_dataset")
+    def test_s3_to_https(self, mock_open_ds):
+        self.assertEqual(
+            OscDatasetStacGenerator._s3_to_https("s3://my-bucket/path/to/file.json"),
+            "https://my-bucket.s3.amazonaws.com/path/to/file.json",
+        )
+
+    @patch("deep_code.utils.dataset_stac_generator.open_dataset")
+    def test_update_existing_variable_catalog(self, mock_open_ds):
+        import json
+        import os
+        import tempfile
+
+        ds = self._make_dataset()
+        mock_open_ds.return_value = ds
+        gen = self._make_generator(ds, osc_themes=["land"])
+
+        base = {
+            "type": "Catalog",
+            "id": "var1",
+            "stac_version": "1.0.0",
+            "description": "Variable catalog",
+            "links": [],
+        }
+        with tempfile.NamedTemporaryFile(mode="w", suffix=".json", delete=False) as f:
+            json.dump(base, f)
+            tmp_path = f.name
+        try:
+            result = gen.update_existing_variable_catalog(tmp_path, "var1")
+        finally:
+            os.unlink(tmp_path)
+
+        rels = [lnk["rel"] for lnk in result["links"]]
+        self.assertIn("child", rels)
+        self.assertIn("related", rels)  # theme link
