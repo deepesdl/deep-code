@@ -26,6 +26,8 @@ osc_themes: [cryosphere]        # must match slugs at opensciencedata.esa.int/th
 osc_region: global
 dataset_status: completed       # ongoing | completed | planned (default: ongoing)
 documentation_link: https://example.com/docs
+visualisation_link: https://example.com/viewer   # URL to a visualisation of the dataset
+osc_project: deep-earth-system-data-lab          # defaults to deep-earth-system-data-lab
 access_link: s3://bucket/your-dataset.zarr   # defaults to s3://deep-esdl-public/{dataset_id}
 
 # CF parameter overrides (list of {name, units, ...} dicts)
@@ -48,6 +50,7 @@ cf_parameter:
 | `description` | No | Human-readable description of the dataset. Overrides the `description` attribute in the Zarr store; falls back to `"No description available."` if neither is set. |
 | `documentation_link` | No | URL to dataset documentation. |
 | `visualisation_link` | No | URL to a visualisation of the dataset (e.g. xcube Viewer, WMS). Added as a `visualisation` link with title `"Dataset visualisation"`. |
+| `osc_project` | No | OSC project ID this dataset belongs to (e.g. `deep-earth-system-data-lab`). Defaults to `deep-earth-system-data-lab`. |
 | `cf_parameter` | No | List of CF metadata dicts to override variable attributes (e.g. `name`, `units`). |
 | `stac_catalog_s3_root` | Yes | S3 root where the STAC Catalog and Item are published. Publishing fails if this field is absent. See [STAC Catalog on S3](#stac-catalog-on-s3). |
 

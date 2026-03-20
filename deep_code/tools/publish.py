@@ -270,6 +270,7 @@ class Publisher:
         cf_params = self.dataset_config.get("cf_parameter")
         license_type = self.dataset_config.get("license_type")
         visualisation_link = self.dataset_config.get("visualisation_link")
+        osc_project = self.dataset_config.get("osc_project")
         osc_project_title = self.dataset_config.get("osc_project_title")
         description = self.dataset_config.get("description")
 
@@ -305,6 +306,7 @@ class Publisher:
             osc_themes=osc_themes,
             cf_params=cf_params,
             visualisation_link=visualisation_link,
+            osc_project=osc_project,
             osc_project_title=osc_project_title,
             description=description,
         )
