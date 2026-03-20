@@ -10,7 +10,7 @@ from unittest.mock import MagicMock, call, patch
 import xarray
 import xarray as xr
 
-from deep_code.utils.helper import open_dataset
+from deep_code.utils.helper import open_dataset, serialize
 
 
 def make_dummy_dataset():
@@ -156,3 +156,23 @@ class TestOpenDataset(unittest.TestCase):
         custom_logger.info.assert_any_call(
             "Successfully opened dataset 'test-id' with configuration: Public store"
         )
+
+
+class TestSerialize(unittest.TestCase):
+    def test_set_converted_to_list(self):
+        result = serialize({1, 2, 3})
+        self.assertIsInstance(result, list)
+        self.assertCountEqual(result, [1, 2, 3])
+
+    def test_object_with_dict_returns_dict(self):
+        class Obj:
+            def __init__(self):
+                self.x = 1
+                self.y = 2
+
+        result = serialize(Obj())
+        self.assertEqual(result, {"x": 1, "y": 2})
+
+    def test_unserializable_raises_type_error(self):
+        with self.assertRaises(TypeError):
+            serialize(42)

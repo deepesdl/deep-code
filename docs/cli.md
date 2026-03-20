@@ -28,3 +28,5 @@ Options:
 1. Reads your configs and builds dataset STAC collections plus variable catalogs.
 2. Builds workflow and experiment OGC API Records.
 3. Forks/clones the target metadata repo (production, staging, or testing), commits generated JSON, and opens a pull request on your behalf.
+
+The pull request description includes a "Generated with deep-code" attribution note.

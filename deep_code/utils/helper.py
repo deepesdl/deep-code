@@ -63,8 +63,10 @@ def open_dataset(
                 "root": os.environ.get("S3_USER_STORAGE_BUCKET", root),
                 "storage_options": {
                     "anon": False,
-                    "key": os.environ.get("S3_USER_STORAGE_KEY"),
-                    "secret": os.environ.get("S3_USER_STORAGE_SECRET"),
+                    **({
+                        "key": os.environ["S3_USER_STORAGE_KEY"],
+                        "secret": os.environ["S3_USER_STORAGE_SECRET"],
+                    } if os.environ.get("S3_USER_STORAGE_KEY") and os.environ.get("S3_USER_STORAGE_SECRET") else {}),
                 },
             },
         },
