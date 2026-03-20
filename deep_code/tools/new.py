@@ -14,16 +14,11 @@ class TemplateGenerator:
     def generate_workflow_template(output_path: Optional[str] = None) -> str:
         """Generate a complete template with all possible keys and placeholder values"""
 
-        required = {
+        workflow_template = {
             "workflow_id": "[REQUIRED: unique identifier for your workflow]",
             "properties": {
                 "title": "[REQUIRED: human-readable title of the workflow]",
                 "license": "[REQUIRED: SPDX license identifier, e.g. CC-BY-4.0, MIT, proprietary]",
-            },
-        }
-
-        optional = {
-            "properties": {
                 "description": "[OPTIONAL: concise summary of what the workflow does]",
                 "keywords": ["[OPTIONAL: KEYWORD1]", "[KEYWORD2]"],
                 "themes": ["[OPTIONAL: thematic area, e.g. land, ocean, atmosphere]"],
@@ -53,10 +48,8 @@ class TemplateGenerator:
             with open(output_path, "w") as f:
                 f.write("# Workflow Configuration Template\n")
                 f.write("# Replace all [PLACEHOLDER] values with your actual data\n\n")
-                f.write("# --- REQUIRED fields ---\n")
-                f.write(yaml.dump(required, sort_keys=False, width=1000, default_flow_style=False))
-                f.write("\n# --- OPTIONAL fields ---\n")
-                f.write(yaml.dump(optional, sort_keys=False, width=1000, default_flow_style=False))
+                f.write(yaml.dump(workflow_template, sort_keys=False, width=1000,
+                                  default_flow_style=False))
 
     @staticmethod
     def generate_dataset_template(output_path: Optional[str] = None) -> str:
