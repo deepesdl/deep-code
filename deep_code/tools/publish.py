@@ -313,7 +313,6 @@ class Publisher:
         # Store so publish() can reuse it for zarr STAC catalog generation
         self._last_generator = generator
 
-        stac_catalog_s3_root = self.dataset_config.get("stac_catalog_s3_root")
         variable_ids = generator.get_variable_ids()
         ds_collection = generator.build_dataset_stac_collection(
             mode=mode, stac_catalog_s3_root=stac_catalog_s3_root
