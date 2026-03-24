@@ -669,7 +669,6 @@ class OscDatasetStacGenerator:
                 title="Open Science Catalog",
             )
         )
-        collection.add_link(Link(rel="via", target=self.access_link, title="Access"))
         if self.documentation_link:
             collection.add_link(
                 Link(rel="via", target=self.documentation_link, title="Documentation")
