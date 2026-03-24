@@ -71,3 +71,16 @@
 - `jupyter_kernel_info` is now optional in `RecordProperties`; workflow configs without a notebook URL no longer require this field.
 - Removed redundant `hasattr` guard for `_last_generator` in `Publisher.publish()`.
 - Added automated MkDocs GitHub Pages deployment on release via a dedicated `docs.yml` workflow.
+- `osc_themes` values are now automatically lowercased, so `'Land'` and `'LAND'` are treated the same as `'land'`, preventing theme validation failures.
+- `collection_id` is now validated to contain no spaces; a clear error is raised with a hint to use hyphens instead.
+- `license_type` (dataset) and `properties.license` (workflow) are now mandatory fields; publishing fails immediately with a descriptive error if either is missing.
+- Variable catalog `description` now falls back to the title-cased variable ID when neither `description` nor `long_name` attrs are present on the zarr variable, preventing `null` description validation failures.
+- Pull requests opened by deep-code now include a "Generated with deep-code" note in the PR description.
+- `stac_catalog_s3_root` is now a mandatory field in the dataset config; publishing fails immediately with a descriptive error if it is absent.
+- STAC catalog links in the OSC collection now follow the OSC convention: a `via` link to the STAC browser URL and a `child` link to the direct HTTPS catalog URL. The `s3://` URL is converted to HTTPS (AWS virtual-hosted style) to satisfy the `uri-reference` format check in the OSC products schema.
+- Added optional `visualisation_link` field to the dataset config; when provided, a `visualisation` link with title `"Dataset visualisation"` is added to the generated OSC collection.
+- Added optional `description` field to the dataset config; overrides the `description` attribute from the Zarr store when set.
+- Added optional `osc_project_title` field to the dataset config to correctly set the project link title (e.g. `"DeepESDL"`) instead of deriving it from the project ID.
+- Fixed `workflow_id` not being normalised (slugified) when stored on `Publisher`, causing spaces in experiment link hrefs and failing `uri-reference` format validation.
+- Removed redundant `via` access link from the OSC STAC collection; access is already expressed via typed assets (`zarr-data`, `zarr-consolidated-metadata`) on the STAC item.
+- `osc_project` is now omitted from `OscDatasetStacGenerator` when not provided, preserving the callee's default instead of passing `None`.

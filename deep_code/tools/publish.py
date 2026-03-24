@@ -172,7 +172,9 @@ class Publisher:
             self.workflow_title = self.workflow_config.get("properties", {}).get(
                 "title"
             )
-            self.workflow_id = self.workflow_config.get("workflow_id")
+            self.workflow_id = self._normalize_name(
+                self.workflow_config.get("workflow_id")
+            )
 
     def _read_config_files(self) -> None:
         if self.dataset_config_path:
@@ -267,9 +269,27 @@ class Publisher:
         osc_themes = self.dataset_config.get("osc_themes")
         cf_params = self.dataset_config.get("cf_parameter")
         license_type = self.dataset_config.get("license_type")
+        visualisation_link = self.dataset_config.get("visualisation_link")
+        osc_project = self.dataset_config.get("osc_project")
+        osc_project_title = self.dataset_config.get("osc_project_title")
+        description = self.dataset_config.get("description")
 
         if not dataset_id or not self.collection_id:
             raise ValueError("Dataset ID or Collection ID missing in the config.")
+
+        if not license_type:
+            raise ValueError(
+                "license_type is required in the dataset config. "
+                "Provide an SPDX identifier (e.g. 'CC-BY-4.0', 'MIT', 'proprietary')."
+            )
+
+        stac_catalog_s3_root = self.dataset_config.get("stac_catalog_s3_root")
+        if not stac_catalog_s3_root:
+            raise ValueError(
+                "stac_catalog_s3_root is required in the dataset config. "
+                "Provide the S3 root where the STAC catalog should be published "
+                "(e.g. 's3://my-bucket/stac/my-collection/')."
+            )
 
         logger.info("Generating STAC collection...")
 
@@ -285,6 +305,10 @@ class Publisher:
             osc_region=osc_region,
             osc_themes=osc_themes,
             cf_params=cf_params,
+            visualisation_link=visualisation_link,
+            **({"osc_project": osc_project} if osc_project else {}),
+            osc_project_title=osc_project_title,
+            description=description,
         )
         # Store so publish() can reuse it for zarr STAC catalog generation
         self._last_generator = generator
@@ -421,6 +445,13 @@ class Publisher:
             raise ValueError("workflow_id is missing in workflow config.")
 
         properties_list = self.workflow_config.get("properties", {})
+
+        if not properties_list.get("license"):
+            raise ValueError(
+                "license is required under 'properties' in the workflow config. "
+                "Provide an SPDX identifier (e.g. 'CC-BY-4.0', 'MIT', 'proprietary')."
+            )
+
         osc_themes = properties_list.get("themes")
         contacts = self.workflow_config.get("contact", [])
         links = self.workflow_config.get("links", [])
@@ -587,20 +618,16 @@ class Publisher:
             ds_files = self.publish_dataset(write_to_file=False, mode=mode)
             files.update(ds_files)
 
-            # Publish STAC catalog + item to S3 when stac_catalog_s3_root is configured.
-            # This is independent of the GitHub PR and happens immediately.
+            # Publish STAC catalog + item to S3 (stac_catalog_s3_root is mandatory).
             stac_catalog_s3_root = self.dataset_config.get("stac_catalog_s3_root")
-            if stac_catalog_s3_root:
-                logger.info(
-                    f"Publishing STAC catalog to S3: {stac_catalog_s3_root}"
-                )
-                zarr_stac_files = self._last_generator.build_zarr_stac_catalog_file_dict(
-                    stac_catalog_s3_root
-                )
-                self._write_stac_catalog_to_s3(
-                    zarr_stac_files, self._get_stac_s3_storage_options()
-                )
-                logger.info("STAC catalog written to S3.")
+            logger.info(f"Publishing STAC catalog to S3: {stac_catalog_s3_root}")
+            zarr_stac_files = self._last_generator.build_zarr_stac_catalog_file_dict(
+                stac_catalog_s3_root
+            )
+            self._write_stac_catalog_to_s3(
+                zarr_stac_files, self._get_stac_s3_storage_options()
+            )
+            logger.info("STAC catalog written to S3.")
 
         if mode in ("workflow", "all"):
             wf_files = self.generate_workflow_experiment_records(
@@ -633,7 +660,11 @@ class Publisher:
         )
         commit_message = f"Publish {mode_label}"
         pr_title = f"Publish {mode_label}"
-        pr_body = f"This PR publishes {mode_label} to the repository."
+        pr_body = (
+            f"This PR publishes {mode_label} to the repository.\n\n"
+            "---\n"
+            "_Generated with [deep-code](https://github.com/deepesdl/deep-code)_"
+        )
 
         pr_url = self.gh_publisher.publish_files(
             branch_name=branch_name,
