@@ -306,7 +306,7 @@ class Publisher:
             osc_themes=osc_themes,
             cf_params=cf_params,
             visualisation_link=visualisation_link,
-            osc_project=osc_project,
+            **({"osc_project": osc_project} if osc_project else {}),
             osc_project_title=osc_project_title,
             description=description,
         )
