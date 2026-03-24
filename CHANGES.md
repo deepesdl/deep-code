@@ -82,3 +82,5 @@
 - Added optional `description` field to the dataset config; overrides the `description` attribute from the Zarr store when set.
 - Added optional `osc_project_title` field to the dataset config to correctly set the project link title (e.g. `"DeepESDL"`) instead of deriving it from the project ID.
 - Fixed `workflow_id` not being normalised (slugified) when stored on `Publisher`, causing spaces in experiment link hrefs and failing `uri-reference` format validation.
+- Removed redundant `via` access link from the OSC STAC collection; access is already expressed via typed assets (`zarr-data`, `zarr-consolidated-metadata`) on the STAC item.
+- `osc_project` is now omitted from `OscDatasetStacGenerator` when not provided, preserving the callee's default instead of passing `None`.
