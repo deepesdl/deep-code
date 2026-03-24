@@ -1,5 +1,42 @@
 # Python API
 
+## LintDataset
+
+`LintDataset` validates an xarray dataset against the metadata rules required for
+publication to the ESA Open Science Catalog. Run it before publishing to catch
+issues early.
+
+```python
+from deep_code.tools.lint import LintDataset
+
+# Lint a Zarr dataset from the DeepESDL public/team bucket by ID
+result = LintDataset(dataset_id="my-dataset.zarr").lint_dataset()
+
+# Or lint an already-opened xarray.Dataset
+import xarray as xr
+ds = xr.open_zarr("s3://my-bucket/my-dataset.zarr")
+result = LintDataset(dataset=ds).lint_dataset()
+
+print(result)
+```
+
+### Validation rules
+
+Two custom rules are checked:
+
+| Rule | What is validated | If missing during publish |
+|---|---|---|
+| `deepcode/dataset-description` | Dataset has a `description` attribute in `ds.attrs`. | Falls back to `"No description available."` |
+| `deepcode/variable-gcmd-keyword-url` | Every data variable has a `gcmd_keyword_url` attribute. | You are prompted to enter a URL for each affected variable interactively. |
+
+Run `LintDataset` beforehand to spot metadata gaps before they interrupt the publish flow.
+
+The same check is also available from the CLI — see [Lint a dataset](cli.md#lint-a-dataset).
+
+---
+
+## Publisher
+
 `deep_code.tools.publish.Publisher` is the main entry point.
 
 ```python
