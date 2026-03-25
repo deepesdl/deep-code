@@ -188,27 +188,31 @@ class GitHubAutomation:
         self._run_git(["checkout", "-B", branch_name], cwd=repo)
 
     def add_file(self, file_path: str, content: Any) -> None:
-        """Add a new file (serialized to JSON) to the local repository and stage it."""
+        """Add a new file (serialized to JSON or YAML) to the local repository and stage it."""
         repo = self._ensure_repo_dir()
         full_path = Path(repo) / file_path
         full_path.parent.mkdir(parents=True, exist_ok=True)
 
-        # Normalize content to something JSON serializable
+        # Normalize content to something serializable
         if hasattr(content, "to_dict"):
             content = content.to_dict()
         if not isinstance(content, (dict, list, str, int, float, bool, type(None))):
             raise TypeError(f"Cannot serialize content of type {type(content)}")
 
-        try:
-            json_content = json.dumps(
-                content, indent=2, ensure_ascii=False, default=serialize
-            )
-        except TypeError as e:
-            raise RuntimeError(
-                f"JSON serialization failed for '{file_path}': {e}"
-            ) from e
+        if str(file_path).endswith(".yaml") or str(file_path).endswith(".yml"):
+            import yaml
+            serialized = yaml.dump(content, sort_keys=False, allow_unicode=True)
+        else:
+            try:
+                serialized = json.dumps(
+                    content, indent=2, ensure_ascii=False, default=serialize
+                )
+            except TypeError as e:
+                raise RuntimeError(
+                    f"JSON serialization failed for '{file_path}': {e}"
+                ) from e
 
-        full_path.write_text(json_content, encoding="utf-8")
+        full_path.write_text(serialized, encoding="utf-8")
         self._run_git(["add", str(full_path)], cwd=repo)
         logging.info("Added and staged file: %s", file_path)
 

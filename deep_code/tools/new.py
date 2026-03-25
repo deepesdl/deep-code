@@ -29,6 +29,12 @@ class TemplateGenerator:
                 },
             },
             "jupyter_notebook_url": "[OPTIONAL: link to the source notebook (e.g. on GitHub)]",
+            "parameters": {
+                "[OPTIONAL: PARAM_NAME]": "[PARAM_VALUE]",
+            },
+            "input_datasets": [
+                "[OPTIONAL: dataset ID or URL used as input to the workflow]",
+            ],
             "contact": [
                 {
                     "name": "[OPTIONAL: contact person's full name]",

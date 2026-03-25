@@ -84,3 +84,5 @@
 - Fixed `workflow_id` not being normalised (slugified) when stored on `Publisher`, causing spaces in experiment link hrefs and failing `uri-reference` format validation.
 - Removed redundant `via` access link from the OSC STAC collection; access is already expressed via typed assets (`zarr-data`, `zarr-consolidated-metadata`) on the STAC item.
 - `osc_project` is now omitted from `OscDatasetStacGenerator` when not provided, preserving the callee's default instead of passing `None`.
+- Added optional `parameters` and `input_datasets` fields to the workflow config. When present, deep-code generates `input.yaml` alongside the experiment record and adds an `input` link to it. When `jupyter_kernel_info` is set, `environment.yaml` is generated and an `environment` link is added. Both links are omitted when their source data is absent.
+- Fixed duplicate `stac_catalog_s3_root` fetch inside `publish_dataset()`.

@@ -186,7 +186,7 @@ class Publisher:
 
     @staticmethod
     def _write_to_file(file_path: str, data: dict):
-        """Write a dictionary to a JSON file.
+        """Write a dictionary to a JSON or YAML file depending on the extension.
 
         Args:
             file_path (str): The path to the file.
@@ -194,14 +194,18 @@ class Publisher:
         """
         # Create the directory if it doesn't exist
         Path(file_path).parent.mkdir(parents=True, exist_ok=True)
-        try:
-            # unpicklable=False -> plain JSON (drops type metadata); cycles are resolved.
-            json_content = jsonpickle.encode(data, unpicklable=False, indent=2)
-        except TypeError as e:
-            raise RuntimeError(f"JSON serialization failed: {e}")
+
+        if str(file_path).endswith(".yaml") or str(file_path).endswith(".yml"):
+            content = yaml.dump(data, sort_keys=False, allow_unicode=True)
+        else:
+            try:
+                # unpicklable=False -> plain JSON (drops type metadata); cycles are resolved.
+                content = jsonpickle.encode(data, unpicklable=False, indent=2)
+            except TypeError as e:
+                raise RuntimeError(f"JSON serialization failed: {e}")
 
         with open(file_path, "w", encoding="utf-8") as f:
-            f.write(json_content)
+            f.write(content)
 
     def _update_and_add_to_file_dict(
         self, file_dict, catalog_path, update_method, *args
@@ -519,6 +523,18 @@ class Publisher:
             # generate experiment record only if there is an output dataset
             dataset_link = link_builder.build_link_to_dataset(self.collection_id)
 
+            input_parameters = self.workflow_config.get("parameters")
+            input_datasets = self.workflow_config.get("input_datasets")
+            input_data = {}
+            if input_parameters:
+                input_data["parameters"] = input_parameters
+            if input_datasets:
+                input_data["input_datasets"] = input_datasets
+            has_input = bool(input_data)
+
+            environment_data = jupyter_kernel_info if jupyter_kernel_info else None
+            has_environment = bool(environment_data)
+
             experiment_record = ExperimentAsOgcRecord(
                 id=workflow_id,
                 title=self.workflow_title,
@@ -527,6 +543,8 @@ class Publisher:
                 collection_id=self.collection_id,
                 properties=exp_record_properties,
                 links=links + theme_links + dataset_link,
+                has_input=has_input,
+                has_environment=has_environment,
             )
             # Convert to dictionary and cleanup
             experiment_dict = experiment_record.to_dict()
@@ -539,6 +557,11 @@ class Publisher:
             # add experiment record to file_dict
             exp_file_path = f"experiments/{workflow_id}/record.json"
             file_dict[exp_file_path] = experiment_dict
+
+            if has_input:
+                file_dict[f"experiments/{workflow_id}/input.yaml"] = input_data
+            if has_environment:
+                file_dict[f"experiments/{workflow_id}/environment.yaml"] = environment_data
 
             # Update base catalogs of experiments with links
             file_dict["experiments/catalog.json"] = self._update_base_catalog(

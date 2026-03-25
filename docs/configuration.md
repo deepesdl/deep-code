@@ -97,6 +97,11 @@ properties:
 
 # Optional
 jupyter_notebook_url: https://github.com/org/repo/path/to/notebook.ipynb
+parameters:
+  start_date: "2020-01-01"
+  region: europe
+input_datasets:
+  - my-input-dataset.zarr
 contact:
   - name: Jane Doe
     organization: Example Org
@@ -122,7 +127,9 @@ links:
 | `properties.themes` | No | List of OSC theme slugs. |
 | `properties.license` | Yes | SPDX license identifier (e.g. `CC-BY-4.0`, `proprietary`). Publishing fails if this field is absent. |
 | `jupyter_notebook_url` | No | Link to the source notebook on GitHub. When omitted, kernel and application links are skipped. |
-| `properties.jupyter_kernel_info` | No | Kernel name, Python version, and environment file URL. Only published when `jupyter_notebook_url` is set. |
+| `properties.jupyter_kernel_info` | No | Kernel name, Python version, and environment file URL. Only published when `jupyter_notebook_url` is set. When present, deep-code also generates `environment.yaml` alongside the experiment record and adds an `environment` link pointing to it. |
+| `parameters` | No | Key-value map of workflow input parameters (e.g. date ranges, region names). When present, deep-code generates `input.yaml` alongside the experiment record and adds an `input` link pointing to it. |
+| `input_datasets` | No | List of dataset IDs or URLs consumed by the workflow. Included in `input.yaml` together with `parameters` when either is set. |
 | `contact` | No | List of contact objects with `name`, `organization`, and `links`. |
 | `links` | No | Additional OGC API record links (e.g. `related`, `describedby`). |
 

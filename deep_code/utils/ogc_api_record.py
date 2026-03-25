@@ -333,6 +333,8 @@ class ExperimentAsOgcRecord(MappingConstructible["OgcRecord"], JsonSerializable)
         linkTemplates=None,
         conformsTo: list[str] = None,
         geometry: Optional[Any] = None,
+        has_input: bool = False,
+        has_environment: bool = False,
     ):
         if linkTemplates is None:
             linkTemplates = []
@@ -347,11 +349,13 @@ class ExperimentAsOgcRecord(MappingConstructible["OgcRecord"], JsonSerializable)
         self.geometry = geometry
         self.properties = properties
         self.linkTemplates = linkTemplates
+        self.has_input = has_input
+        self.has_environment = has_environment
         self.links = self._generate_static_links() + links
 
     def _generate_static_links(self):
         """Generates static links (root and parent) for the record."""
-        return [
+        links = [
             {
                 "rel": "root",
                 "href": "../../catalog.json",
@@ -384,21 +388,24 @@ class ExperimentAsOgcRecord(MappingConstructible["OgcRecord"], JsonSerializable)
                 "application:platform_supports": ["jupyter-notebook"],
                 "application:preferred_app": "JupyterLab",
             },
-            {
+        ]
+        if self.has_input:
+            links.append({
                 "rel": "input",
                 "href": "./input.yaml",
                 "type": "application/yaml",
                 "title": "Input parameters",
-            },
-            {
+            })
+        if self.has_environment:
+            links.append({
                 "rel": "environment",
                 "href": "./environment.yaml",
                 "type": "application/yaml",
                 "title": "Execution environment",
-            },
-            {
-                "rel": "self",
-                "href": f"{BASE_URL_OSC}/experiments/{self.id}/record.json",
-                "type": "application/json",
-            },
-        ]
+            })
+        links.append({
+            "rel": "self",
+            "href": f"{BASE_URL_OSC}/experiments/{self.id}/record.json",
+            "type": "application/json",
+        })
+        return links
