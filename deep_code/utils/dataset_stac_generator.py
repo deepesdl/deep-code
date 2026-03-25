@@ -50,7 +50,7 @@ class OscDatasetStacGenerator:
         osc_missions: list[str] | None = None,
         cf_params: list[dict[str]] | None = None,
         osc_project: str = "deep-earth-system-data-lab",
-        osc_project_title: str | None = None,
+        osc_project_title: str = "DeepESDL",
         visualisation_link: str | None = None,
         description: str | None = None,
     ):
@@ -65,7 +65,7 @@ class OscDatasetStacGenerator:
         self.workflow_title = workflow_title
         self.license_type = license_type
         self.osc_project = osc_project
-        self.osc_project_title = osc_project_title or self.format_string(osc_project)
+        self.osc_project_title = osc_project_title
         self.access_link = access_link or f"s3://deep-esdl-public/{dataset_id}"
         self.documentation_link = documentation_link
         self.osc_status = osc_status
