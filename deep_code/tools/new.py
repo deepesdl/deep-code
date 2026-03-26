@@ -63,6 +63,7 @@ class TemplateGenerator:
         }
 
         optional = {
+            "osc_project_url": "[OPTIONAL: URL to the project website (e.g. https://deepesdl.eu). Used as the 'via' link in the project collection. Defaults to the existing DeepESDL project collection]",
             "osc_themes": ["[OPTIONAL: OSC theme slug, e.g. land, ocean, atmosphere — auto-lowercased]"],
             "osc_region": "[OPTIONAL: geographical coverage, e.g. Global]",
             "dataset_status": "[OPTIONAL: ongoing | completed | planned (default: ongoing)]",
