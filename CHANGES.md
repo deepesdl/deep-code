@@ -84,3 +84,9 @@
 - Fixed `workflow_id` not being normalised (slugified) when stored on `Publisher`, causing spaces in experiment link hrefs and failing `uri-reference` format validation.
 - Removed redundant `via` access link from the OSC STAC collection; access is already expressed via typed assets (`zarr-data`, `zarr-consolidated-metadata`) on the STAC item.
 - `osc_project` is now omitted from `OscDatasetStacGenerator` when not provided, preserving the callee's default instead of passing `None`.
+
+## Changes in 0.1.10 (in Development)
+
+- Generated project collection now includes required STAC extensions (`osc`, `themes`, `contacts`) and OSC-mandatory fields (`osc:type`, `osc:status`, `themes`, `contacts`) to pass OSC catalog validation.
+- Added optional `osc_project_url` field to the dataset config; used as the `via` link in the project collection. Falls back to `documentation_link` if omitted; defaults to the existing DeepESDL project collection when neither is provided.
+- `dataset_status` now defaults to `"ongoing"` when not specified in the dataset config.
