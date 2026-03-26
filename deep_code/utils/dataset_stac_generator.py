@@ -11,7 +11,10 @@ import pandas as pd
 from pystac import Catalog, Collection, Extent, Item, Asset, Link, SpatialExtent, TemporalExtent
 
 from deep_code.constants import (
+    CONTACTS_SCHEMA_URI,
+    OSC_SCHEMA_URI,
     OSC_THEME_SCHEME,
+    THEMES_SCHEMA_URI,
     ZARR_MEDIA_TYPE,
 )
 from deep_code.utils.helper import open_dataset
@@ -51,6 +54,7 @@ class OscDatasetStacGenerator:
         cf_params: list[dict[str]] | None = None,
         osc_project: str = "deep-earth-system-data-lab",
         osc_project_title: str = "DeepESDL",
+        osc_project_url: str | None = None,
         visualisation_link: str | None = None,
         description: str | None = None,
     ):
@@ -66,6 +70,7 @@ class OscDatasetStacGenerator:
         self.license_type = license_type
         self.osc_project = osc_project
         self.osc_project_title = osc_project_title
+        self.osc_project_url = osc_project_url
         self.access_link = access_link or f"s3://deep-esdl-public/{dataset_id}"
         self.documentation_link = documentation_link
         self.osc_status = osc_status
@@ -356,13 +361,61 @@ class OscDatasetStacGenerator:
             "https://esa-earthcode.github.io/open-science-catalog-metadata"
             f"/projects/{self.osc_project}/collection.json"
         )
+        links = [
+            {
+                "rel": "self",
+                "href": self_href,
+                "type": "application/json",
+            },
+            {
+                "rel": "root",
+                "href": "../../catalog.json",
+                "type": "application/json",
+                "title": "Open Science Catalog",
+            },
+            {
+                "rel": "parent",
+                "href": "../catalog.json",
+                "type": "application/json",
+                "title": "Projects",
+            },
+        ]
+        project_url = self.osc_project_url or self.documentation_link
+        if project_url:
+            links.append(
+                {
+                    "rel": "via",
+                    "href": project_url,
+                    "type": "text/html",
+                    "title": self.osc_project_title,
+                }
+            )
+        else:
+            self.logger.warning(
+                "No 'osc_project_url' or 'documentation_link' provided. "
+                "The project collection will be missing a required 'via' link."
+            )
+        themes = (
+            [
+                {
+                    "concepts": [{"id": theme} for theme in self.osc_themes],
+                    "scheme": OSC_THEME_SCHEME,
+                }
+            ]
+            if self.osc_themes
+            else []
+        )
         return {
             "type": "Collection",
             "id": self.osc_project,
             "stac_version": "1.0.0",
-            "stac_extensions": [],
-            "title": self.format_string(self.osc_project),
-            "description": self.format_string(self.osc_project),
+            "stac_extensions": [
+                OSC_SCHEMA_URI,
+                THEMES_SCHEMA_URI,
+                CONTACTS_SCHEMA_URI,
+            ],
+            "title": self.format_string(self.osc_project_title or self.osc_project),
+            "description": self.format_string(self.osc_project_title or self.osc_project),
             "keywords": [],
             "license": "various",
             "extent": {
@@ -371,25 +424,11 @@ class OscDatasetStacGenerator:
             },
             "created": now_iso,
             "updated": now_iso,
-            "links": [
-                {
-                    "rel": "self",
-                    "href": self_href,
-                    "type": "application/json",
-                },
-                {
-                    "rel": "root",
-                    "href": "../../catalog.json",
-                    "type": "application/json",
-                    "title": "Open Science Catalog",
-                },
-                {
-                    "rel": "parent",
-                    "href": "../catalog.json",
-                    "type": "application/json",
-                    "title": "Projects",
-                },
-            ],
+            "osc:type": "project",
+            "osc:status": self.osc_status,
+            "themes": themes,
+            "contacts": [],
+            "links": links,
         }
 
     def update_project_base_catalog(self, project_base_catalog_path) -> dict:
