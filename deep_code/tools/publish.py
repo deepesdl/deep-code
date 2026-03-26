@@ -264,7 +264,7 @@ class Publisher:
         self.collection_id = self.dataset_config.get("collection_id")
         documentation_link = self.dataset_config.get("documentation_link")
         access_link = self.dataset_config.get("access_link")
-        dataset_status = self.dataset_config.get("dataset_status")
+        dataset_status = self.dataset_config.get("dataset_status") or "ongoing"
         osc_region = self.dataset_config.get("osc_region")
         osc_themes = self.dataset_config.get("osc_themes")
         cf_params = self.dataset_config.get("cf_parameter")
@@ -272,6 +272,7 @@ class Publisher:
         visualisation_link = self.dataset_config.get("visualisation_link")
         osc_project = self.dataset_config.get("osc_project")
         osc_project_title = self.dataset_config.get("osc_project_title")
+        osc_project_url = self.dataset_config.get("osc_project_url")
         description = self.dataset_config.get("description")
 
         if not dataset_id or not self.collection_id:
@@ -308,6 +309,7 @@ class Publisher:
             visualisation_link=visualisation_link,
             **({"osc_project": osc_project} if osc_project else {}),
             osc_project_title=osc_project_title,
+            osc_project_url=osc_project_url,
             description=description,
         )
         # Store so publish() can reuse it for zarr STAC catalog generation
