@@ -76,6 +76,22 @@ class TemplateGenerator:
             "cf_parameter": [{"name": "[OPTIONAL: CF standard name]", "units": "[unit string]"}],
         }
 
+        # Fields used only by `deep-code generate-prr-collection` to build a
+        # PRR (Product Readiness Review) collection that conforms to
+        # https://eoresults.esa.int/prr_collection_specifications.html
+        prr = {
+            "prr_output_dir": "[OPTIONAL: local dir for the PRR collection tree — defaults to prr/{collection_id}]",
+            "osc_initiative": "[OPTIONAL: PRR initiative — 'earthcode' or 'apex' (default: earthcode)]",
+            "osc_contract_number": "[PRR-REQUIRED: ESA contract identifier, e.g. 4000114410/15/NL/BW]",
+            "osc_project_website": "[PRR-REQUIRED: project website URL — falls back to osc_project_url / documentation_link]",
+            "osc_project_description": "[PRR-REQUIRED: multi-line project description — falls back to description]",
+            "osc_missions": ["[PRR-REQUIRED: satellite mission name(s), e.g. sentinel-3]"],
+            "thumbnail": "[PRR-REQUIRED: URL to a collection thumbnail image (jpeg/png/webp)]",
+            "thumbnail_media_type": "[OPTIONAL: thumbnail MIME type — guessed from the URL suffix if omitted]",
+            "sci_doi": "[OPTIONAL: dataset DOI, e.g. 10.1000/xyz123 (not a DOI link)]",
+            "sci_citation": "[OPTIONAL: human-readable citation for the dataset]",
+        }
+
         stac_catalog_comment = (
             "\n# stac_catalog_s3_root: deep-code writes the following files to this S3 root:\n"
             "#   {stac_catalog_s3_root}/catalog.json               (STAC Catalog root)\n"
@@ -94,4 +110,8 @@ class TemplateGenerator:
                 f.write(yaml.dump(required, sort_keys=False, width=1000, default_flow_style=False))
                 f.write("\n# --- OPTIONAL fields ---\n")
                 f.write(yaml.dump(optional, sort_keys=False, width=1000, default_flow_style=False))
+                f.write(
+                    "\n# --- PRR fields (for `deep-code generate-prr-collection`) ---\n"
+                )
+                f.write(yaml.dump(prr, sort_keys=False, width=1000, default_flow_style=False))
                 f.write(stac_catalog_comment)

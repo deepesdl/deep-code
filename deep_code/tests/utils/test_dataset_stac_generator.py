@@ -3,17 +3,23 @@
 # Permissions are hereby granted under the terms of the MIT License:
 # https://opensource.org/licenses/MIT.
 
+import json
+import os
+import tempfile
 import unittest
 from datetime import datetime
 from unittest.mock import MagicMock, patch
 
 import numpy as np
-from pystac import Catalog, Item
+from pystac import Catalog, Collection, Item
 from xarray import DataArray, Dataset
 
 from deep_code.constants import (
+    DATACUBE_SCHEMA_URI,
     DEEPESDL_COLLECTION_SELF_HREF,
+    OSC_SCHEMA_URI,
     OSC_THEME_SCHEME,
+    PROCESSING_SCHEMA_URI,
     PRODUCT_BASE_CATALOG_SELF_HREF,
     VARIABLE_BASE_CATALOG_SELF_HREF,
     ZARR_MEDIA_TYPE,
@@ -763,3 +769,285 @@ class TestOscDatasetStacGeneratorExtra(unittest.TestCase):
         rels = [lnk["rel"] for lnk in result["links"]]
         self.assertIn("child", rels)
         self.assertIn("related", rels)  # theme link
+
+
+class TestPRRCollection(unittest.TestCase):
+    """Tests for the PRR-style Collection -> Item -> Assets generation."""
+
+    @patch("deep_code.utils.dataset_stac_generator.open_dataset")
+    def setUp(self, mock_open_ds):
+        self.dataset = Dataset(
+            coords={
+                "lon": ("lon", np.linspace(-20, 20, 4)),
+                "lat": ("lat", np.linspace(-10, 10, 3)),
+                "time": (
+                    "time",
+                    [
+                        np.datetime64(datetime(2021, 1, 1), "ns"),
+                        np.datetime64(datetime(2021, 1, 3), "ns"),
+                    ],
+                ),
+            },
+            data_vars={
+                "sst": (
+                    ("time", "lat", "lon"),
+                    np.random.rand(2, 3, 4),
+                    {"units": "K", "long_name": "Sea surface temperature"},
+                ),
+                "chl": (
+                    ("time", "lat", "lon"),
+                    np.random.rand(2, 3, 4),
+                    {"units": "mg m-3"},
+                ),
+                # A CRS var that must be excluded from cube:variables and drive EPSG.
+                "spatial_ref": ((), 0, {"spatial_epsg": 3035}),
+            },
+            attrs={"description": "PRR test cube"},
+        )
+        mock_open_ds.return_value = self.dataset
+        self.gen = OscDatasetStacGenerator(
+            dataset_id="test.zarr",
+            collection_id="prr-collection",
+            workflow_id="wf",
+            workflow_title="WF",
+            license_type="CC-BY-4.0",
+            access_link="s3://bucket/test.zarr",
+            osc_status="ongoing",
+            osc_region="Global",
+            osc_themes=["oceans"],
+            osc_missions=["sentinel-3"],
+            documentation_link="https://example.org/doc",
+        )
+
+    # ---- helpers ----
+
+    def test_get_epsg_from_spatial_ref(self):
+        self.assertEqual(self.gen._get_epsg(), 3035)
+
+    @patch("deep_code.utils.dataset_stac_generator.open_dataset")
+    def test_get_epsg_default_4326(self, mock_open_ds):
+        ds = Dataset(
+            coords={
+                "lon": ("lon", np.linspace(-1, 1, 2)),
+                "lat": ("lat", np.linspace(-1, 1, 2)),
+                "time": ("time", [np.datetime64(datetime(2020, 1, 1), "ns")]),
+            },
+            data_vars={"v": (("time", "lat", "lon"), np.random.rand(1, 2, 2))},
+        )
+        mock_open_ds.return_value = ds
+        gen = OscDatasetStacGenerator(
+            dataset_id="t.zarr",
+            collection_id="c",
+            workflow_id="wf",
+            workflow_title="WF",
+            license_type="CC-BY-4.0",
+        )
+        self.assertEqual(gen._get_epsg(), 4326)
+
+    def test_get_cube_dimensions(self):
+        dims = self.gen._get_cube_dimensions()
+        self.assertEqual(set(dims), {"lon", "lat", "time"})
+        self.assertEqual(dims["lon"]["type"], "spatial")
+        self.assertEqual(dims["lon"]["axis"], "x")
+        self.assertEqual(dims["lon"]["reference_system"], 3035)
+        self.assertEqual(dims["lon"]["extent"], [-20.0, 20.0])
+        self.assertEqual(dims["lat"]["axis"], "y")
+        self.assertEqual(dims["lat"]["extent"], [-10.0, 10.0])
+        self.assertEqual(dims["time"]["type"], "temporal")
+        self.assertEqual(len(dims["time"]["extent"]), 2)
+
+    def test_get_cube_variables(self):
+        variables = self.gen._get_cube_variables()
+        # CRS variable must be excluded.
+        self.assertEqual(set(variables), {"sst", "chl"})
+        self.assertEqual(variables["sst"]["type"], "data")
+        self.assertEqual(variables["sst"]["dimensions"], ["time", "lat", "lon"])
+        self.assertEqual(variables["sst"]["unit"], "K")
+        self.assertEqual(variables["sst"]["description"], "Sea surface temperature")
+        # chl has a unit but no long_name/description.
+        self.assertEqual(variables["chl"]["unit"], "mg m-3")
+        self.assertNotIn("description", variables["chl"])
+
+    # ---- item ----
+
+    def test_build_prr_stac_item(self):
+        item = self.gen.build_prr_stac_item()
+        self.assertIsInstance(item, Item)
+        self.assertEqual(item.id, "prr-collection")
+        self.assertIn(DATACUBE_SCHEMA_URI, item.stac_extensions)
+        self.assertIn("cube:dimensions", item.properties)
+        self.assertIn("cube:variables", item.properties)
+
+        # datetime is null; start/end are timezone-aware ISO strings.
+        self.assertIsNone(item.datetime)
+        self.assertTrue(item.properties["start_datetime"].endswith("+00:00"))
+        self.assertTrue(item.properties["end_datetime"].endswith("+00:00"))
+
+        self.assertEqual(set(item.assets), {"zarr-data", "zarr-consolidated-metadata"})
+        self.assertEqual(item.assets["zarr-data"].href, "s3://bucket/test.zarr")
+        self.assertEqual(item.assets["zarr-data"].media_type, ZARR_MEDIA_TYPE)
+        self.assertEqual(
+            item.assets["zarr-consolidated-metadata"].href,
+            "s3://bucket/test.zarr/.zmetadata",
+        )
+
+    # ---- collection ----
+
+    def test_build_prr_collection(self):
+        coll = self.gen.build_prr_collection()
+        self.assertIsInstance(coll, Collection)
+        self.assertEqual(coll.id, "prr-collection")
+        self.assertEqual(coll.license, "CC-BY-4.0")
+
+        ef = coll.extra_fields
+        self.assertEqual(ef["osc:type"], "product")
+        self.assertEqual(ef["osc:status"], "ongoing")
+        self.assertEqual(ef["osc:region"], "Global")
+        self.assertCountEqual(ef["osc:variables"], ["sst", "chl"])
+        self.assertEqual(ef["osc:missions"], ["sentinel-3"])
+        self.assertEqual(ef["cf:parameter"], [{"name": "prr-collection"}])
+        self.assertIn("processing:datetime", ef)
+
+        # Extensions declared.
+        self.assertIn(OSC_SCHEMA_URI, coll.stac_extensions)
+        self.assertIn(PROCESSING_SCHEMA_URI, coll.stac_extensions)
+
+        # Themes are plain dicts (not Theme objects).
+        themes = ef["themes"]
+        self.assertEqual(themes[0]["scheme"], OSC_THEME_SCHEME)
+        self.assertEqual(themes[0]["concepts"], [{"id": "oceans"}])
+        self.assertIsInstance(themes[0], dict)
+
+        # The single Item is attached as a child.
+        items = list(coll.get_items())
+        self.assertEqual(len(items), 1)
+        self.assertEqual(items[0].id, "prr-collection")
+
+    def test_build_prr_collection_conformant_fields(self):
+        """A fully configured generator emits every PRR-required field."""
+        from deep_code.constants import SCIENTIFIC_SCHEMA_URI
+
+        with patch(
+            "deep_code.utils.dataset_stac_generator.open_dataset",
+            return_value=self.dataset,
+        ):
+            gen = OscDatasetStacGenerator(
+                dataset_id="test.zarr",
+                collection_id="prr-collection",
+                workflow_id="wf",
+                workflow_title="WF",
+                license_type="CC-BY-4.0",
+                access_link="s3://bucket/test.zarr",
+                osc_status="ongoing",
+                osc_region="Global",
+                osc_themes=["oceans"],
+                osc_missions=["sentinel-3"],
+                osc_project_description="A detailed project description.",
+                osc_project_website="https://project.example.org",
+                osc_contract_number="4000114410/15/NL/BW",
+                thumbnail="https://example.org/logo.jpeg",
+                sci_doi="10.1000/xyz123",
+            )
+        coll = gen.build_prr_collection()
+        ef = coll.extra_fields
+
+        # Scientific extension declared alongside the others.
+        self.assertIn(SCIENTIFIC_SCHEMA_URI, coll.stac_extensions)
+        # Required PRR project fields present.
+        self.assertEqual(ef["osc:initiative"], "earthcode")
+        self.assertEqual(ef["osc:project_website"], "https://project.example.org")
+        self.assertEqual(
+            ef["osc:project_description"], "A detailed project description."
+        )
+        self.assertEqual(ef["osc:contract-number"], "4000114410/15/NL/BW")
+        self.assertEqual(ef["sci:doi"], "10.1000/xyz123")
+        # Thumbnail asset with correct role and guessed media type.
+        self.assertIn("thumbnail", coll.assets)
+        thumb = coll.assets["thumbnail"]
+        self.assertEqual(thumb.roles, ["thumbnail"])
+        self.assertEqual(thumb.media_type, "image/jpeg")
+
+    def test_build_prr_collection_fallbacks(self):
+        """project_website/description fall back to doc link / description."""
+        coll = self.gen.build_prr_collection()
+        ef = coll.extra_fields
+        # Default initiative.
+        self.assertEqual(ef["osc:initiative"], "earthcode")
+        # Fallbacks: website -> documentation_link, description -> dataset description.
+        self.assertEqual(ef["osc:project_website"], "https://example.org/doc")
+        self.assertEqual(ef["osc:project_description"], "PRR test cube")
+        # No thumbnail / contract number configured -> absent.
+        self.assertNotIn("thumbnail", coll.assets)
+        self.assertNotIn("osc:contract-number", ef)
+
+    def test_thumbnail_media_type_guess(self):
+        self.gen.thumbnail = "https://x/logo.png"
+        self.assertEqual(self.gen._thumbnail_media_type(), "image/png")
+        self.gen.thumbnail = "https://x/logo.JPG"
+        self.assertEqual(self.gen._thumbnail_media_type(), "image/jpeg")
+        self.gen.thumbnail = "https://x/logo.webp"
+        self.assertEqual(self.gen._thumbnail_media_type(), "image/webp")
+        self.gen.thumbnail_media_type = "image/tiff"
+        self.assertEqual(self.gen._thumbnail_media_type(), "image/tiff")
+
+    def test_build_prr_collection_cf_params_override(self):
+        self.gen.cf_params = [{"name": "sst", "units": "K"}]
+        coll = self.gen.build_prr_collection()
+        self.assertEqual(
+            coll.extra_fields["cf:parameter"], [{"name": "sst", "units": "K"}]
+        )
+
+    @patch("deep_code.utils.dataset_stac_generator.open_dataset")
+    def test_build_prr_collection_no_themes(self, mock_open_ds):
+        mock_open_ds.return_value = self.dataset
+        gen = OscDatasetStacGenerator(
+            dataset_id="test.zarr",
+            collection_id="prr-collection",
+            workflow_id="wf",
+            workflow_title="WF",
+            license_type="CC-BY-4.0",
+            access_link="s3://bucket/test.zarr",
+        )
+        coll = gen.build_prr_collection()
+        self.assertNotIn("themes", coll.extra_fields)
+
+    # ---- save (local self-contained tree) ----
+
+    def test_save_prr_collection_writes_tree(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            out = self.gen.save_prr_collection(tmp)
+            self.assertEqual(out, tmp)
+
+            collection_path = os.path.join(tmp, "collection.json")
+            item_path = os.path.join(tmp, "prr-collection", "prr-collection.json")
+            self.assertTrue(os.path.isfile(collection_path))
+            self.assertTrue(os.path.isfile(item_path))
+
+            # Files are plain-JSON serialisable (no leftover Python objects).
+            with open(collection_path) as f:
+                coll_dict = json.load(f)
+            with open(item_path) as f:
+                item_dict = json.load(f)
+
+            self.assertEqual(coll_dict["type"], "Collection")
+            self.assertEqual(item_dict["type"], "Feature")
+
+            # Structural links are relative; the Item link points at the child.
+            item_link = next(
+                lnk for lnk in coll_dict["links"] if lnk["rel"] == "item"
+            )
+            self.assertFalse(item_link["href"].startswith("s3://"))
+            self.assertTrue(item_link["href"].endswith(".json"))
+
+            # Asset hrefs stay absolute (the data lives on S3).
+            self.assertEqual(
+                item_dict["assets"]["zarr-data"]["href"], "s3://bucket/test.zarr"
+            )
+
+    def test_save_prr_collection_readable_by_pystac(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            self.gen.save_prr_collection(tmp)
+            coll = Collection.from_file(os.path.join(tmp, "collection.json"))
+            items = list(coll.get_items())
+            self.assertEqual(len(items), 1)
+            self.assertIn(DATACUBE_SCHEMA_URI, items[0].stac_extensions)
