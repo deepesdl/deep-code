@@ -688,7 +688,7 @@ class OscDatasetStacGenerator:
         }
 
     # ------------------------------------------------------------------ #
-    # PRR (Product Readiness Review) style output                         #
+    # PRR (Project Results Repository) style output                         #
     #                                                                     #
     # A self-contained ``Collection -> Item -> Assets`` tree that mirrors #
     # the ESA EarthCODE PRR tutorial. Emitted alongside (not replacing)   #
