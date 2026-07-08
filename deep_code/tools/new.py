@@ -77,7 +77,7 @@ class TemplateGenerator:
         }
 
         # Fields used only by `deep-code generate-prr-collection` to build a
-        # PRR (Product Readiness Review) collection that conforms to
+        # PRR (Project Results Repository) collection that conforms to
         # https://eoresults.esa.int/prr_collection_specifications.html
         prr = {
             "prr_output_dir": "[OPTIONAL: local dir for the PRR collection tree — defaults to prr/{collection_id}]",

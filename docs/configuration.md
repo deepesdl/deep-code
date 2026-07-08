@@ -34,6 +34,16 @@ access_link: s3://bucket/your-dataset.zarr   # defaults to s3://deep-esdl-public
 cf_parameter:
   - name: sea_surface_temperature
     units: kelvin
+
+# PRR fields (only used by `deep-code generate-prr-collection`)
+osc_initiative: earthcode                     # earthcode | apex (default: earthcode)
+osc_missions: [sentinel-3]
+osc_contract_number: 4000114410/15/NL/BW
+osc_project_website: https://project.example.org
+osc_project_description: A detailed multi-line description of the project.
+thumbnail: https://example.org/thumbnail.jpeg
+sci_doi: 10.1000/xyz123
+prr_output_dir: ./prr/your-collection
 ```
 
 ### Field reference
@@ -53,6 +63,27 @@ cf_parameter:
 | `osc_project` | No | OSC project ID this dataset belongs to (e.g. `deep-earth-system-data-lab`). Defaults to `deep-earth-system-data-lab`. |
 | `cf_parameter` | No | List of CF metadata dicts to override variable attributes (e.g. `name`, `units`). |
 | `stac_catalog_s3_root` | Yes | S3 root where the STAC Catalog and Item are published. Publishing fails if this field is absent. See [STAC Catalog on S3](#stac-catalog-on-s3). |
+
+> The fields below are only read by [`deep-code generate-prr-collection`](cli.md#generate-a-prr-collection); `publish` ignores them. "PRR-required" means the field is required by the [PRR specification](https://eoresults.esa.int/prr_collection_specifications.html), not by the command (which still runs and warns).
+
+### PRR collection fields
+
+| Field | Required | Description |
+|---|---|---|
+| `osc_initiative` | No | PRR initiative: `earthcode` or `apex` (default: `earthcode`). |
+| `osc_missions` | PRR-required | List of satellite mission name(s), e.g. `[sentinel-3]`. |
+| `osc_contract_number` | PRR-required | ESA contract identifier, e.g. `4000114410/15/NL/BW`. |
+| `osc_project_website` | PRR-required | Project website URL. Falls back to `osc_project_url`, then `documentation_link`. |
+| `osc_project_description` | PRR-required | Multi-line project description. Falls back to `description`. |
+| `thumbnail` | PRR-required | URL to a collection thumbnail image (jpeg/png/webp). Added as an asset named `thumbnail` with role `thumbnail`. |
+| `thumbnail_media_type` | No | Thumbnail MIME type. Guessed from the URL suffix when omitted. |
+| `sci_doi` | No | Dataset DOI, e.g. `10.1000/xyz123` (a DOI name, not a link). |
+| `sci_citation` | No | Human-readable citation for the dataset. |
+| `prr_output_dir` | No | Local directory for the PRR collection tree. Defaults to `prr/{collection_id}`. |
+
+`themes` for a PRR collection must be drawn from the allowed set:
+`atmosphere`, `cryosphere`, `land`, `magnetosphere-ionosphere`, `oceans`, `solid-earth`
+(configured via `osc_themes`). See [PRR collection output](#prr-collection-output).
 
 ### STAC Catalog on S3
 
@@ -78,6 +109,34 @@ S3 credentials for writing the STAC catalog are resolved in this order:
 `STAC_S3_KEY` / `STAC_S3_SECRET` env vars (STAC-specific, can target any bucket),
 then `AWS_ACCESS_KEY_ID` / `AWS_SECRET_ACCESS_KEY`,
 then the boto3 default chain (IAM role, `~/.aws/credentials`).
+
+### PRR collection output
+
+[`deep-code generate-prr-collection`](cli.md#generate-a-prr-collection) writes a
+self-contained STAC tree to a **local** directory (no S3 write, no GitHub PR):
+
+```
+prr/your-collection/
+├── collection.json                 # STAC Collection (root, relative links)
+└── your-collection/
+    └── your-collection.json         # datacube Item covering the full Zarr store
+```
+
+- **Collection** — declares the OSC, Scientific, Processing, Themes and CF extensions,
+  and carries the PRR-mandatory fields (`osc:project`, `osc:initiative`,
+  `osc:contract-number`, `osc:project_website`, `osc:project_description`,
+  `osc:variables`, `osc:missions`, `cf:parameter`, `processing:datetime`, `themes`,
+  `license`) plus a required `thumbnail` asset.
+- **Item** — carries the `datacube` extension (`cube:dimensions` / `cube:variables`
+  read from the Zarr) and the `zarr-data` / `zarr-consolidated-metadata` assets. Asset
+  hrefs stay absolute (`s3://…`) since that is where the data lives; structural links
+  are relative so the folder is portable.
+
+The output targets the
+[PRR collection specification](https://eoresults.esa.int/prr_collection_specifications.html).
+Fields that can't be defaulted (`osc_missions`, `osc_contract_number`, `thumbnail`) must
+be supplied in the config — otherwise the command still generates the tree but warns that
+it is not yet fully conformant.
 
 ## Workflow config (YAML)
 ```yaml

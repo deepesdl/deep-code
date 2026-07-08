@@ -8,6 +8,7 @@
 - Build STAC collections and catalogs for Datasets and their corresponding variables automatically from the dataset metadata.
 - Generate STAC catalog and item for the product (Zarr store) and publish them to S3.
 - Build OGC API records for Workflows and Experiments from your configs.
+- Generate a Project Results Repository (PRR) STAC collection as local files for submission to the ESA EarthCODE PRR endpoint.
 - Flexible publishling targets i.e production/staging/testing EarthCODE metadata repositories with GitHub automation.
 
 ```mermaid
@@ -15,7 +16,7 @@
 flowchart LR
     subgraph User
         A["Config files<br/>(dataset.yaml, workflow.yaml)"]
-        B["deep-code CLI<br/>(generate-config, publish)"]
+        B["deep-code CLI<br/>(generate-config, publish, generate-prr-collection)"]
     end
 
     subgraph App["deep-code internals"]

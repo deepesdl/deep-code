@@ -124,3 +124,26 @@ file_dict = generator.build_zarr_stac_catalog_file_dict(
 
 See [STAC Catalog on S3](configuration.md#stac-catalog-on-s3) for details on the
 generated structure.
+
+### PRR collection generation
+
+Build a self-contained PRR (Project Results Repository) `Collection → Item → Assets`
+tree as local files. The high-level helper reads the same dataset config as the CLI:
+
+```python
+from deep_code.tools.prr import generate_prr_collection
+
+out_dir = generate_prr_collection("dataset.yaml", output_dir="./prr")
+# ./prr/collection.json  +  ./prr/<collection_id>/<collection_id>.json
+```
+
+Or drive the generator directly:
+
+```python
+generator.save_prr_collection("./prr")   # writes a self-contained tree
+```
+
+The Item includes the `datacube` extension; the Collection declares the OSC, Scientific,
+Processing, Themes and CF extensions and the PRR-mandatory fields. See
+[PRR collection output](configuration.md#prr-collection-output) and
+[Generate a PRR collection](cli.md#generate-a-prr-collection).
