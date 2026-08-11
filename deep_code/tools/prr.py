@@ -16,7 +16,7 @@ import logging
 import fsspec
 import yaml
 
-from deep_code.utils.dataset_stac_generator import OscDatasetStacGenerator
+from deep_code.utils.dataset_stac_generator import ItemConfig, OscDatasetStacGenerator
 
 logger = logging.getLogger(__name__)
 
@@ -38,14 +38,30 @@ def generate_prr_collection(
     with fsspec.open(dataset_config_path, "r") as file:
         config = yaml.safe_load(file) or {}
 
-    dataset_id = config.get("dataset_id")
     collection_id = config.get("collection_id")
     license_type = config.get("license_type")
+    items_config_raw = config.get("items_config")
 
-    if not dataset_id or not collection_id:
-        raise ValueError(
-            "Both 'dataset_id' and 'collection_id' are required in the dataset config."
-        )
+    if items_config_raw:
+        items_config = [
+            ItemConfig(
+                dataset_id=item_config["dataset_id"],
+                item_id=item_config["item_id"],
+            )
+            for item_config in items_config_raw
+        ]
+    else:
+        dataset_id = config.get("dataset_id")
+        item_id = config.get("item_id") or collection_id
+        if not dataset_id or not collection_id:
+            raise ValueError(
+                "At least one item configuration must be provided in the dataset config, "
+                "along with 'collection_id'."
+            )
+        items_config = [ItemConfig(dataset_id=dataset_id, item_id=item_id)]
+
+    if not collection_id:
+        raise ValueError("collection_id is required in the dataset config.")
     if not license_type:
         raise ValueError(
             "license_type is required in the dataset config. "
@@ -54,7 +70,7 @@ def generate_prr_collection(
 
     logger.info(f"Generating PRR STAC collection for '{collection_id}'.")
     generator = OscDatasetStacGenerator(
-        dataset_id=dataset_id,
+        items_config=items_config,
         collection_id=collection_id,
         workflow_id=config.get("workflow_id") or "",
         workflow_title=config.get("workflow_title") or "",

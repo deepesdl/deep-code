@@ -64,13 +64,16 @@ produces a self-contained `Collection → Item → Assets` tree:
 prr/<collection_id>/
 ├── collection.json                 # STAC Collection (root, relative links)
 └── <collection_id>/
-    └── <collection_id>.json         # datacube Item covering the whole Zarr store
+    └── items/
+        └── <item_id>.json         # datacube Item covering the whole Zarr store
 ```
 
 - The **Item** carries the `datacube` extension (`cube:dimensions` / `cube:variables`
   extracted from the Zarr) plus `zarr-data` and `zarr-consolidated-metadata` assets.
 - The **Collection** carries the OSC, Scientific, Processing, Themes and CF extensions
   and the PRR-mandatory fields.
+- `deep-code publish` still publishes one dataset/item at a time; the multi-item
+  generator support is exposed first through the lower-level API and the PRR helper.
 
 The output conforms to the
 [PRR collection specification](https://eoresults.esa.int/prr_collection_specifications.html)

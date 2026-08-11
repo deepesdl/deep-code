@@ -22,7 +22,7 @@ from deep_code.constants import (
     OSC_REPO_OWNER,
     WORKFLOW_BASE_CATALOG_SELF_HREF,
 )
-from deep_code.utils.dataset_stac_generator import OscDatasetStacGenerator
+from deep_code.utils.dataset_stac_generator import ItemConfig, OscDatasetStacGenerator
 from deep_code.utils.github_automation import GitHubAutomation
 from deep_code.utils.ogc_api_record import (
     ExperimentAsOgcRecord,
@@ -248,6 +248,34 @@ class Publisher:
                     full_path, var_id
                 )
 
+    @staticmethod
+    def _build_items_config(dataset_config: dict[str, Any]) -> list[ItemConfig]:
+        """Build item configs from the dataset config.
+
+        Supports the new ``items_config`` list while keeping the legacy
+        single-item ``dataset_id`` / ``item_id`` fields for backwards
+        compatibility.
+        """
+        items_config_raw = dataset_config.get("items_config")
+        if items_config_raw:
+            items_config = [
+                ItemConfig(
+                    dataset_id=item_config["dataset_id"],
+                    item_id=item_config["item_id"],
+                )
+                for item_config in items_config_raw
+            ]
+        else:
+            dataset_id = dataset_config.get("dataset_id")
+            collection_id = dataset_config.get("collection_id")
+            item_id = dataset_config.get("item_id") or collection_id
+            if not dataset_id:
+                raise ValueError(
+                    "At least one item configuration must be provided in the dataset config."
+                )
+            items_config = [ItemConfig(dataset_id=dataset_id, item_id=item_id)]
+        return items_config
+
     def publish_dataset(
         self,
         write_to_file: bool = False,
@@ -260,7 +288,11 @@ class Publisher:
             raise ValueError(
                 "No dataset config loaded. Provide dataset_config_path to publish dataset."
             )
-        dataset_id = self.dataset_config.get("dataset_id")
+        items_config = self._build_items_config(self.dataset_config)
+        if len(items_config) != 1:
+            raise ValueError(
+                "publish currently supports exactly one item configuration."
+            )
         self.collection_id = self.dataset_config.get("collection_id")
         documentation_link = self.dataset_config.get("documentation_link")
         access_link = self.dataset_config.get("access_link")
@@ -275,8 +307,8 @@ class Publisher:
         osc_project_url = self.dataset_config.get("osc_project_url")
         description = self.dataset_config.get("description")
 
-        if not dataset_id or not self.collection_id:
-            raise ValueError("Dataset ID or Collection ID missing in the config.")
+        if not self.collection_id:
+            raise ValueError("Collection ID missing in the config.")
 
         if not license_type:
             raise ValueError(
@@ -295,7 +327,7 @@ class Publisher:
         logger.info("Generating STAC collection...")
 
         generator = OscDatasetStacGenerator(
-            dataset_id=dataset_id,
+            items_config=items_config,
             collection_id=self.collection_id,
             workflow_id=self.workflow_id,
             workflow_title=self.workflow_title,

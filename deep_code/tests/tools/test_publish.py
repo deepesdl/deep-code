@@ -295,7 +295,9 @@ class TestPublisher(unittest.TestCase):
         mock_generator = MagicMock()
         mock_generator.build_zarr_stac_catalog_file_dict.return_value = {
             "s3://test-bucket/stac/catalog.json": {"type": "Catalog"},
-            "s3://test-bucket/stac/test-collection/item.json": {"type": "Feature"},
+            "s3://test-bucket/stac/test-collection/items/test-collection.json": {
+                "type": "Feature"
+            },
         }
         # Simulate what publish_dataset() normally does: store the generator
         self.publisher._last_generator = mock_generator
@@ -401,7 +403,7 @@ class TestPublisher(unittest.TestCase):
 
     def test_publish_dataset_raises_when_ids_missing(self):
         self.publisher.dataset_config = {"collection_id": "", "dataset_id": ""}
-        with pytest.raises(ValueError, match="Dataset ID or Collection ID missing"):
+        with pytest.raises(ValueError, match="item configuration"):
             self.publisher.publish_dataset(write_to_file=False)
 
     def test_publish_dataset_raises_when_license_missing(self):

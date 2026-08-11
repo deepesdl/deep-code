@@ -24,7 +24,11 @@ from deep_code.constants import (
     VARIABLE_BASE_CATALOG_SELF_HREF,
     ZARR_MEDIA_TYPE,
 )
-from deep_code.utils.dataset_stac_generator import OscDatasetStacGenerator, Theme
+from deep_code.utils.dataset_stac_generator import (
+    ItemConfig,
+    OscDatasetStacGenerator,
+    Theme,
+)
 
 
 class TestOSCProductSTACGenerator(unittest.TestCase):
@@ -456,7 +460,7 @@ class TestOSCProductSTACGenerator(unittest.TestCase):
         # Self href
         self.assertEqual(
             item.self_href,
-            "s3://test-bucket/stac/my-collection/mock-collection-id/item.json",
+            "s3://test-bucket/stac/my-collection/items/mock-collection-id.json",
         )
 
         # Required link rels
@@ -490,7 +494,7 @@ class TestOSCProductSTACGenerator(unittest.TestCase):
 
         catalog_path = "s3://test-bucket/stac/my-collection/catalog.json"
         item_path = (
-            "s3://test-bucket/stac/my-collection/mock-collection-id/item.json"
+            "s3://test-bucket/stac/my-collection/items/mock-collection-id.json"
         )
         self.assertIn(catalog_path, file_dict)
         self.assertIn(item_path, file_dict)
@@ -506,13 +510,44 @@ class TestOSCProductSTACGenerator(unittest.TestCase):
         self.assertEqual(catalog_dict["id"], "mock-collection-id-stac-catalog")
 
         item_dict = file_dict[
-            "s3://test-bucket/stac/my-collection/mock-collection-id/item.json"
+            "s3://test-bucket/stac/my-collection/items/mock-collection-id.json"
         ]
         self.assertEqual(item_dict["type"], "Feature")
         self.assertEqual(item_dict["id"], "mock-collection-id")
         self.assertIn("assets", item_dict)
         self.assertIn("zarr-data", item_dict["assets"])
         self.assertIn("zarr-consolidated-metadata", item_dict["assets"])
+
+    @patch("deep_code.utils.dataset_stac_generator.open_dataset")
+    def test_build_zarr_stac_catalog_file_dict_multiple_items(self, mock_open_ds):
+        """Multiple item configurations produce multiple item files and links."""
+        mock_open_ds.return_value = self.mock_dataset
+        gen = OscDatasetStacGenerator(
+            collection_id="multi-collection",
+            items_config=[
+                ItemConfig(dataset_id="first.zarr", item_id="first-item"),
+                ItemConfig(dataset_id="second.zarr", item_id="second-item"),
+            ],
+            workflow_id="dummy",
+            workflow_title="test",
+            license_type="proprietary",
+        )
+
+        file_dict = gen.build_zarr_stac_catalog_file_dict(
+            "s3://test-bucket/stac/multi-collection/"
+        )
+
+        self.assertIn(
+            "s3://test-bucket/stac/multi-collection/items/first-item.json",
+            file_dict,
+        )
+        self.assertIn(
+            "s3://test-bucket/stac/multi-collection/items/second-item.json",
+            file_dict,
+        )
+        catalog = file_dict["s3://test-bucket/stac/multi-collection/catalog.json"]
+        item_links = [lnk for lnk in catalog["links"] if lnk["rel"] == "item"]
+        self.assertEqual(len(item_links), 2)
 
     def test_build_dataset_stac_collection_adds_s3_catalog_via_link(self):
         """A 'via' link (STAC browser) and a 'child' link (HTTPS catalog) are added
@@ -1019,7 +1054,9 @@ class TestPRRCollection(unittest.TestCase):
             self.assertEqual(out, tmp)
 
             collection_path = os.path.join(tmp, "collection.json")
-            item_path = os.path.join(tmp, "prr-collection", "prr-collection.json")
+            item_path = os.path.join(
+                tmp, "prr-collection", "items", "prr-collection.json"
+            )
             self.assertTrue(os.path.isfile(collection_path))
             self.assertTrue(os.path.isfile(item_path))
 

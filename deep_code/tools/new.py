@@ -56,10 +56,15 @@ class TemplateGenerator:
         """Generate a complete dataset template with all possible keys and placeholder values"""
 
         required = {
-            "dataset_id": "[REQUIRED: name of the Zarr store in your S3 bucket, e.g. my-dataset.zarr]",
             "collection_id": "[REQUIRED: unique identifier, no spaces — use hyphens (e.g. My-Dataset-2024)]",
             "license_type": "[REQUIRED: SPDX license identifier, e.g. CC-BY-4.0, MIT, proprietary]",
             "stac_catalog_s3_root": "[REQUIRED: S3 root for the STAC Catalog + Item, e.g. s3://my-bucket/stac/my-collection/]",
+            "items_config": [
+                {
+                    "dataset_id": "[REQUIRED: name of the Zarr store in your S3 bucket, e.g. my-dataset.zarr]",
+                    "item_id": "[REQUIRED: unique STAC item id, no spaces — use hyphens]",
+                }
+            ],
         }
 
         optional = {
@@ -95,7 +100,9 @@ class TemplateGenerator:
         stac_catalog_comment = (
             "\n# stac_catalog_s3_root: deep-code writes the following files to this S3 root:\n"
             "#   {stac_catalog_s3_root}/catalog.json               (STAC Catalog root)\n"
-            "#   {stac_catalog_s3_root}/{collection_id}/item.json  (STAC Item for the whole Zarr)\n"
+            "#   {stac_catalog_s3_root}/{collection_id}/items/{item_id}.json  (STAC Item for each Zarr)\n"
+            "# items_config can contain multiple dataset/item pairs, but publish\n"
+            "# currently only consumes one item configuration.\n"
             "# S3 write credentials are resolved in order:\n"
             "#   1. STAC_S3_KEY / STAC_S3_SECRET env vars (STAC-specific, any bucket)\n"
             "#   2. AWS_ACCESS_KEY_ID / AWS_SECRET_ACCESS_KEY env vars\n"
