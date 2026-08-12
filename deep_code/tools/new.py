@@ -48,8 +48,14 @@ class TemplateGenerator:
             with open(output_path, "w") as f:
                 f.write("# Workflow Configuration Template\n")
                 f.write("# Replace all [PLACEHOLDER] values with your actual data\n\n")
-                f.write(yaml.dump(workflow_template, sort_keys=False, width=1000,
-                                  default_flow_style=False))
+                f.write(
+                    yaml.dump(
+                        workflow_template,
+                        sort_keys=False,
+                        width=1000,
+                        default_flow_style=False,
+                    )
+                )
 
     @staticmethod
     def generate_dataset_template(output_path: Optional[str] = None) -> str:
@@ -69,7 +75,9 @@ class TemplateGenerator:
 
         optional = {
             "osc_project_url": "[OPTIONAL: URL to the project website (e.g. https://deepesdl.eu). Used as the 'via' link in the project collection. Defaults to the existing DeepESDL project collection]",
-            "osc_themes": ["[OPTIONAL: OSC theme slug, e.g. land, ocean, atmosphere — auto-lowercased]"],
+            "osc_themes": [
+                "[OPTIONAL: OSC theme slug, e.g. land, ocean, atmosphere — auto-lowercased]"
+            ],
             "osc_region": "[OPTIONAL: geographical coverage, e.g. Global]",
             "dataset_status": "[OPTIONAL: ongoing | completed | planned (default: ongoing)]",
             "description": "[OPTIONAL: human-readable description of the dataset. Overrides the description attribute in the Zarr store if set]",
@@ -77,8 +85,10 @@ class TemplateGenerator:
             "visualisation_link": "[OPTIONAL: URL to a visualisation of the dataset (e.g. xcube Viewer, WMS)]",
             "osc_project": "[OPTIONAL: OSC project ID (e.g. deep-earth-system-data-lab). Defaults to deep-earth-system-data-lab]",
             "osc_project_title": "[OPTIONAL: display title of the OSC project as it appears in the catalog (e.g. DeepESDL). Defaults to a formatted version of osc_project if omitted]",
-            "access_link": "[OPTIONAL: public S3 URL of the Zarr store — defaults to s3://deep-esdl-public/{dataset_id}]",
-            "cf_parameter": [{"name": "[OPTIONAL: CF standard name]", "units": "[unit string]"}],
+            "access_link_root": "[OPTIONAL: public S3 URL of the Zarr store — defaults to s3://deep-esdl-public]",
+            "cf_parameter": [
+                {"name": "[OPTIONAL: CF standard name]", "units": "[unit string]"}
+            ],
         }
 
         # Fields used only by `deep-code generate-prr-collection` to build a
@@ -90,7 +100,9 @@ class TemplateGenerator:
             "osc_contract_number": "[PRR-REQUIRED: ESA contract identifier, e.g. 4000114410/15/NL/BW]",
             "osc_project_website": "[PRR-REQUIRED: project website URL — falls back to osc_project_url / documentation_link]",
             "osc_project_description": "[PRR-REQUIRED: multi-line project description — falls back to description]",
-            "osc_missions": ["[PRR-REQUIRED: satellite mission name(s), e.g. sentinel-3]"],
+            "osc_missions": [
+                "[PRR-REQUIRED: satellite mission name(s), e.g. sentinel-3]"
+            ],
             "thumbnail": "[PRR-REQUIRED: URL to a collection thumbnail image (jpeg/png/webp)]",
             "thumbnail_media_type": "[OPTIONAL: thumbnail MIME type — guessed from the URL suffix if omitted]",
             "sci_doi": "[OPTIONAL: dataset DOI, e.g. 10.1000/xyz123 (not a DOI link)]",
@@ -114,11 +126,23 @@ class TemplateGenerator:
                 f.write("# Dataset Configuration Template\n")
                 f.write("# Replace all [PLACEHOLDER] values with your actual data\n\n")
                 f.write("# --- REQUIRED fields ---\n")
-                f.write(yaml.dump(required, sort_keys=False, width=1000, default_flow_style=False))
+                f.write(
+                    yaml.dump(
+                        required, sort_keys=False, width=1000, default_flow_style=False
+                    )
+                )
                 f.write("\n# --- OPTIONAL fields ---\n")
-                f.write(yaml.dump(optional, sort_keys=False, width=1000, default_flow_style=False))
+                f.write(
+                    yaml.dump(
+                        optional, sort_keys=False, width=1000, default_flow_style=False
+                    )
+                )
                 f.write(
                     "\n# --- PRR fields (for `deep-code generate-prr-collection`) ---\n"
                 )
-                f.write(yaml.dump(prr, sort_keys=False, width=1000, default_flow_style=False))
+                f.write(
+                    yaml.dump(
+                        prr, sort_keys=False, width=1000, default_flow_style=False
+                    )
+                )
                 f.write(stac_catalog_comment)

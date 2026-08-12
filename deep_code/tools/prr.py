@@ -76,7 +76,7 @@ def generate_prr_collection(
         workflow_title=config.get("workflow_title") or "",
         license_type=license_type,
         documentation_link=config.get("documentation_link"),
-        access_link=config.get("access_link"),
+        access_link_root=config.get("access_link_root"),
         osc_status=config.get("dataset_status") or "ongoing",
         osc_region=config.get("osc_region") or "Global",
         osc_themes=config.get("osc_themes"),
