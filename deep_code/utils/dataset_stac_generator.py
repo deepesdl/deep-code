@@ -9,6 +9,7 @@ from dataclasses import dataclass
 from datetime import datetime, timezone
 from typing import Any
 
+import numpy as np
 import pandas as pd
 from pystac import (
     Asset,
@@ -50,8 +51,8 @@ class OscDatasetStacGenerator:
     Args:
         collection_id: Unique identifier for the STAC collection.
         items_config: List of item configuration entries. Each item maps one
-            dataset_id to one item_id.
-        access_link_root: Public access link to root of the datasets.
+            dataset_id to one item_id
+        access_link_root: Public access link to the root of the datasets.
         documentation_link: Link to dataset documentation.
         osc_status: Status of the dataset (e.g., "ongoing").
         osc_region: Geographical region associated with the dataset.
@@ -64,12 +65,10 @@ class OscDatasetStacGenerator:
     def __init__(
         self,
         collection_id: str,
-        items_config: list[ItemConfig] | None = None,
-        workflow_id: str = "",
-        workflow_title: str = "",
-        license_type: str = "",
-        dataset_id: str | None = None,
-        item_id: str | None = None,
+        items_config: list[ItemConfig],
+        workflow_id: str,
+        workflow_title: str,
+        license_type: str,
         access_link_root: str | None = None,
         documentation_link: str | None = None,
         osc_status: str = "ongoing",
@@ -96,18 +95,6 @@ class OscDatasetStacGenerator:
                 f"collection_id must not contain spaces: {collection_id!r}. "
                 "Use hyphens as word separators (e.g. 'My-Collection-2024')."
             )
-        if not items_config:
-            if dataset_id:
-                items_config = [
-                    ItemConfig(
-                        dataset_id=dataset_id,
-                        item_id=item_id or collection_id,
-                    )
-                ]
-            else:
-                raise ValueError(
-                    "At least one item configuration must be provided."
-                )
         self.collection_id = collection_id
         self.items_config = items_config
         self.workflow_id = workflow_id
@@ -116,7 +103,7 @@ class OscDatasetStacGenerator:
         self.osc_project = osc_project
         self.osc_project_title = osc_project_title
         self.osc_project_url = osc_project_url
-        self.access_link_root = access_link_root or f"s3://deep-esdl-public/"
+        self.access_link_root = access_link_root or "s3://deep-esdl-public/"
         self.documentation_link = documentation_link
         self.osc_status = osc_status
         self.osc_region = osc_region
@@ -135,15 +122,10 @@ class OscDatasetStacGenerator:
         self.sci_doi = sci_doi
         self.sci_citation = sci_citation
         self.logger = logging.getLogger(__name__)
-        self.datasets = self._load_item_datasets()
-        self.dataset = self.datasets[0]
-        self.variables_metadata = self._build_variables_metadata(self.datasets)
 
-    def _get_spatial_extent(
-        self, dataset: xr.Dataset | None = None
-    ) -> SpatialExtent:
+    @staticmethod
+    def _get_spatial_extent(dataset: xr.Dataset) -> SpatialExtent:
         """Extract spatial extent from the dataset."""
-        dataset = dataset or self.dataset
         if {"lon", "lat"}.issubset(dataset.coords):
             # For regular gridding
             lon_min, lon_max = (
@@ -177,11 +159,10 @@ class OscDatasetStacGenerator:
                 "('lon', 'lat' or 'x', 'y')."
             )
 
-    def _get_temporal_extent(
-        self, dataset: xr.Dataset | None = None
-    ) -> TemporalExtent:
+    @staticmethod
+    def _get_temporal_extent(dataset: xr.Dataset) -> TemporalExtent:
         """Extract temporal extent from the dataset."""
-        dataset = dataset or self.dataset
+        dataset = dataset
         if "time" in dataset.coords:
             try:
                 # Convert the time bounds to datetime objects
@@ -199,70 +180,40 @@ class OscDatasetStacGenerator:
             return name.replace(" ", "-").replace("_", "-").lower()
         return None
 
-    @staticmethod
-    def _unique_preserve_order(values: list[str]) -> list[str]:
-        """Return values without duplicates while preserving the input order."""
-        return list(dict.fromkeys(values))
-
-    def _load_item_datasets(self) -> list[xr.Dataset]:
-        """Open the configured datasets in item order."""
-        return [
-            open_dataset(item_config.dataset_id, logger=self.logger)
-            for item_config in self.items_config
-        ]
-
-    def _build_variables_metadata(self, datasets: list[xr.Dataset]) -> dict[str, dict]:
-        """Collect variable metadata across all configured datasets."""
-        variables_metadata: dict[str, dict] = {}
-        for dataset in datasets:
-            variables_metadata.update(self.get_variables_metadata(dataset))
-        return variables_metadata
-
-    def _get_dataset_for_item(self, item_config: ItemConfig) -> xr.Dataset:
-        """Return the cached dataset that matches ``item_config``."""
-        for config, dataset in zip(self.items_config, self.datasets):
-            if config.dataset_id == item_config.dataset_id:
-                return dataset
-        raise ValueError(
-            f"Dataset {item_config.dataset_id!r} is not part of the generator configuration."
-        )
-
     def _build_access_link(self, item_config: ItemConfig) -> str:
         """Return the asset href for an item, supporting prefix and full URLs."""
-        access_link = self.access_link_root
-        if access_link.endswith("/"):
-            return f"{access_link.rstrip('/')}/{item_config.dataset_id}"
-        return access_link
+        root = self.access_link_root
+        if root.endswith("/"):
+            root = root.rstrip("/")
+        return f"{root}/{item_config.dataset_id}"
 
-    def _union_spatial_extent(self, datasets: list[xr.Dataset]) -> SpatialExtent:
+    @staticmethod
+    def _union_spatial_extent(items: list[Item]) -> SpatialExtent:
         """Merge multiple dataset spatial extents into a single bounding box."""
-        bboxes = [
-            self._get_spatial_extent(dataset).bboxes[0]
-            for dataset in datasets
-        ]
+        bboxes = [item.bbox for item in items]
         return SpatialExtent(
-            [[
-                min(bbox[0] for bbox in bboxes),
-                min(bbox[1] for bbox in bboxes),
-                max(bbox[2] for bbox in bboxes),
-                max(bbox[3] for bbox in bboxes),
-            ]]
+            [
+                [
+                    min(bbox[0] for bbox in bboxes),
+                    min(bbox[1] for bbox in bboxes),
+                    max(bbox[2] for bbox in bboxes),
+                    max(bbox[3] for bbox in bboxes),
+                ]
+            ]
         )
 
-    def _union_temporal_extent(self, datasets: list[xr.Dataset]) -> TemporalExtent:
+    @staticmethod
+    def _union_temporal_extent(items: list[Item]) -> TemporalExtent:
         """Merge multiple dataset temporal extents into a single interval."""
-        intervals = [
-            self._get_temporal_extent(dataset).intervals[0]
-            for dataset in datasets
-        ]
-        start_values = [interval[0] for interval in intervals if interval[0] is not None]
-        end_values = [interval[1] for interval in intervals if interval[1] is not None]
-        if not start_values or not end_values:
-            raise ValueError("Unable to compute a temporal extent for the datasets.")
-        return TemporalExtent([[min(start_values), max(end_values)]])
+        intervals = np.array(
+            [
+                [item.properties["start_datetime"], item.properties["end_datetime"]]
+                for item in items
+            ]
+        ).astype(np.datetime64)
+        return TemporalExtent([[min(intervals[:, 0]), max(intervals[:, 1])]])
 
-    def _get_general_metadata(self, dataset: xr.Dataset | None = None) -> dict:
-        dataset = dataset or self.dataset
+    def _get_general_metadata(self, dataset: xr.Dataset) -> dict:
         return {
             "description": (
                 self.description
@@ -284,9 +235,8 @@ class OscDatasetStacGenerator:
             "gcmd_keyword_url": gcmd_keyword_url,
         }
 
-    def get_variable_ids(self, dataset: xr.Dataset | None = None) -> list[str]:
+    def get_variable_ids(self, dataset: xr.Dataset) -> list[str]:
         """Get variable IDs for all variables in the dataset."""
-        dataset = dataset or self.dataset
         variable_ids = list(self.get_variables_metadata(dataset).keys())
         #  Remove 'crs' and 'spatial_ref' from the list if they exist, note that
         #  spatial_ref will be normalized to spatial-ref in variable_ids and skipped.
@@ -294,11 +244,8 @@ class OscDatasetStacGenerator:
             var_id for var_id in variable_ids if var_id not in ["crs", "spatial-ref"]
         ]
 
-    def get_variables_metadata(
-        self, dataset: xr.Dataset | None = None
-    ) -> dict[str, dict]:
+    def get_variables_metadata(self, dataset: xr.Dataset) -> dict[str, dict]:
         """Extract metadata for all variables in the dataset."""
-        dataset = dataset or self.dataset
         variables_metadata = {}
         for var_name, variable in dataset.data_vars.items():
             var_metadata = self.extract_metadata_for_variable(variable)
@@ -598,7 +545,7 @@ class OscDatasetStacGenerator:
             )
         return data
 
-    def update_existing_variable_catalog(self, var_file_path, var_id) -> dict:
+    def update_existing_variable_catalog(self, var_file_path) -> dict:
         """Append child and theme links to an existing variable catalog."""
         with open(var_file_path, encoding="utf-8") as f:
             data = json.load(f)
@@ -651,8 +598,8 @@ class OscDatasetStacGenerator:
 
     def build_zarr_stac_item(
         self,
-        item_config: ItemConfig | str | None = None,
-        stac_catalog_s3_root: str | None = None,
+        item_config: ItemConfig,
+        stac_catalog_s3_root: str,
     ) -> Item:
         """Build a single STAC Item representing the entire Zarr store.
 
@@ -667,15 +614,11 @@ class OscDatasetStacGenerator:
         Returns:
             A :class:`pystac.Item` ready to be serialised to S3.
         """
-        if isinstance(item_config, str) and stac_catalog_s3_root is None:
-            stac_catalog_s3_root = item_config
-            item_config = None
-        item_config = item_config or self.items_config[0]
-        if stac_catalog_s3_root is None:
-            raise ValueError("stac_catalog_s3_root is required.")
-
-        self.logger.info(f"Building STAC Item for collection '{self.collection_id}'.")
-        dataset = self._get_dataset_for_item(item_config)
+        self.logger.info(
+            f"Building STAC Item {item_config.item_id} "
+            f"for collection '{self.collection_id}'."
+        )
+        dataset = open_dataset(item_config.dataset_id, logger=self.logger)
         spatial_extent = self._get_spatial_extent(dataset)
         temporal_extent = self._get_temporal_extent(dataset)
         general_metadata = self._get_general_metadata(dataset)
@@ -921,7 +864,7 @@ class OscDatasetStacGenerator:
             variables[str(name)] = entry
         return variables
 
-    def build_prr_stac_item(self, item_config: ItemConfig | None = None) -> Item:
+    def build_prr_stac_item(self, item_config: ItemConfig) -> Item:
         """Build the single datacube Item for the PRR collection.
 
         One Item covers the full spatiotemporal extent of the Zarr store. It
@@ -930,13 +873,11 @@ class OscDatasetStacGenerator:
         (root/parent/collection/self) are left for :meth:`save_prr_collection`
         to fill in via ``Collection.add_item`` + ``normalize_hrefs``.
         """
-        item_config = item_config or self.items_config[0]
-
         self.logger.info(
             f"Building PRR STAC Item '{item_config.item_id}' "
             f"for collection '{self.collection_id}'."
         )
-        dataset = self._get_dataset_for_item(item_config)
+        dataset = open_dataset(item_config.dataset_id, logger=self.logger)
         spatial_extent = self._get_spatial_extent(dataset)
         temporal_extent = self._get_temporal_extent(dataset)
         general_metadata = self._get_general_metadata(dataset)
@@ -1018,24 +959,17 @@ class OscDatasetStacGenerator:
         items = [
             self.build_prr_stac_item(item_config) for item_config in self.items_config
         ]
-        spatial_extent = SpatialExtent([item.bbox for item in items])
-        temporal_extent = TemporalExtent(
-            [
-                [item.properties["start_datetime"], item.properties["end_datetime"]]
-                for item in items
-            ]
-        )
-        variables: list[str] = []
-        for dataset in self.datasets:
-            variables.extend(self.get_variable_ids(dataset))
-        variables = self._unique_preserve_order(variables)
+        spatial_extent = self._union_spatial_extent(items)
+        temporal_extent = self._union_temporal_extent(items)
+        dataset_ref = open_dataset(self.items_config[0].dataset_id, logger=self.logger)
+        variables = self.get_variable_ids(dataset_ref)
 
         collection = Collection(
             id=self.collection_id,
             description=self.description or "No description provided.",
             extent=Extent(spatial=spatial_extent, temporal=temporal_extent),
             license=self.license_type,
-            title=self.description or self.collection_id,
+            title=self.collection_id,
         )
 
         osc_extension = OscExtension.add_to(collection)
@@ -1212,14 +1146,12 @@ class OscDatasetStacGenerator:
             A pystac.Collection object.
         """
         try:
-            datasets = self.datasets
-            spatial_extent = self._union_spatial_extent(datasets)
-            temporal_extent = self._union_temporal_extent(datasets)
-            variables: list[str] = []
-            for dataset in datasets:
-                variables.extend(self.get_variable_ids(dataset))
-            variables = self._unique_preserve_order(variables)
-            general_metadata = self._get_general_metadata(datasets[0])
+            assert len(self.items_config) == 1
+            dataset = open_dataset(self.items_config[0].dataset_id, logger=self.logger)
+            spatial_extent = self._get_spatial_extent(dataset)
+            temporal_extent = self._get_temporal_extent(dataset)
+            variables = self.get_variable_ids(dataset)
+            general_metadata = self._get_general_metadata(dataset)
         except ValueError as e:
             raise ValueError(f"Metadata extraction failed: {e}")
 

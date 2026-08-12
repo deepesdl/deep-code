@@ -245,7 +245,7 @@ class Publisher:
                     / var_file_path
                 )
                 file_dict[var_file_path] = generator.update_existing_variable_catalog(
-                    full_path, var_id
+                    full_path
                 )
 
     @staticmethod
@@ -384,7 +384,9 @@ class Publisher:
             file_dict[project_collection_path] = generator.build_project_collection()
             # Add child link in the projects base catalog
             self._update_and_add_to_file_dict(
-                file_dict, "projects/catalog.json", generator.update_project_base_catalog
+                file_dict,
+                "projects/catalog.json",
+                generator.update_project_base_catalog,
             )
         else:
             self._update_and_add_to_file_dict(

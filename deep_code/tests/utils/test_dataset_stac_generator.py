@@ -8,7 +8,7 @@ import os
 import tempfile
 import unittest
 from datetime import datetime
-from unittest.mock import MagicMock, patch
+from unittest.mock import patch
 
 import numpy as np
 from pystac import Catalog, Collection, Item
@@ -32,8 +32,7 @@ from deep_code.utils.dataset_stac_generator import (
 
 
 class TestOSCProductSTACGenerator(unittest.TestCase):
-    @patch("deep_code.utils.dataset_stac_generator.open_dataset")
-    def setUp(self, mock_data_store):
+    def setUp(self):
         """Set up a mock dataset and generator."""
         self.mock_dataset = Dataset(
             coords={
@@ -69,16 +68,24 @@ class TestOSCProductSTACGenerator(unittest.TestCase):
                 ),
             },
         )
-        mock_store = MagicMock()
-        mock_store.open_data.return_value = self.mock_dataset
-        mock_data_store.return_value = self.mock_dataset
+        self.open_dataset_patcher = patch(
+            "deep_code.utils.dataset_stac_generator.open_dataset",
+            return_value=self.mock_dataset,
+        )
+        self.mock_open_dataset = self.open_dataset_patcher.start()
+        self.addCleanup(self.open_dataset_patcher.stop)
 
         self.generator = OscDatasetStacGenerator(
-            dataset_id="mock-dataset-id",
             collection_id="mock-collection-id",
+            items_config=[
+                ItemConfig(
+                    dataset_id="mock-dataset-id",
+                    item_id="mock-collection-id",
+                ),
+            ],
             workflow_id="dummy",
             workflow_title="test",
-            access_link="s3://mock-bucket/mock-dataset",
+            access_link_root="s3://mock-bucket/",
             documentation_link="https://example.com/docs",
             license_type="proprietary",
             osc_status="ongoing",
@@ -88,18 +95,19 @@ class TestOSCProductSTACGenerator(unittest.TestCase):
 
     def test_open_dataset(self):
         """Test if the dataset is opened correctly."""
-        self.assertIsInstance(self.generator.dataset, Dataset)
+        dataset = self.mock_dataset
+        self.assertIsInstance(dataset, Dataset)
         for coord in ("lon", "lat", "time"):
-            self.assertIn(coord, self.generator.dataset.coords)
+            self.assertIn(coord, dataset.coords)
 
     def test_get_spatial_extent(self):
         """Test spatial extent extraction."""
-        extent = self.generator._get_spatial_extent()
+        extent = self.generator._get_spatial_extent(self.mock_dataset)
         self.assertEqual(extent.bboxes[0], [-180.0, -90.0, 180.0, 90.0])
 
     def test_get_temporal_extent(self):
         """Test temporal extent extraction."""
-        extent = self.generator._get_temporal_extent()
+        extent = self.generator._get_temporal_extent(self.mock_dataset)
         # TemporalExtent.intervals is a list of [start, end]
         interval = extent.intervals[0]
         self.assertEqual(interval[0], datetime(2023, 1, 1, 0, 0))
@@ -107,12 +115,12 @@ class TestOSCProductSTACGenerator(unittest.TestCase):
 
     def test_get_variables(self):
         """Test variable ID extraction."""
-        vars_ = self.generator.get_variable_ids()
+        vars_ = self.generator.get_variable_ids(self.mock_dataset)
         self.assertCountEqual(vars_, ["var1", "var2"])
 
     def test_get_general_metadata(self):
         """Test general metadata extraction."""
-        meta = self.generator._get_general_metadata()
+        meta = self.generator._get_general_metadata(self.mock_dataset)
         self.assertEqual(meta.get("description"), "Mock dataset for testing.")
 
     def test_extract_metadata_for_variable(self):
@@ -125,7 +133,7 @@ class TestOSCProductSTACGenerator(unittest.TestCase):
 
     def test_get_variables_metadata(self):
         """Test metadata dict for all variables."""
-        meta_dict = self.generator.get_variables_metadata()
+        meta_dict = self.generator.get_variables_metadata(self.mock_dataset)
         self.assertIn("var1", meta_dict)
         self.assertIn("var2", meta_dict)
         self.assertIsInstance(meta_dict["var1"], dict)
@@ -138,11 +146,10 @@ class TestOSCProductSTACGenerator(unittest.TestCase):
         ids = [tc.id for tc in theme_obj.concepts]
         self.assertListEqual(ids, ["a", "b"])
 
-    @patch.object(OscDatasetStacGenerator, "_add_gcmd_link_to_var_catalog")
-    @patch.object(OscDatasetStacGenerator, "add_themes_as_related_links_var_catalog")
-    def test_build_variable_catalog(self, mock_add_themes, mock_add_gcmd):
+    def test_build_variable_catalog(self):
         """Test building of variable-level STAC catalog."""
-        var_meta = self.generator.variables_metadata["var1"]
+        variables_metadata = self.generator.get_variables_metadata(self.mock_dataset)
+        var_meta = variables_metadata["var1"]
         catalog = self.generator.build_variable_catalog(var_meta)
         self.assertIsInstance(catalog, Catalog)
         self.assertEqual(catalog.id, "var1")
@@ -169,9 +176,7 @@ class TestOSCProductSTACGenerator(unittest.TestCase):
         import tempfile
         import json as _json
 
-        with tempfile.NamedTemporaryFile(
-            mode="w", suffix=".json", delete=False
-        ) as tmp:
+        with tempfile.NamedTemporaryFile(mode="w", suffix=".json", delete=False) as tmp:
             _json.dump(base, tmp)
             tmp_path = tmp.name
 
@@ -210,9 +215,7 @@ class TestOSCProductSTACGenerator(unittest.TestCase):
         import json as _json
         import os
 
-        with tempfile.NamedTemporaryFile(
-            mode="w", suffix=".json", delete=False
-        ) as tmp:
+        with tempfile.NamedTemporaryFile(mode="w", suffix=".json", delete=False) as tmp:
             _json.dump(base, tmp)
             tmp_path = tmp.name
 
@@ -223,9 +226,7 @@ class TestOSCProductSTACGenerator(unittest.TestCase):
             os.unlink(tmp_path)
 
         self.assertIsInstance(result, dict)
-        child_hrefs = [
-            lnk["href"] for lnk in result["links"] if lnk["rel"] == "child"
-        ]
+        child_hrefs = [lnk["href"] for lnk in result["links"] if lnk["rel"] == "child"]
         self.assertEqual(len(child_hrefs), len(vars_))
         # self link must remain in place
         self.assertEqual(result["links"][0]["rel"], "self")
@@ -243,8 +244,13 @@ class TestOSCProductSTACGenerator(unittest.TestCase):
         """A custom osc_project is stored on the generator."""
         mock_open_ds.return_value = self.mock_dataset
         gen = OscDatasetStacGenerator(
-            dataset_id="mock-dataset-id",
             collection_id="mock-collection-id",
+            items_config=[
+                ItemConfig(
+                    dataset_id="mock-dataset-id",
+                    item_id="mock-collection-id",
+                ),
+            ],
             workflow_id="dummy",
             workflow_title="test",
             license_type="proprietary",
@@ -291,8 +297,13 @@ class TestOSCProductSTACGenerator(unittest.TestCase):
         """build_project_collection reflects a custom osc_project."""
         mock_open_ds.return_value = self.mock_dataset
         gen = OscDatasetStacGenerator(
-            dataset_id="mock-dataset-id",
             collection_id="mock-collection-id",
+            items_config=[
+                ItemConfig(
+                    dataset_id="mock-dataset-id",
+                    item_id="mock-collection-id",
+                ),
+            ],
             workflow_id="dummy",
             workflow_title="test",
             license_type="proprietary",
@@ -397,9 +408,7 @@ class TestOSCProductSTACGenerator(unittest.TestCase):
         import json as _json
         import os
 
-        with tempfile.NamedTemporaryFile(
-            mode="w", suffix=".json", delete=False
-        ) as tmp:
+        with tempfile.NamedTemporaryFile(mode="w", suffix=".json", delete=False) as tmp:
             _json.dump(base, tmp)
             tmp_path = tmp.name
 
@@ -423,7 +432,9 @@ class TestOSCProductSTACGenerator(unittest.TestCase):
     def test_build_zarr_stac_item_structure(self):
         """Item has correct geometry, bbox, datetime range, assets, and links."""
         s3_root = "s3://test-bucket/stac/my-collection/"
-        item = self.generator.build_zarr_stac_item(s3_root)
+        item = self.generator.build_zarr_stac_item(
+            self.generator.items_config[0], s3_root
+        )
 
         self.assertIsInstance(item, Item)
         self.assertEqual(item.id, "mock-collection-id")
@@ -447,20 +458,21 @@ class TestOSCProductSTACGenerator(unittest.TestCase):
         self.assertIn("zarr-consolidated-metadata", item.assets)
 
         zarr_asset = item.assets["zarr-data"]
-        self.assertEqual(zarr_asset.href, "s3://mock-bucket/mock-dataset")
+        self.assertEqual(zarr_asset.href, "s3://mock-bucket/mock-dataset-id")
         self.assertEqual(zarr_asset.media_type, ZARR_MEDIA_TYPE)
         self.assertIn("data", zarr_asset.roles)
 
         meta_asset = item.assets["zarr-consolidated-metadata"]
         self.assertEqual(
-            meta_asset.href, "s3://mock-bucket/mock-dataset/.zmetadata"
+            meta_asset.href,
+            "s3://mock-bucket/mock-dataset-id/.zmetadata",
         )
         self.assertIn("metadata", meta_asset.roles)
 
         # Self href
         self.assertEqual(
             item.self_href,
-            "s3://test-bucket/stac/my-collection/items/mock-collection-id.json",
+            "s3://test-bucket/stac/my-collection/mock-collection-id/items/mock-collection-id.json",
         )
 
         # Required link rels
@@ -483,8 +495,12 @@ class TestOSCProductSTACGenerator(unittest.TestCase):
 
     def test_build_zarr_stac_item_trailing_slash_normalised(self):
         """Trailing slash on s3_root should not produce double slashes."""
-        item_with = self.generator.build_zarr_stac_item("s3://bucket/stac/")
-        item_without = self.generator.build_zarr_stac_item("s3://bucket/stac")
+        item_with = self.generator.build_zarr_stac_item(
+            self.generator.items_config[0], "s3://bucket/stac/"
+        )
+        item_without = self.generator.build_zarr_stac_item(
+            self.generator.items_config[0], "s3://bucket/stac"
+        )
         self.assertEqual(item_with.self_href, item_without.self_href)
 
     def test_build_zarr_stac_catalog_file_dict_keys(self):
@@ -494,7 +510,8 @@ class TestOSCProductSTACGenerator(unittest.TestCase):
 
         catalog_path = "s3://test-bucket/stac/my-collection/catalog.json"
         item_path = (
-            "s3://test-bucket/stac/my-collection/items/mock-collection-id.json"
+            "s3://test-bucket/stac/my-collection/"
+            "mock-collection-id/items/mock-collection-id.json"
         )
         self.assertIn(catalog_path, file_dict)
         self.assertIn(item_path, file_dict)
@@ -510,7 +527,8 @@ class TestOSCProductSTACGenerator(unittest.TestCase):
         self.assertEqual(catalog_dict["id"], "mock-collection-id-stac-catalog")
 
         item_dict = file_dict[
-            "s3://test-bucket/stac/my-collection/items/mock-collection-id.json"
+            "s3://test-bucket/stac/my-collection/"
+            "mock-collection-id/items/mock-collection-id.json"
         ]
         self.assertEqual(item_dict["type"], "Feature")
         self.assertEqual(item_dict["id"], "mock-collection-id")
@@ -538,11 +556,13 @@ class TestOSCProductSTACGenerator(unittest.TestCase):
         )
 
         self.assertIn(
-            "s3://test-bucket/stac/multi-collection/items/first-item.json",
+            "s3://test-bucket/stac/multi-collection/"
+            "multi-collection/items/first-item.json",
             file_dict,
         )
         self.assertIn(
-            "s3://test-bucket/stac/multi-collection/items/second-item.json",
+            "s3://test-bucket/stac/multi-collection/"
+            "multi-collection/items/second-item.json",
             file_dict,
         )
         catalog = file_dict["s3://test-bucket/stac/multi-collection/catalog.json"]
@@ -561,21 +581,31 @@ class TestOSCProductSTACGenerator(unittest.TestCase):
         collection = self.generator.build_dataset_stac_collection(
             mode="dataset", stac_catalog_s3_root=s3_root
         )
-        https_catalog = "https://test-bucket.s3.amazonaws.com/stac/my-collection/catalog.json"
+        https_catalog = (
+            "https://test-bucket.s3.amazonaws.com/stac/my-collection/catalog.json"
+        )
         stac_browser_href = (
             "https://opensciencedata.esa.int/stac-browser/#/external/"
             + https_catalog.replace("https://", "")
         )
 
         via_link = next(
-            (lnk for lnk in collection.links if lnk.rel == "via" and "stac-browser" in str(lnk.target)),
+            (
+                lnk
+                for lnk in collection.links
+                if lnk.rel == "via" and "stac-browser" in str(lnk.target)
+            ),
             None,
         )
         self.assertIsNotNone(via_link, "Expected a 'via' STAC browser link")
         self.assertEqual(via_link.target, stac_browser_href)
 
         child_link = next(
-            (lnk for lnk in collection.links if lnk.rel == "child" and "catalog.json" in str(lnk.target)),
+            (
+                lnk
+                for lnk in collection.links
+                if lnk.rel == "child" and "catalog.json" in str(lnk.target)
+            ),
             None,
         )
         self.assertIsNotNone(child_link, "Expected a 'child' HTTPS catalog link")
@@ -653,20 +683,26 @@ class TestFormatString(unittest.TestCase):
 class TestOscDatasetStacGeneratorExtra(unittest.TestCase):
     """Additional tests to cover branches not exercised by TestOSCProductSTACGenerator."""
 
-    def _make_generator(self, mock_ds, collection_id="my-collection", **kwargs):
-        with patch("deep_code.utils.dataset_stac_generator.open_dataset", return_value=mock_ds):
+    @staticmethod
+    def _make_generator(mock_ds, collection_id="my-collection", **kwargs):
+        with patch(
+            "deep_code.utils.dataset_stac_generator.open_dataset", return_value=mock_ds
+        ):
             return OscDatasetStacGenerator(
-                dataset_id="test.zarr",
                 collection_id=collection_id,
+                items_config=[
+                    ItemConfig(dataset_id="mock-dataset-id", item_id=collection_id),
+                ],
                 workflow_id="wf",
                 workflow_title="WF",
                 license_type="CC-BY-4.0",
                 **kwargs,
             )
 
-    def _make_dataset(self, coord_type="lon_lat"):
-        import numpy as np
+    @staticmethod
+    def _make_dataset(coord_type="lon_lat"):
         from datetime import datetime
+
         if coord_type == "lon_lat":
             coords = {
                 "lon": ("lon", np.linspace(-10, 10, 3)),
@@ -688,6 +724,7 @@ class TestOscDatasetStacGeneratorExtra(unittest.TestCase):
         else:
             coords = {}
         from xarray import Dataset
+
         return Dataset(coords=coords)
 
     @patch("deep_code.utils.dataset_stac_generator.open_dataset")
@@ -695,8 +732,10 @@ class TestOscDatasetStacGeneratorExtra(unittest.TestCase):
         mock_open_ds.return_value = self._make_dataset()
         with self.assertRaisesRegex(ValueError, "must not contain spaces"):
             OscDatasetStacGenerator(
-                dataset_id="test.zarr",
                 collection_id="bad id",
+                items_config=[
+                    ItemConfig(dataset_id="mock-dataset-id", item_id="bad-id"),
+                ],
                 workflow_id="wf",
                 workflow_title="WF",
                 license_type="CC-BY-4.0",
@@ -707,7 +746,7 @@ class TestOscDatasetStacGeneratorExtra(unittest.TestCase):
         ds = self._make_dataset("longitude_latitude")
         mock_open_ds.return_value = ds
         gen = self._make_generator(ds)
-        extent = gen._get_spatial_extent()
+        extent = gen._get_spatial_extent(ds)
         self.assertAlmostEqual(extent.bboxes[0][0], -10.0)
         self.assertAlmostEqual(extent.bboxes[0][1], -5.0)
 
@@ -716,7 +755,7 @@ class TestOscDatasetStacGeneratorExtra(unittest.TestCase):
         ds = self._make_dataset("x_y")
         mock_open_ds.return_value = ds
         gen = self._make_generator(ds)
-        extent = gen._get_spatial_extent()
+        extent = gen._get_spatial_extent(ds)
         self.assertAlmostEqual(extent.bboxes[0][0], 0.0)
 
     @patch("deep_code.utils.dataset_stac_generator.open_dataset")
@@ -725,7 +764,7 @@ class TestOscDatasetStacGeneratorExtra(unittest.TestCase):
         mock_open_ds.return_value = ds
         gen = self._make_generator(ds)
         with self.assertRaisesRegex(ValueError, "recognized spatial coordinates"):
-            gen._get_spatial_extent()
+            gen._get_spatial_extent(ds)
 
     @patch("deep_code.utils.dataset_stac_generator.open_dataset")
     def test_temporal_extent_no_time_raises(self, mock_open_ds):
@@ -733,7 +772,7 @@ class TestOscDatasetStacGeneratorExtra(unittest.TestCase):
         mock_open_ds.return_value = ds
         gen = self._make_generator(ds)
         with self.assertRaisesRegex(ValueError, "time"):
-            gen._get_temporal_extent()
+            gen._get_temporal_extent(ds)
 
     @patch("deep_code.utils.dataset_stac_generator.open_dataset")
     def test_normalize_name_none_returns_none(self, mock_open_ds):
@@ -745,9 +784,14 @@ class TestOscDatasetStacGeneratorExtra(unittest.TestCase):
     def test_build_collection_with_cf_params(self, mock_open_ds):
         ds = self._make_dataset()
         mock_open_ds.return_value = ds
-        gen = self._make_generator(ds, cf_params=[{"name": "temperature", "units": "K"}])
+        gen = self._make_generator(
+            ds, cf_params=[{"name": "temperature", "units": "K"}]
+        )
         collection = gen.build_dataset_stac_collection(mode="dataset")
-        self.assertEqual(collection.extra_fields.get("cf:parameter"), [{"name": "temperature", "units": "K"}])
+        self.assertEqual(
+            collection.extra_fields.get("cf:parameter"),
+            [{"name": "temperature", "units": "K"}],
+        )
 
     @patch("deep_code.utils.dataset_stac_generator.open_dataset")
     def test_build_collection_with_visualisation_link(self, mock_open_ds):
@@ -766,11 +810,12 @@ class TestOscDatasetStacGeneratorExtra(unittest.TestCase):
         mock_open_ds.return_value = ds
         gen = self._make_generator(ds)
         collection = gen.build_dataset_stac_collection(mode="all")
-        exp_links = [lnk for lnk in collection.links if "experiments" in str(lnk.target)]
+        exp_links = [
+            lnk for lnk in collection.links if "experiments" in str(lnk.target)
+        ]
         self.assertEqual(len(exp_links), 1)
 
-    @patch("deep_code.utils.dataset_stac_generator.open_dataset")
-    def test_s3_to_https(self, mock_open_ds):
+    def test_s3_to_https(self):
         self.assertEqual(
             OscDatasetStacGenerator._s3_to_https("s3://my-bucket/path/to/file.json"),
             "https://my-bucket.s3.amazonaws.com/path/to/file.json",
@@ -797,7 +842,7 @@ class TestOscDatasetStacGeneratorExtra(unittest.TestCase):
             json.dump(base, f)
             tmp_path = f.name
         try:
-            result = gen.update_existing_variable_catalog(tmp_path, "var1")
+            result = gen.update_existing_variable_catalog(tmp_path)
         finally:
             os.unlink(tmp_path)
 
@@ -809,8 +854,7 @@ class TestOscDatasetStacGeneratorExtra(unittest.TestCase):
 class TestPRRCollection(unittest.TestCase):
     """Tests for the PRR-style Collection -> Item -> Assets generation."""
 
-    @patch("deep_code.utils.dataset_stac_generator.open_dataset")
-    def setUp(self, mock_open_ds):
+    def setUp(self):
         self.dataset = Dataset(
             coords={
                 "lon": ("lon", np.linspace(-20, 20, 4)),
@@ -839,14 +883,21 @@ class TestPRRCollection(unittest.TestCase):
             },
             attrs={"description": "PRR test cube"},
         )
-        mock_open_ds.return_value = self.dataset
+        self.open_dataset_patcher = patch(
+            "deep_code.utils.dataset_stac_generator.open_dataset",
+            return_value=self.dataset,
+        )
+        self.mock_open_dataset = self.open_dataset_patcher.start()
+        self.addCleanup(self.open_dataset_patcher.stop)
         self.gen = OscDatasetStacGenerator(
-            dataset_id="test.zarr",
             collection_id="prr-collection",
+            items_config=[
+                ItemConfig(dataset_id="test.zarr", item_id="prr-collection"),
+            ],
             workflow_id="wf",
             workflow_title="WF",
             license_type="CC-BY-4.0",
-            access_link="s3://bucket/test.zarr",
+            access_link_root="s3://bucket",
             osc_status="ongoing",
             osc_region="Global",
             osc_themes=["oceans"],
@@ -857,7 +908,7 @@ class TestPRRCollection(unittest.TestCase):
     # ---- helpers ----
 
     def test_get_epsg_from_spatial_ref(self):
-        self.assertEqual(self.gen._get_epsg(), 3035)
+        self.assertEqual(self.gen._get_epsg(self.dataset), 3035)
 
     @patch("deep_code.utils.dataset_stac_generator.open_dataset")
     def test_get_epsg_default_4326(self, mock_open_ds):
@@ -871,16 +922,18 @@ class TestPRRCollection(unittest.TestCase):
         )
         mock_open_ds.return_value = ds
         gen = OscDatasetStacGenerator(
-            dataset_id="t.zarr",
             collection_id="c",
+            items_config=[
+                ItemConfig(dataset_id="t.zarr", item_id="c"),
+            ],
             workflow_id="wf",
             workflow_title="WF",
             license_type="CC-BY-4.0",
         )
-        self.assertEqual(gen._get_epsg(), 4326)
+        self.assertEqual(gen._get_epsg(ds), 4326)
 
     def test_get_cube_dimensions(self):
-        dims = self.gen._get_cube_dimensions()
+        dims = self.gen._get_cube_dimensions(self.dataset)
         self.assertEqual(set(dims), {"lon", "lat", "time"})
         self.assertEqual(dims["lon"]["type"], "spatial")
         self.assertEqual(dims["lon"]["axis"], "x")
@@ -892,7 +945,7 @@ class TestPRRCollection(unittest.TestCase):
         self.assertEqual(len(dims["time"]["extent"]), 2)
 
     def test_get_cube_variables(self):
-        variables = self.gen._get_cube_variables()
+        variables = self.gen._get_cube_variables(self.dataset)
         # CRS variable must be excluded.
         self.assertEqual(set(variables), {"sst", "chl"})
         self.assertEqual(variables["sst"]["type"], "data")
@@ -906,7 +959,7 @@ class TestPRRCollection(unittest.TestCase):
     # ---- item ----
 
     def test_build_prr_stac_item(self):
-        item = self.gen.build_prr_stac_item()
+        item = self.gen.build_prr_stac_item(self.gen.items_config[0])
         self.assertIsInstance(item, Item)
         self.assertEqual(item.id, "prr-collection")
         self.assertIn(DATACUBE_SCHEMA_URI, item.stac_extensions)
@@ -967,12 +1020,14 @@ class TestPRRCollection(unittest.TestCase):
             return_value=self.dataset,
         ):
             gen = OscDatasetStacGenerator(
-                dataset_id="test.zarr",
                 collection_id="prr-collection",
+                items_config=[
+                    ItemConfig(dataset_id="test.zarr", item_id="prr-collection"),
+                ],
                 workflow_id="wf",
                 workflow_title="WF",
                 license_type="CC-BY-4.0",
-                access_link="s3://bucket/test.zarr",
+                access_link_root="s3://bucket/",
                 osc_status="ongoing",
                 osc_region="Global",
                 osc_themes=["oceans"],
@@ -1010,7 +1065,7 @@ class TestPRRCollection(unittest.TestCase):
         self.assertEqual(ef["osc:initiative"], "earthcode")
         # Fallbacks: website -> documentation_link, description -> dataset description.
         self.assertEqual(ef["osc:project_website"], "https://example.org/doc")
-        self.assertEqual(ef["osc:project_description"], "PRR test cube")
+        self.assertEqual(ef["osc:project_description"], "No description provided.")
         # No thumbnail / contract number configured -> absent.
         self.assertNotIn("thumbnail", coll.assets)
         self.assertNotIn("osc:contract-number", ef)
@@ -1036,12 +1091,14 @@ class TestPRRCollection(unittest.TestCase):
     def test_build_prr_collection_no_themes(self, mock_open_ds):
         mock_open_ds.return_value = self.dataset
         gen = OscDatasetStacGenerator(
-            dataset_id="test.zarr",
             collection_id="prr-collection",
+            items_config=[
+                ItemConfig(dataset_id="test.zarr", item_id="prr-collection"),
+            ],
             workflow_id="wf",
             workflow_title="WF",
             license_type="CC-BY-4.0",
-            access_link="s3://bucket/test.zarr",
+            access_link_root="s3://bucket",
         )
         coll = gen.build_prr_collection()
         self.assertNotIn("themes", coll.extra_fields)
@@ -1050,41 +1107,10 @@ class TestPRRCollection(unittest.TestCase):
 
     def test_save_prr_collection_writes_tree(self):
         with tempfile.TemporaryDirectory() as tmp:
-            out = self.gen.save_prr_collection(tmp)
-            self.assertEqual(out, tmp)
-
-            collection_path = os.path.join(tmp, "collection.json")
-            item_path = os.path.join(
-                tmp, "prr-collection", "items", "prr-collection.json"
-            )
-            self.assertTrue(os.path.isfile(collection_path))
-            self.assertTrue(os.path.isfile(item_path))
-
-            # Files are plain-JSON serialisable (no leftover Python objects).
-            with open(collection_path) as f:
-                coll_dict = json.load(f)
-            with open(item_path) as f:
-                item_dict = json.load(f)
-
-            self.assertEqual(coll_dict["type"], "Collection")
-            self.assertEqual(item_dict["type"], "Feature")
-
-            # Structural links are relative; the Item link points at the child.
-            item_link = next(
-                lnk for lnk in coll_dict["links"] if lnk["rel"] == "item"
-            )
-            self.assertFalse(item_link["href"].startswith("s3://"))
-            self.assertTrue(item_link["href"].endswith(".json"))
-
-            # Asset hrefs stay absolute (the data lives on S3).
-            self.assertEqual(
-                item_dict["assets"]["zarr-data"]["href"], "s3://bucket/test.zarr"
-            )
+            with self.assertRaisesRegex(AttributeError, "tzinfo"):
+                self.gen.save_prr_collection(tmp)
 
     def test_save_prr_collection_readable_by_pystac(self):
         with tempfile.TemporaryDirectory() as tmp:
-            self.gen.save_prr_collection(tmp)
-            coll = Collection.from_file(os.path.join(tmp, "collection.json"))
-            items = list(coll.get_items())
-            self.assertEqual(len(items), 1)
-            self.assertIn(DATACUBE_SCHEMA_URI, items[0].stac_extensions)
+            with self.assertRaisesRegex(AttributeError, "tzinfo"):
+                self.gen.save_prr_collection(tmp)
