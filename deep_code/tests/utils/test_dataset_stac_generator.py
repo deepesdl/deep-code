@@ -1107,10 +1107,37 @@ class TestPRRCollection(unittest.TestCase):
 
     def test_save_prr_collection_writes_tree(self):
         with tempfile.TemporaryDirectory() as tmp:
-            with self.assertRaisesRegex(AttributeError, "tzinfo"):
-                self.gen.save_prr_collection(tmp)
+            out = self.gen.save_prr_collection(tmp)
+            self.assertEqual(out, tmp)
+
+            collection_path = os.path.join(tmp, "collection.json")
+            item_path = os.path.join(tmp, "prr-collection", "prr-collection.json")
+            self.assertTrue(os.path.isfile(collection_path))
+            self.assertTrue(os.path.isfile(item_path))
+
+            # Files are plain-JSON serialisable (no leftover Python objects).
+            with open(collection_path) as f:
+                coll_dict = json.load(f)
+            with open(item_path) as f:
+                item_dict = json.load(f)
+
+            self.assertEqual(coll_dict["type"], "Collection")
+            self.assertEqual(item_dict["type"], "Feature")
+
+            # Structural links are relative; the Item link points at the child.
+            item_link = next(lnk for lnk in coll_dict["links"] if lnk["rel"] == "item")
+            self.assertFalse(item_link["href"].startswith("s3://"))
+            self.assertTrue(item_link["href"].endswith(".json"))
+
+            # Asset hrefs stay absolute (the data lives on S3).
+            self.assertEqual(
+                item_dict["assets"]["zarr-data"]["href"], "s3://bucket/test.zarr"
+            )
 
     def test_save_prr_collection_readable_by_pystac(self):
         with tempfile.TemporaryDirectory() as tmp:
-            with self.assertRaisesRegex(AttributeError, "tzinfo"):
-                self.gen.save_prr_collection(tmp)
+            self.gen.save_prr_collection(tmp)
+            coll = Collection.from_file(os.path.join(tmp, "collection.json"))
+            items = list(coll.get_items())
+            self.assertEqual(len(items), 1)
+            self.assertIn(DATACUBE_SCHEMA_URI, items[0].stac_extensions)

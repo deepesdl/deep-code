@@ -207,10 +207,13 @@ class OscDatasetStacGenerator:
         """Merge multiple dataset temporal extents into a single interval."""
         intervals = np.array(
             [
-                [item.properties["start_datetime"], item.properties["end_datetime"]]
+                [
+                    datetime.fromisoformat(item.properties["start_datetime"]),
+                    datetime.fromisoformat(item.properties["end_datetime"]),
+                ]
                 for item in items
             ]
-        ).astype(np.datetime64)
+        )
         return TemporalExtent([[min(intervals[:, 0]), max(intervals[:, 1])]])
 
     def _get_general_metadata(self, dataset: xr.Dataset) -> dict:
