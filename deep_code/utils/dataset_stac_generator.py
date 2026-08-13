@@ -646,7 +646,7 @@ class OscDatasetStacGenerator:
         now_iso = datetime.now(timezone.utc).isoformat()
         root = stac_catalog_s3_root.rstrip("/")
         catalog_href = f"{root}/catalog.json"
-        item_href = f"{root}/{self.collection_id}/items/{item_config.item_id}.json"
+        item_href = f"{root}/{self.collection_id}/item.json"
         osc_collection_href = (
             "https://esa-earthcode.github.io/open-science-catalog-metadata"
             f"/products/{self.collection_id}/collection.json"
@@ -715,10 +715,7 @@ class OscDatasetStacGenerator:
             {stac_catalog_s3_root}/
             ├── catalog.json                   # STAC Catalog (root)
             └── {collection_id}/
-                └── collection.json
-                └── items/
-                    ├── {item_id_0}.json       # STAC Item (whole Zarr)
-                    └── {item_id_1}.json       # STAC Item (whole Zarr)
+                └── item.json       # STAC Item (whole Zarr)
 
         Args:
             stac_catalog_s3_root: S3 root URL (e.g. ``s3://my-bucket/stac/``).
@@ -730,9 +727,9 @@ class OscDatasetStacGenerator:
             f"Building STAC Catalog file dict for collection '{self.collection_id}' "
             f"at root '{stac_catalog_s3_root}'."
         )
+
         root = stac_catalog_s3_root.rstrip("/")
         catalog_href = f"{root}/catalog.json"
-
         catalog = Catalog(
             id=f"{self.collection_id}-stac-catalog",
             description=f"STAC Catalog for {self.collection_id}",
@@ -741,27 +738,24 @@ class OscDatasetStacGenerator:
         catalog.add_link(
             Link(rel="root", target=catalog_href, media_type="application/json")
         )
-        file_dict = {catalog_href: catalog.to_dict(transform_hrefs=False)}
 
-        for item_config in self.items_config:
-            item = self.build_zarr_stac_item(item_config, stac_catalog_s3_root)
-            item_href = f"{root}/{self.collection_id}/items/{item_config.item_id}.json"
-            catalog.add_link(
-                Link(
-                    rel="item",
-                    target=f"./{self.collection_id}/items/{item_config.item_id}.json",
-                    media_type="application/json",
-                    title=item_config.item_id,
-                )
+        item_config = self.items_config[0]
+        item = self.build_zarr_stac_item(item_config, stac_catalog_s3_root)
+        catalog.add_link(
+            Link(
+                rel="item",
+                target=f"./{self.collection_id}/items/{item_config.item_id}.json",
+                media_type="application/json",
+                title=item_config.item_id,
             )
-            file_dict[item_href] = item.to_dict(transform_hrefs=False)
-
-        file_dict[catalog_href] = catalog.to_dict(transform_hrefs=False)
-        self.logger.info(
-            "STAC Catalog file dict ready: %s",
-            ", ".join(file_dict.keys()),
         )
-        return file_dict
+        item_href = f"{root}/{self.collection_id}/items/{item_config.item_id}.json"
+
+        self.logger.info(f"STAC Catalog file dict ready: {catalog_href}, {item_href}")
+        return {
+            catalog_href: catalog.to_dict(transform_hrefs=False),
+            item_href: item.to_dict(transform_hrefs=False),
+        }
 
     # --------------------------------------------------------------------- #
     # PRR (Project Results Repository) style output                         #

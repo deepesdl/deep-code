@@ -110,7 +110,7 @@ class RecordProperties(MappingConstructible["RecordProperties"], JsonSerializabl
 
 
 class LinksBuilder:
-    def __init__(self, themes: list[str], jupyter_kernel_info: dict[str]):
+    def __init__(self, themes: list[str], jupyter_kernel_info: dict[str, Any]):
         self.themes = themes
         self.jupyter_kernel_info = jupyter_kernel_info
         self.theme_links = []
@@ -233,7 +233,7 @@ class LinksBuilder:
         jupyter_notebook_url: str,
         title: str = "Open notebook on the DeepESDL platform",
         branch_override: str | None = None,
-    ) -> dict[str, str]:
+    ) -> list[dict[str, str]]:
         return [
             {
                 "rel": "related",

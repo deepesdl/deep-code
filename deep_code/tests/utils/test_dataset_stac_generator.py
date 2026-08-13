@@ -472,7 +472,7 @@ class TestOSCProductSTACGenerator(unittest.TestCase):
         # Self href
         self.assertEqual(
             item.self_href,
-            "s3://test-bucket/stac/my-collection/mock-collection-id/items/mock-collection-id.json",
+            "s3://test-bucket/stac/my-collection/mock-collection-id/item.json",
         )
 
         # Required link rels
@@ -538,7 +538,7 @@ class TestOSCProductSTACGenerator(unittest.TestCase):
 
     @patch("deep_code.utils.dataset_stac_generator.open_dataset")
     def test_build_zarr_stac_catalog_file_dict_multiple_items(self, mock_open_ds):
-        """Multiple item configurations produce multiple item files and links."""
+        """Only the first item configuration is emitted in the STAC file dict."""
         mock_open_ds.return_value = self.mock_dataset
         gen = OscDatasetStacGenerator(
             collection_id="multi-collection",
@@ -560,14 +560,14 @@ class TestOSCProductSTACGenerator(unittest.TestCase):
             "multi-collection/items/first-item.json",
             file_dict,
         )
-        self.assertIn(
+        self.assertNotIn(
             "s3://test-bucket/stac/multi-collection/"
             "multi-collection/items/second-item.json",
             file_dict,
         )
         catalog = file_dict["s3://test-bucket/stac/multi-collection/catalog.json"]
         item_links = [lnk for lnk in catalog["links"] if lnk["rel"] == "item"]
-        self.assertEqual(len(item_links), 2)
+        self.assertEqual(len(item_links), 1)
 
     def test_build_dataset_stac_collection_adds_s3_catalog_via_link(self):
         """A 'via' link (STAC browser) and a 'child' link (HTTPS catalog) are added

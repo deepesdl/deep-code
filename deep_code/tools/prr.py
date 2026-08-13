@@ -39,10 +39,16 @@ def generate_prr_collection(
         config = yaml.safe_load(file) or {}
 
     collection_id = config.get("collection_id")
+    osc_project = config.get("osc_project")
+    osc_project_url = config.get("osc_project_url")
     license_type = config.get("license_type")
     items_config_raw = config.get("items_config")
     if not collection_id:
         raise ValueError("collection_id is required in the dataset config.")
+    if not osc_project:
+        raise ValueError("osc_project is required in the dataset config.")
+    if not osc_project_url:
+        raise ValueError("osc_project_url is required in the dataset config.")
     if not license_type:
         raise ValueError(
             "license_type is required in the dataset config. "
