@@ -720,6 +720,7 @@ class OscDatasetStacGenerator:
             {stac_catalog_s3_root}/
             ├── catalog.json                   # STAC Catalog (root)
             └── {collection_id}/
+                └── collection.json
                 └── items/
                     ├── {item_id_0}.json       # STAC Item (whole Zarr)
                     └── {item_id_1}.json       # STAC Item (whole Zarr)
@@ -767,13 +768,13 @@ class OscDatasetStacGenerator:
         )
         return file_dict
 
-    # ------------------------------------------------------------------- #
-    # PRR (Project Results Repository) style output                       #
-    #                                                                     #
-    # A self-contained ``Collection -> Item -> Assets`` tree that mirrors #
-    # the ESA EarthCODE PRR tutorial. Emitted alongside (not replacing)   #
-    # the plain catalog.json/items/*.json under ``{root}/prr/``.          #
-    # ------------------------------------------------------------------- #
+    # --------------------------------------------------------------------- #
+    # PRR (Project Results Repository) style output                         #
+    #                                                                       #
+    # A self-contained ``Collection -> Item -> Assets`` tree that mirrors   #
+    # the ESA EarthCODE PRR tutorial. Emitted alongside (not replacing)     #
+    # the plain {collection_id}/items/{item_id}.json under ``{root}/prr/``. #
+    # --------------------------------------------------------------------- #
 
     @staticmethod
     def _get_epsg(dataset: xr.Dataset) -> int:
@@ -945,6 +946,7 @@ class OscDatasetStacGenerator:
                 roles=["metadata"],
             ),
         )
+        item.set_self_href(f"./{self.collection_id}/items/{item_config.item_id}.json")
         self.logger.info(
             f"PRR STAC Item '{item_config.item_id}' built for '{self.collection_id}'."
         )
@@ -974,6 +976,7 @@ class OscDatasetStacGenerator:
             license=self.license_type,
             title=self.collection_id,
         )
+        collection.set_self_href(f"./{self.collection_id}/collection.json")
 
         osc_extension = OscExtension.add_to(collection)
         osc_extension.osc_project = self.osc_project
@@ -1115,8 +1118,8 @@ class OscDatasetStacGenerator:
         ready to inspect or submit to the ESA EarthCODE PRR endpoint::
 
             {output_dir}/
-            ├── collection.json                # STAC Collection (root)
             └── {collection_id}/
+                └── collection.json            # STAC Collection (root)
                 └── items
                     └── {item_id_0}.json       # datacube Item (whole Zarr)
                     └── {item_id_1}.json       # datacube Item (whole Zarr)

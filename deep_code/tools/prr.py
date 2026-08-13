@@ -41,25 +41,6 @@ def generate_prr_collection(
     collection_id = config.get("collection_id")
     license_type = config.get("license_type")
     items_config_raw = config.get("items_config")
-
-    if items_config_raw:
-        items_config = [
-            ItemConfig(
-                dataset_id=item_config["dataset_id"],
-                item_id=item_config["item_id"],
-            )
-            for item_config in items_config_raw
-        ]
-    else:
-        dataset_id = config.get("dataset_id")
-        item_id = config.get("item_id") or collection_id
-        if not dataset_id or not collection_id:
-            raise ValueError(
-                "At least one item configuration must be provided in the dataset config, "
-                "along with 'collection_id'."
-            )
-        items_config = [ItemConfig(dataset_id=dataset_id, item_id=item_id)]
-
     if not collection_id:
         raise ValueError("collection_id is required in the dataset config.")
     if not license_type:
@@ -67,11 +48,20 @@ def generate_prr_collection(
             "license_type is required in the dataset config. "
             "Provide an SPDX identifier (e.g. 'CC-BY-4.0', 'MIT', 'proprietary')."
         )
+    if not items_config_raw:
+        raise ValueError("items_config is required in the dataset config.")
+    items_config = [
+        ItemConfig(
+            dataset_id=item_config["dataset_id"],
+            item_id=item_config["item_id"],
+        )
+        for item_config in items_config_raw
+    ]
 
     logger.info(f"Generating PRR STAC collection for '{collection_id}'.")
     generator = OscDatasetStacGenerator(
-        items_config=items_config,
         collection_id=collection_id,
+        items_config=items_config,
         workflow_id=config.get("workflow_id") or "",
         workflow_title=config.get("workflow_title") or "",
         license_type=license_type,
