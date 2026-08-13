@@ -907,8 +907,8 @@ class TestPRRCollection(unittest.TestCase):
 
     # ---- helpers ----
 
-    def test_get_epsg_from_spatial_ref(self):
-        self.assertEqual(self.gen._get_epsg(self.dataset), 3035)
+    def test_get_crs_from_spatial_ref(self):
+        self.assertEqual(self.gen._get_crs(self.dataset).to_epsg(), 3035)
 
     @patch("deep_code.utils.dataset_stac_generator.open_dataset")
     def test_get_epsg_default_4326(self, mock_open_ds):
@@ -930,7 +930,7 @@ class TestPRRCollection(unittest.TestCase):
             workflow_title="WF",
             license_type="CC-BY-4.0",
         )
-        self.assertEqual(gen._get_epsg(ds), 4326)
+        self.assertEqual(gen._get_crs(ds).to_epsg(), 4326)
 
     def test_get_cube_dimensions(self):
         dims = self.gen._get_cube_dimensions(self.dataset)

@@ -127,8 +127,6 @@ class OscDatasetStacGenerator:
     def _get_spatial_extent(self, dataset: xr.Dataset) -> SpatialExtent:
         """Extract the spatial extent and return it in EPSG:4326."""
 
-        epsg = self._get_epsg(dataset)
-
         if {"lon", "lat"}.issubset(dataset.coords):
             x_name, y_name = "lon", "lat"
         elif {"longitude", "latitude"}.issubset(dataset.coords):
@@ -146,10 +144,10 @@ class OscDatasetStacGenerator:
         y_min = float(dataset[y_name].min())
         y_max = float(dataset[y_name].max())
 
-        epsg = self._get_epsg(dataset)
+        crs = self._get_crs(dataset)
 
-        if epsg != 4326:
-            transformer = pyproj.Transformer.from_crs(epsg, 4326, always_xy=True)
+        if crs.to_epsg() != 4326:
+            transformer = pyproj.Transformer.from_crs(crs, 4326, always_xy=True)
             x_min, y_min, x_max, y_max = transformer.transform_bounds(
                 x_min, y_min, x_max, y_max
             )
@@ -774,7 +772,7 @@ class OscDatasetStacGenerator:
     # --------------------------------------------------------------------- #
 
     @staticmethod
-    def _get_epsg(dataset: xr.Dataset) -> int:
+    def _get_crs(dataset: xr.Dataset) -> pyproj.CRS:
         """Best-effort EPSG code for the dataset, defaulting to 4326.
 
         Reads an ``spatial_epsg``/``epsg`` attribute from a ``crs`` or
@@ -784,13 +782,16 @@ class OscDatasetStacGenerator:
         for var_name in ("spatial_ref", "crs"):
             if var_name in dataset.variables:
                 attrs = dataset[var_name].attrs
-                for key in ("spatial_epsg", "epsg", "EPSG"):
-                    if key in attrs:
-                        try:
-                            return int(attrs[key])
-                        except (TypeError, ValueError):
-                            pass
-        return 4326
+                try:
+                    return pyproj.CRS.from_cf(attrs)
+                except pyproj.exceptions.CRSError:
+                    for key in ("spatial_epsg", "epsg", "EPSG"):
+                        if key in attrs:
+                            try:
+                                return pyproj.CRS.from_epsg(attrs[key])
+                            except (TypeError, ValueError):
+                                pass
+        return pyproj.CRS.from_epsg(4326)
 
     def _get_cube_dimensions(self, dataset: xr.Dataset) -> dict[str, dict]:
         """Build the ``cube:dimensions`` object from the dataset coordinates.
@@ -800,7 +801,7 @@ class OscDatasetStacGenerator:
         dimension, and any remaining index coordinate is emitted as an
         additional dimension.
         """
-        epsg = self._get_epsg(dataset)
+        crs = self._get_crs(dataset)
         x_names = {"lon", "longitude", "x"}
         y_names = {"lat", "latitude", "y"}
         dimensions: dict[str, dict] = {}
@@ -815,14 +816,14 @@ class OscDatasetStacGenerator:
                     "type": "spatial",
                     "axis": "x",
                     "extent": [float(coord.min()), float(coord.max())],
-                    "reference_system": epsg,
+                    "reference_system": crs.to_epsg(),
                 }
             elif lname in y_names:
                 dimensions[name] = {
                     "type": "spatial",
                     "axis": "y",
                     "extent": [float(coord.min()), float(coord.max())],
-                    "reference_system": epsg,
+                    "reference_system": crs.to_epsg(),
                 }
             elif lname == "time":
                 time_min = pd.to_datetime(coord.min().values).to_pydatetime()
