@@ -958,8 +958,8 @@ class OscDatasetStacGenerator:
         The Collection carries OSC extension fields (``osc:type``, ``osc:status``,
         ``osc:variables``, ``osc:missions``, ``themes``), a ``cf:parameter`` list
         and ``processing:datetime`` — aligning with the ESA EarthCODE PRR
-        endpoint (e.g. ``eoresults.esa.int``). The Item is added as a child so a
-        subsequent ``normalize_hrefs`` produces a self-contained tree.
+        endpoint (e.g. ``eoresults.esa.int``). The Item is added as a child, so
+        it produces a self-contained tree.
         """
         items = [
             self.build_prr_stac_item(item_config) for item_config in self.items_config
@@ -1138,7 +1138,6 @@ class OscDatasetStacGenerator:
             f"'{output_dir}'."
         )
         collection = self.build_prr_collection()
-        collection.normalize_hrefs(output_dir)
         collection.save(catalog_type=CatalogType.SELF_CONTAINED)
         self.logger.info(f"PRR STAC collection written to '{output_dir}'.")
         return output_dir
