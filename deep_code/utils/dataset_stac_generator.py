@@ -11,6 +11,7 @@ from typing import Any
 
 import numpy as np
 import pandas as pd
+import pyproj
 from pystac import (
     Asset,
     Catalog,
@@ -123,41 +124,35 @@ class OscDatasetStacGenerator:
         self.sci_citation = sci_citation
         self.logger = logging.getLogger(__name__)
 
-    @staticmethod
-    def _get_spatial_extent(dataset: xr.Dataset) -> SpatialExtent:
-        """Extract spatial extent from the dataset."""
+    def _get_spatial_extent(self, dataset: xr.Dataset) -> SpatialExtent:
+        """Extract the spatial extent and return it in EPSG:4326."""
+
+        epsg = self._get_epsg(dataset)
+
         if {"lon", "lat"}.issubset(dataset.coords):
-            # For regular gridding
-            lon_min, lon_max = (
-                float(dataset.lon.min()),
-                float(dataset.lon.max()),
-            )
-            lat_min, lat_max = (
-                float(dataset.lat.min()),
-                float(dataset.lat.max()),
-            )
-            return SpatialExtent([[lon_min, lat_min, lon_max, lat_max]])
+            x_name, y_name = "lon", "lat"
         elif {"longitude", "latitude"}.issubset(dataset.coords):
-            # For regular gridding with 'longitude' and 'latitude'
-            lon_min, lon_max = (
-                float(dataset.longitude.min()),
-                float(dataset.longitude.max()),
-            )
-            lat_min, lat_max = (
-                float(dataset.latitude.min()),
-                float(dataset.latitude.max()),
-            )
-            return SpatialExtent([[lon_min, lat_min, lon_max, lat_max]])
+            x_name, y_name = "longitude", "latitude"
         elif {"x", "y"}.issubset(dataset.coords):
-            # For irregular gridding
-            x_min, x_max = (float(dataset.x.min()), float(dataset.x.max()))
-            y_min, y_max = (float(dataset.y.min()), float(dataset.y.max()))
-            return SpatialExtent([[x_min, y_min, x_max, y_max]])
+            x_name, y_name = "x", "y"
         else:
             raise ValueError(
                 "Dataset does not have recognized spatial coordinates "
-                "('lon', 'lat' or 'x', 'y')."
+                "('lon', 'lat'), ('longitude', 'latitude'), or ('x', 'y')."
             )
+
+        x_min = float(dataset[x_name].min())
+        x_max = float(dataset[x_name].max())
+        y_min = float(dataset[y_name].min())
+        y_max = float(dataset[y_name].max())
+
+        epsg = self._get_epsg(dataset)
+
+        if epsg != 4326:
+            transformer = pyproj.Transformer.from_crs(epsg, 4326, always_xy=True)
+            bbox = transformer.transform_bounds(x_min, y_min, x_max, y_max)
+
+        return SpatialExtent([bbox])
 
     @staticmethod
     def _get_temporal_extent(dataset: xr.Dataset) -> TemporalExtent:
@@ -924,6 +919,34 @@ class OscDatasetStacGenerator:
                 "cube:variables": self._get_cube_variables(dataset),
             },
         )
+        item.add_link(
+            Link(
+                rel="collection",
+                target="../collection.json",
+                media_type="application/json",
+            )
+        )
+        item.add_link(
+            Link(
+                rel="parent",
+                target="../collection.json",
+                media_type="application/json",
+            )
+        )
+        item.add_link(
+            Link(
+                rel="root",
+                target="../../",
+                media_type="application/json",
+            )
+        )
+        item.add_link(
+            Link(
+                rel="self",
+                target=f"./{item_config.item_id}.json",
+                media_type="application/geo+json",
+            )
+        )
         item.stac_extensions.append(DATACUBE_SCHEMA_URI)
         # Asset hrefs stay absolute (the Zarr lives on S3); only the structural
         # links become relative when the tree is normalised locally.
@@ -975,6 +998,35 @@ class OscDatasetStacGenerator:
             extent=Extent(spatial=spatial_extent, temporal=temporal_extent),
             license=self.license_type,
             title=self.collection_id,
+        )
+        collection.stac_version = "1.0.0"
+        collection.add_link(
+            Link(
+                rel="parent",
+                target="../",
+                media_type="application/json",
+            )
+        )
+        collection.add_link(
+            Link(
+                rel="root",
+                target="../",
+                media_type="application/json",
+            )
+        )
+        collection.add_link(
+            Link(
+                rel="self",
+                target="./collection.json",
+                media_type="application/json",
+            )
+        )
+        collection.add_link(
+            Link(
+                rel="items",
+                target="./items",
+                media_type="application/geo+json",
+            )
         )
 
         osc_extension = OscExtension.add_to(collection)

@@ -74,7 +74,8 @@ def generate_prr_collection(
         cf_params=config.get("cf_parameter"),
         visualisation_link=config.get("visualisation_link"),
         description=config.get("description"),
-        **({"osc_project": config["osc_project"]} if config.get("osc_project") else {}),
+        osc_project=config.get("osc_project"),
+        osc_project_title=config.get("osc_project_title"),
         osc_project_url=config.get("osc_project_url"),
         # PRR-specific project metadata.
         osc_initiative=config.get("osc_initiative") or "earthcode",
