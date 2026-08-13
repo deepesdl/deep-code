@@ -946,7 +946,7 @@ class OscDatasetStacGenerator:
                 roles=["metadata"],
             ),
         )
-        item.set_self_href(f"./{self.collection_id}/items/{item_config.item_id}.json")
+
         self.logger.info(
             f"PRR STAC Item '{item_config.item_id}' built for '{self.collection_id}'."
         )
@@ -976,7 +976,6 @@ class OscDatasetStacGenerator:
             license=self.license_type,
             title=self.collection_id,
         )
-        collection.set_self_href(f"./{self.collection_id}/collection.json")
 
         osc_extension = OscExtension.add_to(collection)
         osc_extension.osc_project = self.osc_project
@@ -1138,6 +1137,15 @@ class OscDatasetStacGenerator:
             f"'{output_dir}'."
         )
         collection = self.build_prr_collection()
+
+        # Set absolute HREFs for writing.
+        collection_dir = f"{output_dir}/{self.collection_id}"
+        items_dir = f"{collection_dir}/items"
+        collection.set_self_href(f"{collection_dir}/collection.json")
+        for item in collection.get_items():
+            item.set_self_href(f"{items_dir}/{item.id}.json")
+
+        # Write the collection and its children.
         collection.save(catalog_type=CatalogType.SELF_CONTAINED)
         self.logger.info(f"PRR STAC collection written to '{output_dir}'.")
         return output_dir
