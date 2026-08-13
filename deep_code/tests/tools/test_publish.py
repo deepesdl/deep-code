@@ -11,7 +11,6 @@ from pystac import Catalog
 
 from deep_code.tools.publish import Publisher
 from deep_code.utils.ogc_api_record import LinksBuilder
-from deep_code.utils.dataset_stac_generator import ItemConfig
 
 
 class TestPublisher(unittest.TestCase):

@@ -173,8 +173,8 @@ class TestOSCProductSTACGenerator(unittest.TestCase):
                 }
             ],
         }
-        import tempfile
         import json as _json
+        import tempfile
 
         with tempfile.NamedTemporaryFile(mode="w", suffix=".json", delete=False) as tmp:
             _json.dump(base, tmp)
@@ -211,9 +211,9 @@ class TestOSCProductSTACGenerator(unittest.TestCase):
                 }
             ],
         }
-        import tempfile
         import json as _json
         import os
+        import tempfile
 
         with tempfile.NamedTemporaryFile(mode="w", suffix=".json", delete=False) as tmp:
             _json.dump(base, tmp)
@@ -404,9 +404,9 @@ class TestOSCProductSTACGenerator(unittest.TestCase):
                 }
             ],
         }
-        import tempfile
         import json as _json
         import os
+        import tempfile
 
         with tempfile.NamedTemporaryFile(mode="w", suffix=".json", delete=False) as tmp:
             _json.dump(base, tmp)

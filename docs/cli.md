@@ -61,11 +61,12 @@ needs no GitHub credentials or S3 write access (it only reads the Zarr store). I
 produces a self-contained `Collection → Item → Assets` tree:
 
 ```
-prr/<collection_id>/
-├── collection.json                 # STAC Collection (root, relative links)
-└── <collection_id>/
-    └── items/
-        └── <item_id>.json         # datacube Item covering the whole Zarr store
+prr/
+└── {collection_id}/
+    └── collection.json            # STAC Collection (root)
+    └── items
+        └── {item_id_0}.json       # datacube Item (whole Zarr)
+        └── {item_id_1}.json       # datacube Item (whole Zarr)
 ```
 
 - The **Item** carries the `datacube` extension (`cube:dimensions` / `cube:variables`
@@ -83,5 +84,4 @@ still runs but logs a warning listing what is needed for full conformance. See
 
 Options:
 
-- `--output-dir/-o`: directory to write the tree into. Defaults to `prr_output_dir`
-  from the config, then `prr/<collection_id>`.
+- `--output-dir/-o`: directory to write the tree into. Defaults to `prr`.

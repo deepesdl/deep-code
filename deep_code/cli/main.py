@@ -15,7 +15,6 @@ from deep_code.cli.publish import publish
 @click.group()
 def main():
     """Deep Code CLI."""
-    pass
 
 
 main.add_command(publish)

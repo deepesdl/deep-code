@@ -4,14 +4,13 @@
 # Permissions are hereby granted under the terms of the MIT License:
 # https://opensource.org/licenses/MIT.
 
-from typing import Optional
 
 import yaml
 
 
 class TemplateGenerator:
     @staticmethod
-    def generate_workflow_template(output_path: Optional[str] = None) -> str:
+    def generate_workflow_template(output_path: str | None = None) -> str:
         """Generate a complete template with all possible keys and placeholder values"""
 
         workflow_template = {
@@ -58,7 +57,7 @@ class TemplateGenerator:
                 )
 
     @staticmethod
-    def generate_dataset_template(output_path: Optional[str] = None) -> str:
+    def generate_dataset_template(output_path: str | None = None) -> str:
         """Generate a complete dataset template with all possible keys and placeholder values"""
 
         required = {

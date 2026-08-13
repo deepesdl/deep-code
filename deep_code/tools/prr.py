@@ -94,6 +94,6 @@ def generate_prr_collection(
         sci_citation=config.get("sci_citation"),
     )
 
-    out_dir = output_dir or config.get("prr_output_dir") or f"prr/{collection_id}"
+    out_dir = output_dir or config.get("prr_output_dir") or "prr"
     generator.save_prr_collection(out_dir)
     return out_dir

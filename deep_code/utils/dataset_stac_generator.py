@@ -12,6 +12,7 @@ from typing import Any
 import numpy as np
 import pandas as pd
 import pyproj
+import xarray as xr
 from pystac import (
     Asset,
     Catalog,
@@ -23,7 +24,6 @@ from pystac import (
     SpatialExtent,
     TemporalExtent,
 )
-import xarray as xr
 
 from deep_code.constants import (
     CONTACTS_SCHEMA_URI,
@@ -70,6 +70,7 @@ class OscDatasetStacGenerator:
         workflow_id: str,
         workflow_title: str,
         license_type: str,
+        osc_project: str,
         access_link_root: str | None = None,
         documentation_link: str | None = None,
         osc_status: str = "ongoing",
@@ -77,8 +78,7 @@ class OscDatasetStacGenerator:
         osc_themes: list[str] | None = None,
         osc_missions: list[str] | None = None,
         cf_params: list[dict[str, Any]] | None = None,
-        osc_project: str = "deep-earth-system-data-lab",
-        osc_project_title: str = "DeepESDL",
+        osc_project_title: str = None,
         osc_project_url: str | None = None,
         visualisation_link: str | None = None,
         description: str | None = None,
@@ -102,7 +102,7 @@ class OscDatasetStacGenerator:
         self.workflow_title = workflow_title
         self.license_type = license_type
         self.osc_project = osc_project
-        self.osc_project_title = osc_project_title
+        self.osc_project_title = osc_project_title or osc_project
         self.osc_project_url = osc_project_url
         self.access_link_root = access_link_root or "s3://deep-esdl-public/"
         self.documentation_link = documentation_link

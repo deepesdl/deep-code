@@ -119,7 +119,7 @@ file_dict = generator.build_zarr_stac_catalog_file_dict(
 )
 # file_dict contains:
 #   "s3://bucket/stac/my-collection/catalog.json"
-#   "s3://bucket/stac/my-collection/my-collection/items/my-item.json"
+#   "s3://bucket/stac/my-collection/my-collection/item.json"
 ```
 
 See [STAC Catalog on S3](configuration.md#stac-catalog-on-s3) for details on the
