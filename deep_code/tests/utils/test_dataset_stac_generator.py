@@ -1110,8 +1110,10 @@ class TestPRRCollection(unittest.TestCase):
             out = self.gen.save_prr_collection(tmp)
             self.assertEqual(out, tmp)
 
-            collection_path = os.path.join(tmp, "collection.json")
-            item_path = os.path.join(tmp, "prr-collection", "prr-collection.json")
+            collection_path = os.path.join(tmp, "prr-collection", "collection.json")
+            item_path = os.path.join(
+                tmp, "prr-collection", "items", "prr-collection.json"
+            )
             self.assertTrue(os.path.isfile(collection_path))
             self.assertTrue(os.path.isfile(item_path))
 
@@ -1137,7 +1139,9 @@ class TestPRRCollection(unittest.TestCase):
     def test_save_prr_collection_readable_by_pystac(self):
         with tempfile.TemporaryDirectory() as tmp:
             self.gen.save_prr_collection(tmp)
-            coll = Collection.from_file(os.path.join(tmp, "collection.json"))
+            coll = Collection.from_file(
+                os.path.join(tmp, "prr-collection", "collection.json")
+            )
             items = list(coll.get_items())
             self.assertEqual(len(items), 1)
             self.assertIn(DATACUBE_SCHEMA_URI, items[0].stac_extensions)

@@ -150,9 +150,11 @@ class OscDatasetStacGenerator:
 
         if epsg != 4326:
             transformer = pyproj.Transformer.from_crs(epsg, 4326, always_xy=True)
-            bbox = transformer.transform_bounds(x_min, y_min, x_max, y_max)
+            x_min, y_min, x_max, y_max = transformer.transform_bounds(
+                x_min, y_min, x_max, y_max
+            )
 
-        return SpatialExtent([bbox])
+        return SpatialExtent([[x_min, y_min, x_max, y_max]])
 
     @staticmethod
     def _get_temporal_extent(dataset: xr.Dataset) -> TemporalExtent:
@@ -919,34 +921,6 @@ class OscDatasetStacGenerator:
                 "cube:variables": self._get_cube_variables(dataset),
             },
         )
-        item.add_link(
-            Link(
-                rel="collection",
-                target="../collection.json",
-                media_type="application/json",
-            )
-        )
-        item.add_link(
-            Link(
-                rel="parent",
-                target="../collection.json",
-                media_type="application/json",
-            )
-        )
-        item.add_link(
-            Link(
-                rel="root",
-                target="../../",
-                media_type="application/json",
-            )
-        )
-        item.add_link(
-            Link(
-                rel="self",
-                target=f"./{item_config.item_id}.json",
-                media_type="application/geo+json",
-            )
-        )
         item.stac_extensions.append(DATACUBE_SCHEMA_URI)
         # Asset hrefs stay absolute (the Zarr lives on S3); only the structural
         # links become relative when the tree is normalised locally.
@@ -1000,34 +974,6 @@ class OscDatasetStacGenerator:
             title=self.collection_id,
         )
         collection.stac_version = "1.0.0"
-        collection.add_link(
-            Link(
-                rel="parent",
-                target="../",
-                media_type="application/json",
-            )
-        )
-        collection.add_link(
-            Link(
-                rel="root",
-                target="../",
-                media_type="application/json",
-            )
-        )
-        collection.add_link(
-            Link(
-                rel="self",
-                target="./collection.json",
-                media_type="application/json",
-            )
-        )
-        collection.add_link(
-            Link(
-                rel="items",
-                target="./items",
-                media_type="application/geo+json",
-            )
-        )
 
         osc_extension = OscExtension.add_to(collection)
         osc_extension.osc_project = self.osc_project
