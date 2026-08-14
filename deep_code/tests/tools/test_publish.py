@@ -513,7 +513,7 @@ class TestPublisher(unittest.TestCase):
     @patch("deep_code.tools.publish.LinksBuilder")
     @patch("deep_code.tools.publish.OSCWorkflowOGCApiRecordGenerator")
     def test_generate_workflow_records_mode_workflow(self, MockRG, MockLinks, MockWF):
-        mock_rg, mock_props, mock_wf_record, _ = self._setup_workflow_mocks()
+        mock_rg, _mock_props, mock_wf_record, _ = self._setup_workflow_mocks()
         MockRG.return_value = mock_rg
         MockWF.return_value = mock_wf_record
 
@@ -537,7 +537,7 @@ class TestPublisher(unittest.TestCase):
     def test_generate_workflow_records_mode_all(
         self, MockRG, MockLinks, MockWF, MockExp
     ):
-        mock_rg, mock_props, mock_wf_record, mock_exp_record = (
+        mock_rg, _mock_props, mock_wf_record, mock_exp_record = (
             self._setup_workflow_mocks()
         )
         MockRG.return_value = mock_rg

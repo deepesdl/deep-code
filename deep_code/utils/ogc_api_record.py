@@ -72,13 +72,13 @@ class RecordProperties(MappingConstructible["RecordProperties"], JsonSerializabl
         description: str,
         osc_project: str,
         jupyter_kernel_info: JupyterKernelInfo = None,
-        osc_workflow: str = None,
-        updated: str = None,
-        contacts: list[Contact] = None,
-        themes: list[Theme] = None,
+        osc_workflow: str | None = None,
+        updated: str | None = None,
+        contacts: list[Contact] | None = None,
+        themes: list[Theme] | None = None,
         keywords: list[str] | None = None,
         formats: list[dict] | None = None,
-        license: str = None,
+        license: str | None = None,
     ):
         self.created = created
         self.updated = updated
@@ -255,11 +255,13 @@ class WorkflowAsOgcRecord(MappingConstructible["OgcRecord"], JsonSerializable):
         jupyter_notebook_url: str,
         properties: RecordProperties,
         links: list[dict],
-        linkTemplates: list = [],
-        conformsTo: list[str] = None,
+        linkTemplates: list | None = None,
+        conformsTo: list[str] | None = None,
         geometry: Any | None = None,
         themes: Any | None = None,
     ):
+        if linkTemplates is None:
+            linkTemplates = []
         if conformsTo is None:
             conformsTo = [
                 OGC_API_RECORD_SPEC,
@@ -331,7 +333,7 @@ class ExperimentAsOgcRecord(MappingConstructible["OgcRecord"], JsonSerializable)
         properties: RecordProperties,
         links: list[dict],
         linkTemplates=None,
-        conformsTo: list[str] = None,
+        conformsTo: list[str] | None = None,
         geometry: Any | None = None,
     ):
         if linkTemplates is None:

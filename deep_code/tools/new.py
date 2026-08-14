@@ -70,8 +70,8 @@ class TemplateGenerator:
                     "item_id": "[REQUIRED: unique STAC item id, no spaces — use hyphens]",
                 }
             ],
-            "osc_project": "[OPTIONAL: OSC project ID (e.g. deep-earth-system-data-lab). Defaults to deep-earth-system-data-lab]",
-            "osc_project_url": "[OPTIONAL: URL to the project website (e.g. https://deepesdl.eu). Used as the 'via' link in the project collection.]",
+            "osc_project": "[REQUIRED: OSC project ID (e.g. deep-earth-system-data-lab)]",
+            "osc_project_url": "[REQUIRED: URL to the project website (e.g. https://deepesdl.eu). Used as the 'via' link in the project collection.]",
         }
 
         optional = {

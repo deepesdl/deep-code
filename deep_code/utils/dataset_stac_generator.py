@@ -78,7 +78,7 @@ class OscDatasetStacGenerator:
         osc_themes: list[str] | None = None,
         osc_missions: list[str] | None = None,
         cf_params: list[dict[str, Any]] | None = None,
-        osc_project_title: str = None,
+        osc_project_title: str | None = None,
         osc_project_url: str | None = None,
         visualisation_link: str | None = None,
         description: str | None = None,
@@ -245,7 +245,7 @@ class OscDatasetStacGenerator:
     def get_variables_metadata(self, dataset: xr.Dataset) -> dict[str, dict]:
         """Extract metadata for all variables in the dataset."""
         variables_metadata = {}
-        for var_name, variable in dataset.data_vars.items():
+        for variable in dataset.data_vars.values():
             var_metadata = self.extract_metadata_for_variable(variable)
             variables_metadata[var_metadata.get("variable_id")] = var_metadata
         return variables_metadata

@@ -88,6 +88,7 @@ class TestOSCProductSTACGenerator(unittest.TestCase):
             access_link_root="s3://mock-bucket/",
             documentation_link="https://example.com/docs",
             license_type="proprietary",
+            osc_project="deep-earth-system-data-lab",
             osc_status="ongoing",
             osc_region="Global",
             osc_themes=["climate", "environment"],
@@ -549,6 +550,7 @@ class TestOSCProductSTACGenerator(unittest.TestCase):
             workflow_id="dummy",
             workflow_title="test",
             license_type="proprietary",
+            osc_project="deep-earth-system-data-lab",
         )
 
         file_dict = gen.build_zarr_stac_catalog_file_dict(
@@ -688,6 +690,7 @@ class TestOscDatasetStacGeneratorExtra(unittest.TestCase):
         with patch(
             "deep_code.utils.dataset_stac_generator.open_dataset", return_value=mock_ds
         ):
+            kwargs.setdefault("osc_project", "deep-earth-system-data-lab")
             return OscDatasetStacGenerator(
                 collection_id=collection_id,
                 items_config=[
@@ -739,6 +742,7 @@ class TestOscDatasetStacGeneratorExtra(unittest.TestCase):
                 workflow_id="wf",
                 workflow_title="WF",
                 license_type="CC-BY-4.0",
+                osc_project="deep-earth-system-data-lab",
             )
 
     @patch("deep_code.utils.dataset_stac_generator.open_dataset")
@@ -897,6 +901,7 @@ class TestPRRCollection(unittest.TestCase):
             workflow_id="wf",
             workflow_title="WF",
             license_type="CC-BY-4.0",
+            osc_project="deep-earth-system-data-lab",
             access_link_root="s3://bucket",
             osc_status="ongoing",
             osc_region="Global",
@@ -929,6 +934,7 @@ class TestPRRCollection(unittest.TestCase):
             workflow_id="wf",
             workflow_title="WF",
             license_type="CC-BY-4.0",
+            osc_project="deep-earth-system-data-lab",
         )
         self.assertEqual(gen._get_crs(ds).to_epsg(), 4326)
 
@@ -1032,6 +1038,7 @@ class TestPRRCollection(unittest.TestCase):
                 osc_region="Global",
                 osc_themes=["oceans"],
                 osc_missions=["sentinel-3"],
+                osc_project="deep-earth-system-data-lab",
                 osc_project_description="A detailed project description.",
                 osc_project_website="https://project.example.org",
                 osc_contract_number="4000114410/15/NL/BW",
@@ -1098,6 +1105,7 @@ class TestPRRCollection(unittest.TestCase):
             workflow_id="wf",
             workflow_title="WF",
             license_type="CC-BY-4.0",
+            osc_project="deep-earth-system-data-lab",
             access_link_root="s3://bucket",
         )
         coll = gen.build_prr_collection()
