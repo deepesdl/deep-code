@@ -85,6 +85,7 @@ class TemplateGenerator:
             "visualisation_link": "[OPTIONAL: URL to a visualisation of the dataset (e.g. xcube Viewer, WMS)]",
             "osc_project_title": "[OPTIONAL: display title of the OSC project as it appears in the catalog (e.g. DeepESDL). Defaults to a formatted version of osc_project if omitted]",
             "access_link_root": "[OPTIONAL: public S3 URL of the Zarr store — defaults to s3://deep-esdl-public]",
+            "collection_title": "[OPTIONAL: title present in the collection and in the STAC browser]",
             "cf_parameter": [
                 {"name": "[OPTIONAL: CF standard name]", "units": "[unit string]"}
             ],

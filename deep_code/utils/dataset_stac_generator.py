@@ -53,6 +53,7 @@ class OscDatasetStacGenerator:
         collection_id: Unique identifier for the STAC collection.
         items_config: List of item configuration entries. Each item maps one
             dataset_id to one item_id
+        collection_title: Title present in the collection and in the STAC browser
         access_link_root: Public access link to the root of the datasets.
         documentation_link: Link to dataset documentation.
         osc_status: Status of the dataset (e.g., "ongoing").
@@ -71,6 +72,7 @@ class OscDatasetStacGenerator:
         workflow_title: str,
         license_type: str,
         osc_project: str,
+        collection_title: str | None = None,
         access_link_root: str | None = None,
         documentation_link: str | None = None,
         osc_status: str = "ongoing",
@@ -105,10 +107,14 @@ class OscDatasetStacGenerator:
         self.osc_project_title = osc_project_title or osc_project
         self.osc_project_url = osc_project_url
         self.access_link_root = access_link_root or "s3://deep-esdl-public/"
+        self.collection_title = collection_title or collection_id
         self.documentation_link = documentation_link
         self.osc_status = osc_status
         self.osc_region = osc_region
-        self.osc_themes = [t.lower() for t in (osc_themes or [])]
+        if osc_themes is None:
+            osc_themes = []
+        assert isinstance(osc_themes, list)
+        self.osc_themes = [t.lower() for t in osc_themes]
         self.osc_missions = osc_missions or []
         self.cf_params = cf_params or {}
         self.visualisation_link = visualisation_link
@@ -966,7 +972,7 @@ class OscDatasetStacGenerator:
             description=self.description or "No description provided.",
             extent=Extent(spatial=spatial_extent, temporal=temporal_extent),
             license=self.license_type,
-            title=self.collection_id,
+            title=self.collection_title,
         )
         collection.stac_version = "1.0.0"
 
