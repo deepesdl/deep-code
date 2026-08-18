@@ -1,4 +1,4 @@
-from typing import Any, Dict, List, Optional, Tuple
+from typing import Any
 from urllib.parse import quote, urlencode, urlparse
 
 from xrlint.util.constructible import MappingConstructible
@@ -72,13 +72,13 @@ class RecordProperties(MappingConstructible["RecordProperties"], JsonSerializabl
         description: str,
         osc_project: str,
         jupyter_kernel_info: JupyterKernelInfo = None,
-        osc_workflow: str = None,
-        updated: str = None,
-        contacts: list[Contact] = None,
-        themes: list[Theme] = None,
+        osc_workflow: str | None = None,
+        updated: str | None = None,
+        contacts: list[Contact] | None = None,
+        themes: list[Theme] | None = None,
         keywords: list[str] | None = None,
         formats: list[dict] | None = None,
-        license: str = None,
+        license: str | None = None,
     ):
         self.created = created
         self.updated = updated
@@ -110,7 +110,7 @@ class RecordProperties(MappingConstructible["RecordProperties"], JsonSerializabl
 
 
 class LinksBuilder:
-    def __init__(self, themes: list[str], jupyter_kernel_info: dict[str]):
+    def __init__(self, themes: list[str], jupyter_kernel_info: dict[str, Any]):
         self.themes = themes
         self.jupyter_kernel_info = jupyter_kernel_info
         self.theme_links = []
@@ -152,7 +152,7 @@ class LinksBuilder:
             }
         ]
 
-    def build_link_to_jnb(self, workflow_title, jupyter_nb_url) -> List[Dict[str, Any]]:
+    def build_link_to_jnb(self, workflow_title, jupyter_nb_url) -> list[dict[str, Any]]:
         return [
             {
                 "rel": "application",
@@ -171,7 +171,7 @@ class LinksBuilder:
         ]
 
     @staticmethod
-    def _parse_github_notebook_url(url: str) -> Tuple[str, str, str, str]:
+    def _parse_github_notebook_url(url: str) -> tuple[str, str, str, str]:
         """
         Returns (repo_url, repo_name, branch, file_path_in_repo) from a GitHub URL.
 
@@ -233,7 +233,7 @@ class LinksBuilder:
         jupyter_notebook_url: str,
         title: str = "Open notebook on the DeepESDL platform",
         branch_override: str | None = None,
-    ) -> dict[str, str]:
+    ) -> list[dict[str, str]]:
         return [
             {
                 "rel": "related",
@@ -255,11 +255,13 @@ class WorkflowAsOgcRecord(MappingConstructible["OgcRecord"], JsonSerializable):
         jupyter_notebook_url: str,
         properties: RecordProperties,
         links: list[dict],
-        linkTemplates: list = [],
-        conformsTo: list[str] = None,
-        geometry: Optional[Any] = None,
-        themes: Optional[Any] = None,
+        linkTemplates: list | None = None,
+        conformsTo: list[str] | None = None,
+        geometry: Any | None = None,
+        themes: Any | None = None,
     ):
+        if linkTemplates is None:
+            linkTemplates = []
         if conformsTo is None:
             conformsTo = [
                 OGC_API_RECORD_SPEC,
@@ -331,8 +333,8 @@ class ExperimentAsOgcRecord(MappingConstructible["OgcRecord"], JsonSerializable)
         properties: RecordProperties,
         links: list[dict],
         linkTemplates=None,
-        conformsTo: list[str] = None,
-        geometry: Optional[Any] = None,
+        conformsTo: list[str] | None = None,
+        geometry: Any | None = None,
     ):
         if linkTemplates is None:
             linkTemplates = []

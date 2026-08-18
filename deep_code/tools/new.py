@@ -4,14 +4,13 @@
 # Permissions are hereby granted under the terms of the MIT License:
 # https://opensource.org/licenses/MIT.
 
-from typing import Optional
 
 import yaml
 
 
 class TemplateGenerator:
     @staticmethod
-    def generate_workflow_template(output_path: Optional[str] = None) -> str:
+    def generate_workflow_template(output_path: str | None = None) -> str:
         """Generate a complete template with all possible keys and placeholder values"""
 
         workflow_template = {
@@ -48,38 +47,74 @@ class TemplateGenerator:
             with open(output_path, "w") as f:
                 f.write("# Workflow Configuration Template\n")
                 f.write("# Replace all [PLACEHOLDER] values with your actual data\n\n")
-                f.write(yaml.dump(workflow_template, sort_keys=False, width=1000,
-                                  default_flow_style=False))
+                f.write(
+                    yaml.dump(
+                        workflow_template,
+                        sort_keys=False,
+                        width=1000,
+                        default_flow_style=False,
+                    )
+                )
 
     @staticmethod
-    def generate_dataset_template(output_path: Optional[str] = None) -> str:
+    def generate_dataset_template(output_path: str | None = None) -> str:
         """Generate a complete dataset template with all possible keys and placeholder values"""
 
         required = {
-            "dataset_id": "[REQUIRED: name of the Zarr store in your S3 bucket, e.g. my-dataset.zarr]",
             "collection_id": "[REQUIRED: unique identifier, no spaces — use hyphens (e.g. My-Dataset-2024)]",
             "license_type": "[REQUIRED: SPDX license identifier, e.g. CC-BY-4.0, MIT, proprietary]",
             "stac_catalog_s3_root": "[REQUIRED: S3 root for the STAC Catalog + Item, e.g. s3://my-bucket/stac/my-collection/]",
+            "items_config": [
+                {
+                    "dataset_id": "[REQUIRED: name of the Zarr store in your S3 bucket, e.g. my-dataset.zarr]",
+                    "item_id": "[REQUIRED: unique STAC item id, no spaces — use hyphens]",
+                }
+            ],
+            "osc_project": "[REQUIRED: OSC project ID (e.g. deep-earth-system-data-lab)]",
+            "osc_project_url": "[REQUIRED: URL to the project website (e.g. https://deepesdl.eu). Used as the 'via' link in the project collection.]",
         }
 
         optional = {
-            "osc_project_url": "[OPTIONAL: URL to the project website (e.g. https://deepesdl.eu). Used as the 'via' link in the project collection. Defaults to the existing DeepESDL project collection]",
-            "osc_themes": ["[OPTIONAL: OSC theme slug, e.g. land, ocean, atmosphere — auto-lowercased]"],
+            "osc_themes": [
+                "[OPTIONAL: OSC theme slug, e.g. land, ocean, atmosphere — auto-lowercased]"
+            ],
             "osc_region": "[OPTIONAL: geographical coverage, e.g. Global]",
             "dataset_status": "[OPTIONAL: ongoing | completed | planned (default: ongoing)]",
             "description": "[OPTIONAL: human-readable description of the dataset. Overrides the description attribute in the Zarr store if set]",
             "documentation_link": "[OPTIONAL: link to documentation, publication, or handbook]",
             "visualisation_link": "[OPTIONAL: URL to a visualisation of the dataset (e.g. xcube Viewer, WMS)]",
-            "osc_project": "[OPTIONAL: OSC project ID (e.g. deep-earth-system-data-lab). Defaults to deep-earth-system-data-lab]",
             "osc_project_title": "[OPTIONAL: display title of the OSC project as it appears in the catalog (e.g. DeepESDL). Defaults to a formatted version of osc_project if omitted]",
-            "access_link": "[OPTIONAL: public S3 URL of the Zarr store — defaults to s3://deep-esdl-public/{dataset_id}]",
-            "cf_parameter": [{"name": "[OPTIONAL: CF standard name]", "units": "[unit string]"}],
+            "access_link_root": "[OPTIONAL: public S3 URL of the Zarr store — defaults to s3://deep-esdl-public]",
+            "collection_title": "[OPTIONAL: title present in the collection and in the STAC browser]",
+            "cf_parameter": [
+                {"name": "[OPTIONAL: CF standard name]", "units": "[unit string]"}
+            ],
+        }
+
+        # Fields used only by `deep-code generate-prr-collection` to build a
+        # PRR (Project Results Repository) collection that conforms to
+        # https://eoresults.esa.int/prr_collection_specifications.html
+        prr = {
+            "prr_output_dir": "[OPTIONAL: local dir for the PRR collection tree — defaults to prr/{collection_id}]",
+            "osc_initiative": "[OPTIONAL: PRR initiative — 'earthcode' or 'apex' (default: earthcode)]",
+            "osc_contract_number": "[PRR-REQUIRED: ESA contract identifier, e.g. 4000114410/15/NL/BW]",
+            "osc_project_website": "[PRR-REQUIRED: project website URL — falls back to osc_project_url / documentation_link]",
+            "osc_project_description": "[PRR-REQUIRED: multi-line project description — falls back to description]",
+            "osc_missions": [
+                "[PRR-REQUIRED: satellite mission name(s), e.g. sentinel-3]"
+            ],
+            "thumbnail": "[PRR-REQUIRED: URL to a collection thumbnail image (jpeg/png/webp)]",
+            "thumbnail_media_type": "[OPTIONAL: thumbnail MIME type — guessed from the URL suffix if omitted]",
+            "sci_doi": "[OPTIONAL: dataset DOI, e.g. 10.1000/xyz123 (not a DOI link)]",
+            "sci_citation": "[OPTIONAL: human-readable citation for the dataset]",
         }
 
         stac_catalog_comment = (
             "\n# stac_catalog_s3_root: deep-code writes the following files to this S3 root:\n"
             "#   {stac_catalog_s3_root}/catalog.json               (STAC Catalog root)\n"
-            "#   {stac_catalog_s3_root}/{collection_id}/item.json  (STAC Item for the whole Zarr)\n"
+            "#   {stac_catalog_s3_root}/{collection_id}/items/{item_id}.json  (STAC Item for each Zarr)\n"
+            "# items_config can contain multiple dataset/item pairs, but publish\n"
+            "# currently only consumes one item configuration.\n"
             "# S3 write credentials are resolved in order:\n"
             "#   1. STAC_S3_KEY / STAC_S3_SECRET env vars (STAC-specific, any bucket)\n"
             "#   2. AWS_ACCESS_KEY_ID / AWS_SECRET_ACCESS_KEY env vars\n"
@@ -91,7 +126,23 @@ class TemplateGenerator:
                 f.write("# Dataset Configuration Template\n")
                 f.write("# Replace all [PLACEHOLDER] values with your actual data\n\n")
                 f.write("# --- REQUIRED fields ---\n")
-                f.write(yaml.dump(required, sort_keys=False, width=1000, default_flow_style=False))
+                f.write(
+                    yaml.dump(
+                        required, sort_keys=False, width=1000, default_flow_style=False
+                    )
+                )
                 f.write("\n# --- OPTIONAL fields ---\n")
-                f.write(yaml.dump(optional, sort_keys=False, width=1000, default_flow_style=False))
+                f.write(
+                    yaml.dump(
+                        optional, sort_keys=False, width=1000, default_flow_style=False
+                    )
+                )
+                f.write(
+                    "\n# --- PRR fields (for `deep-code generate-prr-collection`) ---\n"
+                )
+                f.write(
+                    yaml.dump(
+                        prr, sort_keys=False, width=1000, default_flow_style=False
+                    )
+                )
                 f.write(stac_catalog_comment)

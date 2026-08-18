@@ -18,5 +18,5 @@ from deep_code.tools.new import TemplateGenerator
     help="Output directory for templates",
 )
 def generate_config(output_dir):
-    TemplateGenerator.generate_workflow_template(f"{output_dir}/workflow_config.yaml")
-    TemplateGenerator.generate_dataset_template(f"{output_dir}/dataset_config.yaml")
+    TemplateGenerator.generate_workflow_template(f"{output_dir}/workflow.yaml")
+    TemplateGenerator.generate_dataset_template(f"{output_dir}/dataset.yaml")

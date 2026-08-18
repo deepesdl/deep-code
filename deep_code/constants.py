@@ -41,3 +41,10 @@ APPLICATION_STAC_EXTENSION_SPEC = (
     "https://stac-extensions.github.io/application/v0.1.0/schema.json"
 )
 ZARR_MEDIA_TYPE = "application/vnd+zarr"
+DATACUBE_SCHEMA_URI = "https://stac-extensions.github.io/datacube/v2.2.0/schema.json"
+PROCESSING_SCHEMA_URI = (
+    "https://stac-extensions.github.io/processing/v1.2.0/schema.json"
+)
+SCIENTIFIC_SCHEMA_URI = (
+    "https://stac-extensions.github.io/scientific/v1.0.0/schema.json"
+)
