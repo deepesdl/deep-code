@@ -16,7 +16,7 @@ import logging
 import fsspec
 import yaml
 
-from deep_code.utils.dataset_stac_generator import OscDatasetStacGenerator
+from deep_code.utils.dataset_stac_generator import ItemConfig, OscDatasetStacGenerator
 
 logger = logging.getLogger(__name__)
 
@@ -38,29 +38,42 @@ def generate_prr_collection(
     with fsspec.open(dataset_config_path, "r") as file:
         config = yaml.safe_load(file) or {}
 
-    dataset_id = config.get("dataset_id")
     collection_id = config.get("collection_id")
+    osc_project = config.get("osc_project")
+    osc_project_url = config.get("osc_project_url")
     license_type = config.get("license_type")
-
-    if not dataset_id or not collection_id:
-        raise ValueError(
-            "Both 'dataset_id' and 'collection_id' are required in the dataset config."
-        )
+    items_config_raw = config.get("items_config")
+    if not collection_id:
+        raise ValueError("collection_id is required in the dataset config.")
+    if not osc_project:
+        raise ValueError("osc_project is required in the dataset config.")
+    if not osc_project_url:
+        raise ValueError("osc_project_url is required in the dataset config.")
     if not license_type:
         raise ValueError(
             "license_type is required in the dataset config. "
             "Provide an SPDX identifier (e.g. 'CC-BY-4.0', 'MIT', 'proprietary')."
         )
+    if not items_config_raw:
+        raise ValueError("items_config is required in the dataset config.")
+    items_config = [
+        ItemConfig(
+            dataset_id=item_config["dataset_id"],
+            item_id=item_config["item_id"],
+        )
+        for item_config in items_config_raw
+    ]
 
     logger.info(f"Generating PRR STAC collection for '{collection_id}'.")
     generator = OscDatasetStacGenerator(
-        dataset_id=dataset_id,
         collection_id=collection_id,
+        items_config=items_config,
         workflow_id=config.get("workflow_id") or "",
         workflow_title=config.get("workflow_title") or "",
         license_type=license_type,
         documentation_link=config.get("documentation_link"),
-        access_link=config.get("access_link"),
+        collection_title=config.get("collection_title"),
+        access_link_root=config.get("access_link_root"),
         osc_status=config.get("dataset_status") or "ongoing",
         osc_region=config.get("osc_region") or "Global",
         osc_themes=config.get("osc_themes"),
@@ -68,7 +81,8 @@ def generate_prr_collection(
         cf_params=config.get("cf_parameter"),
         visualisation_link=config.get("visualisation_link"),
         description=config.get("description"),
-        **({"osc_project": config["osc_project"]} if config.get("osc_project") else {}),
+        osc_project=config.get("osc_project"),
+        osc_project_title=config.get("osc_project_title"),
         osc_project_url=config.get("osc_project_url"),
         # PRR-specific project metadata.
         osc_initiative=config.get("osc_initiative") or "earthcode",
@@ -81,6 +95,6 @@ def generate_prr_collection(
         sci_citation=config.get("sci_citation"),
     )
 
-    out_dir = output_dir or config.get("prr_output_dir") or f"prr/{collection_id}"
+    out_dir = output_dir or config.get("prr_output_dir") or "prr"
     generator.save_prr_collection(out_dir)
     return out_dir

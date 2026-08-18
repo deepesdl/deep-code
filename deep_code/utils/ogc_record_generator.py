@@ -16,26 +16,24 @@ from deep_code.utils.ogc_api_record import (
 
 
 class OSCWorkflowOGCApiRecordGenerator:
-    """Generates OGC API record for a workflow
-    """
+    """Generates OGC API record for a workflow"""
 
     @staticmethod
     def build_contact_objects(contacts_list: list[dict]) -> list[Contact]:
         """Build a list of Contact objects from a list of contact dictionaries.
-            Uses the inherited MappingConstructible logic to parse each dict.
+        Uses the inherited MappingConstructible logic to parse each dict.
 
-            Args:
-                contacts_list: A list of dictionaries, each containing contact information.
+        Args:
+            contacts_list: A list of dictionaries, each containing contact information.
 
-            Returns:
-                A list of Contact instances.
-            """
+        Returns:
+            A list of Contact instances.
+        """
         return [Contact.from_value(cdict) for cdict in contacts_list]
 
     @staticmethod
     def build_theme(osc_themes: list[str]) -> Theme:
-        """Convert each string into a ThemeConcept
-        """
+        """Convert each string into a ThemeConcept"""
         concepts = [ThemeConcept(id=theme_str) for theme_str in osc_themes]
         return Theme(concepts=concepts, scheme=OSC_THEME_SCHEME)
 

@@ -71,14 +71,14 @@ publisher.publish(write_to_file=False, mode="dataset")
 over individual artifacts.
 
 ```python
-from deep_code.utils.dataset_stac_generator import OscDatasetStacGenerator
+from deep_code.utils.dataset_stac_generator import ItemConfig, OscDatasetStacGenerator
 
 generator = OscDatasetStacGenerator(
-    dataset_id="my-dataset.zarr",
     collection_id="my-collection",
     workflow_id="my-workflow",
     workflow_title="My Workflow",
     license_type="CC-BY-4.0",
+    items_config=[ItemConfig(dataset_id="my-dataset.zarr", item_id="my-item")],
     osc_themes=["cryosphere"],
     osc_region="Global",
     osc_status="completed",
@@ -134,7 +134,7 @@ tree as local files. The high-level helper reads the same dataset config as the 
 from deep_code.tools.prr import generate_prr_collection
 
 out_dir = generate_prr_collection("dataset.yaml", output_dir="./prr")
-# ./prr/collection.json  +  ./prr/<collection_id>/<collection_id>.json
+# ./prr/collection.json  +  ./prr/<collection_id>/items/<item_id>.json
 ```
 
 Or drive the generator directly:

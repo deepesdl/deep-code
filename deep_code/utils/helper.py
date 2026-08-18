@@ -1,6 +1,5 @@
 import logging
 import os
-from typing import Optional
 
 import xarray as xr
 from xcube.core.store import new_data_store
@@ -25,8 +24,8 @@ def serialize(obj):
 def open_dataset(
     dataset_id: str,
     root: str = "deep-esdl-public",
-    storage_configs: Optional[list[dict]] = None,
-    logger: Optional[logging.Logger] = None,
+    storage_configs: list[dict] | None = None,
+    logger: logging.Logger | None = None,
 ) -> xr.Dataset:
     """Open an xarray dataset from a specified store.
 
@@ -63,10 +62,15 @@ def open_dataset(
                 "root": os.environ.get("S3_USER_STORAGE_BUCKET", root),
                 "storage_options": {
                     "anon": False,
-                    **({
-                        "key": os.environ["S3_USER_STORAGE_KEY"],
-                        "secret": os.environ["S3_USER_STORAGE_SECRET"],
-                    } if os.environ.get("S3_USER_STORAGE_KEY") and os.environ.get("S3_USER_STORAGE_SECRET") else {}),
+                    **(
+                        {
+                            "key": os.environ["S3_USER_STORAGE_KEY"],
+                            "secret": os.environ["S3_USER_STORAGE_SECRET"],
+                        }
+                        if os.environ.get("S3_USER_STORAGE_KEY")
+                        and os.environ.get("S3_USER_STORAGE_SECRET")
+                        else {}
+                    ),
                 },
             },
         },
