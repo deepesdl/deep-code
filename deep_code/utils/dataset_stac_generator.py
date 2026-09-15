@@ -62,6 +62,10 @@ class OscDatasetStacGenerator:
         osc_missions: List of satellite missions associated with the dataset.
         cf_params: CF metadata parameters for the dataset.
         osc_project: OSC project identifier (default: "deep-earth-system-data-lab").
+        coord_position: Position of the coordinates within each grid cell.
+            ``"center"`` assumes coordinates represent cell centers,
+            ``"left"`` assumes they represent the left/top edge, and
+            ``"right"`` assumes they represent the right/bottom edge.
     """
 
     def __init__(
@@ -831,38 +835,66 @@ class OscDatasetStacGenerator:
                                 pass
         return pyproj.CRS.from_epsg(4326)
 
-    def _get_cube_dimensions(self, dataset: xr.Dataset) -> dict[str, dict]:
+    def _get_cube_dimensions(
+        self,
+        dataset: xr.Dataset,
+        coord_position: Literal["left", "center", "right"] = "center",
+    ) -> dict[str, dict]:
         """Build the ``cube:dimensions`` object from the dataset coordinates.
 
         Follows the datacube STAC extension: horizontal spatial dimensions are
         classified by axis (x/y), the ``time`` coordinate becomes a temporal
         dimension, and any remaining index coordinate is emitted as an
         additional dimension.
+
+        Args:
+            dataset: Dataset from which to extract the cube dimensions.
+            coord_position: Position of spatial coordinates within each grid cell.
+                ``"center"`` assumes cell-center coordinates, ``"left"`` assumes
+                left/bottom edge coordinates, and ``"right"`` assumes
+                right/top edge coordinates.
         """
+        if coord_position not in {"left", "center", "right"}:
+            raise ValueError(
+                f"Invalid coord_position: {coord_position!r}. "
+                "Must be 'left', 'center', or 'right'."
+            )
+
         crs = self._get_crs(dataset)
         x_names = {"lon", "longitude", "x"}
         y_names = {"lat", "latitude", "y"}
         dimensions: dict[str, dict] = {}
+
         for name, coord in dataset.coords.items():
             if name not in dataset.dims:
                 # Skip non-dimension coordinates (e.g. scalar or auxiliary coords).
                 continue
+
             name = str(name)
             lname = name.lower()
-            if lname in x_names:
+
+            if lname in x_names or lname in y_names:
+                coord_min = float(coord.min())
+                coord_max = float(coord.max())
+                resolution = float(abs(coord.diff(name).median()))
+
+                if coord_position == "center":
+                    extent_min = coord_min - resolution / 2
+                    extent_max = coord_max + resolution / 2
+                elif coord_position == "left":
+                    extent_min = coord_min
+                    extent_max = coord_max + resolution
+                else:  # coord_position == "right"
+                    extent_min = coord_min - resolution
+                    extent_max = coord_max
+
                 dimensions[name] = {
                     "type": "spatial",
-                    "axis": "x",
-                    "extent": [float(coord.min()), float(coord.max())],
+                    "axis": "x" if lname in x_names else "y",
+                    "extent": [extent_min, extent_max],
                     "reference_system": crs.to_epsg(),
                 }
-            elif lname in y_names:
-                dimensions[name] = {
-                    "type": "spatial",
-                    "axis": "y",
-                    "extent": [float(coord.min()), float(coord.max())],
-                    "reference_system": crs.to_epsg(),
-                }
+
             elif lname == "time":
                 time_min = pd.to_datetime(coord.min().values).to_pydatetime()
                 time_max = pd.to_datetime(coord.max().values).to_pydatetime()
@@ -870,6 +902,7 @@ class OscDatasetStacGenerator:
                     "type": "temporal",
                     "extent": [time_min.isoformat(), time_max.isoformat()],
                 }
+
             else:
                 try:
                     dimensions[name] = {
@@ -881,6 +914,7 @@ class OscDatasetStacGenerator:
                         "type": lname,
                         "values": [str(v) for v in coord.values.tolist()],
                     }
+
         return dimensions
 
     @staticmethod
@@ -956,7 +990,9 @@ class OscDatasetStacGenerator:
                 "description": general_metadata.get("description", ""),
                 "created": now_iso,
                 "updated": now_iso,
-                "cube:dimensions": self._get_cube_dimensions(dataset),
+                "cube:dimensions": self._get_cube_dimensions(
+                    dataset, self.coord_position
+                ),
                 "cube:variables": self._get_cube_variables(dataset),
             },
         )
