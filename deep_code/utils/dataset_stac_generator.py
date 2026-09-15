@@ -7,7 +7,7 @@ import json
 import logging
 from dataclasses import dataclass
 from datetime import datetime, timezone
-from typing import Any
+from typing import Any, Literal
 
 import numpy as np
 import pandas as pd
@@ -92,6 +92,7 @@ class OscDatasetStacGenerator:
         thumbnail_media_type: str | None = None,
         sci_doi: str | None = None,
         sci_citation: str | None = None,
+        coord_position: Literal["left", "center", "right"] = "center",
     ):
         if " " in collection_id:
             raise ValueError(
@@ -128,10 +129,28 @@ class OscDatasetStacGenerator:
         self.thumbnail_media_type = thumbnail_media_type
         self.sci_doi = sci_doi
         self.sci_citation = sci_citation
+        self.coord_position = coord_position
         self.logger = logging.getLogger(__name__)
 
-    def _get_spatial_extent(self, dataset: xr.Dataset) -> SpatialExtent:
-        """Extract the spatial extent and return it in EPSG:4326."""
+    def _get_spatial_extent(
+        self,
+        dataset: xr.Dataset,
+        coord_position: Literal["left", "center", "right"] = "center",
+    ) -> SpatialExtent:
+        """Extract the spatial extent and return it in EPSG:4326.
+
+        Args:
+            dataset: Input dataset.
+            coord_position: Position of the coordinates within each grid cell.
+                ``"center"`` assumes coordinates represent cell centers,
+                ``"left"`` assumes they represent the left/top edge, and
+                ``"right"`` assumes they represent the right/bottom edge.
+        """
+        if coord_position not in {"left", "center", "right"}:
+            raise ValueError(
+                f"Invalid coord_position: {coord_position!r}. "
+                "Must be 'left', 'center', or 'right'."
+            )
 
         if {"lon", "lat"}.issubset(dataset.coords):
             x_name, y_name = "lon", "lat"
@@ -145,10 +164,29 @@ class OscDatasetStacGenerator:
                 "('lon', 'lat'), ('longitude', 'latitude'), or ('x', 'y')."
             )
 
-        x_min = float(dataset[x_name].min())
-        x_max = float(dataset[x_name].max())
-        y_min = float(dataset[y_name].min())
-        y_max = float(dataset[y_name].max())
+        x = dataset[x_name]
+        y = dataset[y_name]
+
+        x_min = float(x.min())
+        x_max = float(x.max())
+        y_min = float(y.min())
+        y_max = float(y.max())
+
+        # Calculate the grid resolution from adjacent coordinates.
+        x_res = float(abs(x.diff(x_name).median()))
+        y_res = float(abs(y.diff(y_name).median()))
+
+        if coord_position == "center":
+            x_min -= x_res / 2
+            x_max += x_res / 2
+            y_min -= y_res / 2
+            y_max += y_res / 2
+        elif coord_position == "left":
+            x_max += x_res
+            y_max += y_res
+        elif coord_position == "right":
+            x_min -= x_res
+            y_min -= y_res
 
         crs = self._get_crs(dataset)
 
@@ -623,7 +661,7 @@ class OscDatasetStacGenerator:
             f"for collection '{self.collection_id}'."
         )
         dataset = open_dataset(item_config.dataset_id, logger=self.logger)
-        spatial_extent = self._get_spatial_extent(dataset)
+        spatial_extent = self._get_spatial_extent(dataset, self.coord_position)
         temporal_extent = self._get_temporal_extent(dataset)
         general_metadata = self._get_general_metadata(dataset)
 
@@ -880,7 +918,7 @@ class OscDatasetStacGenerator:
             f"for collection '{self.collection_id}'."
         )
         dataset = open_dataset(item_config.dataset_id, logger=self.logger)
-        spatial_extent = self._get_spatial_extent(dataset)
+        spatial_extent = self._get_spatial_extent(dataset, self.coord_position)
         temporal_extent = self._get_temporal_extent(dataset)
         general_metadata = self._get_general_metadata(dataset)
 
@@ -1160,7 +1198,7 @@ class OscDatasetStacGenerator:
         try:
             assert len(self.items_config) == 1
             dataset = open_dataset(self.items_config[0].dataset_id, logger=self.logger)
-            spatial_extent = self._get_spatial_extent(dataset)
+            spatial_extent = self._get_spatial_extent(dataset, self.coord_position)
             temporal_extent = self._get_temporal_extent(dataset)
             variables = self.get_variable_ids(dataset)
             general_metadata = self._get_general_metadata(dataset)
