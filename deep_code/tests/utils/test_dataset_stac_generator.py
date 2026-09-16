@@ -46,7 +46,12 @@ class TestOSCProductSTACGenerator(unittest.TestCase):
                     ],
                 ),
             },
-            attrs={"description": "Mock dataset for testing.", "title": "Mock Dataset"},
+            attrs={
+                "description": "Mock dataset for testing.",
+                "title": "Mock Dataset",
+                "size": 123456,
+                "metadata_size": 123,
+            },
             data_vars={
                 "var1": (
                     ("time", "lat", "lon"),
@@ -468,14 +473,14 @@ class TestOSCProductSTACGenerator(unittest.TestCase):
         self.assertIn("zarr-consolidated-metadata", item.assets)
 
         zarr_asset = item.assets["zarr-data"]
-        self.assertEqual(zarr_asset.href, "s3://mock-bucket/mock-dataset-id")
+        self.assertEqual(zarr_asset.href, "../mock-dataset-id")
         self.assertEqual(zarr_asset.media_type, ZARR_MEDIA_TYPE)
         self.assertIn("data", zarr_asset.roles)
 
         meta_asset = item.assets["zarr-consolidated-metadata"]
         self.assertEqual(
             meta_asset.href,
-            "s3://mock-bucket/mock-dataset-id/.zmetadata",
+            "../mock-dataset-id/.zmetadata",
         )
         self.assertIn("metadata", meta_asset.roles)
 
@@ -894,7 +899,11 @@ class TestPRRCollection(unittest.TestCase):
                 # A CRS var that must be excluded from cube:variables and drive EPSG.
                 "spatial_ref": ((), 0, {"spatial_epsg": 3035}),
             },
-            attrs={"description": "PRR test cube"},
+            attrs={
+                "description": "PRR test cube",
+                "size": 123456,
+                "metadata_size": 123,
+            },
         )
         self.open_dataset_patcher = patch(
             "deep_code.utils.dataset_stac_generator.open_dataset",
@@ -1010,11 +1019,11 @@ class TestPRRCollection(unittest.TestCase):
         self.assertTrue(item.properties["end_datetime"].endswith("+00:00"))
 
         self.assertEqual(set(item.assets), {"zarr-data", "zarr-consolidated-metadata"})
-        self.assertEqual(item.assets["zarr-data"].href, "s3://bucket/test.zarr")
+        self.assertEqual(item.assets["zarr-data"].href, "../test.zarr")
         self.assertEqual(item.assets["zarr-data"].media_type, ZARR_MEDIA_TYPE)
         self.assertEqual(
             item.assets["zarr-consolidated-metadata"].href,
-            "s3://bucket/test.zarr/.zmetadata",
+            "../test.zarr/.zmetadata",
         )
 
     # ---- collection ----
@@ -1170,9 +1179,7 @@ class TestPRRCollection(unittest.TestCase):
             self.assertTrue(item_link["href"].endswith(".json"))
 
             # Asset hrefs stay absolute (the data lives on S3).
-            self.assertEqual(
-                item_dict["assets"]["zarr-data"]["href"], "s3://bucket/test.zarr"
-            )
+            self.assertEqual(item_dict["assets"]["zarr-data"]["href"], "../test.zarr")
 
     def test_save_prr_collection_readable_by_pystac(self):
         with tempfile.TemporaryDirectory() as tmp:

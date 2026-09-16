@@ -1037,7 +1037,9 @@ class OscDatasetStacGenerator:
         ]
         spatial_extent = self._union_spatial_extent(items)
         temporal_extent = self._union_temporal_extent(items)
-        dataset_ref = open_dataset(self.items_config[0].dataset_id, logger=self.logger)
+        dataset_ref = open_dataset(
+            self.items_config[0].dataset_id, logger=self.logger, calc_filesizes=False
+        )
         variables = self.get_variable_ids(dataset_ref)
 
         collection = Collection(
@@ -1232,7 +1234,11 @@ class OscDatasetStacGenerator:
         """
         try:
             assert len(self.items_config) == 1
-            dataset = open_dataset(self.items_config[0].dataset_id, logger=self.logger)
+            dataset = open_dataset(
+                self.items_config[0].dataset_id,
+                logger=self.logger,
+                calc_filesizes=False,
+            )
             spatial_extent = self._get_spatial_extent(dataset, self.coord_position)
             temporal_extent = self._get_temporal_extent(dataset)
             variables = self.get_variable_ids(dataset)
