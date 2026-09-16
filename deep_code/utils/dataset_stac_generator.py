@@ -64,7 +64,7 @@ class OscDatasetStacGenerator:
         osc_project: OSC project identifier (default: "deep-earth-system-data-lab").
         coord_position: Position of the coordinates within each grid cell.
             ``"center"`` assumes coordinates represent cell centers,
-            ``"left"`` assumes they represent the left/top edge, and
+            ``"left"`` assumes they represent the left/bottom edge, and
             ``"right"`` assumes they represent the right/top edge.
     """
 
