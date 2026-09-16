@@ -878,16 +878,16 @@ class OscDatasetStacGenerator:
                 coord_max = float(coord.max())
 
                 if coord_position == "center":
-                    resolution = float(abs(coord[:2].diff(name)))
+                    resolution = float(abs(coord[:2].diff(name))[0])
                     extent_min = coord_min - resolution / 2
-                    resolution = float(abs(coord[-2:].diff(name)))
+                    resolution = float(abs(coord[-2:].diff(name))[0])
                     extent_max = coord_max + resolution / 2
                 elif coord_position == "left":
                     extent_min = coord_min
-                    resolution = float(abs(coord[-2:].diff(name)))
+                    resolution = float(abs(coord[-2:].diff(name))[0])
                     extent_max = coord_max + resolution
                 else:  # coord_position == "right"
-                    resolution = float(abs(coord[:2].diff(name)))
+                    resolution = float(abs(coord[:2].diff(name))[0])
                     extent_min = coord_min - resolution
                     extent_max = coord_max
 
