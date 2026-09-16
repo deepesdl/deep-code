@@ -893,7 +893,7 @@ class OscDatasetStacGenerator:
 
                 dimensions[name] = {
                     "type": "spatial",
-                    "axis": lname,
+                    "axis": "x" if lname in x_names else "y",
                     "extent": [extent_min, extent_max],
                     "reference_system": crs.to_epsg(),
                 }
