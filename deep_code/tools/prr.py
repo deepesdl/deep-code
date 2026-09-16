@@ -93,6 +93,7 @@ def generate_prr_collection(
         thumbnail_media_type=config.get("thumbnail_media_type"),
         sci_doi=config.get("sci_doi"),
         sci_citation=config.get("sci_citation"),
+        coord_position=config.get("coord_position") or "center",
     )
 
     out_dir = output_dir or config.get("prr_output_dir") or "prr"

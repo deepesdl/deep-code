@@ -7,7 +7,7 @@ import json
 import logging
 from dataclasses import dataclass
 from datetime import datetime, timezone
-from typing import Any
+from typing import Any, Literal
 
 import numpy as np
 import pandas as pd
@@ -62,6 +62,10 @@ class OscDatasetStacGenerator:
         osc_missions: List of satellite missions associated with the dataset.
         cf_params: CF metadata parameters for the dataset.
         osc_project: OSC project identifier (default: "deep-earth-system-data-lab").
+        coord_position: Position of the coordinates within each grid cell.
+            ``"center"`` assumes coordinates represent cell centers,
+            ``"left"`` assumes they represent the left/bottom edge, and
+            ``"right"`` assumes they represent the right/top edge.
     """
 
     def __init__(
@@ -92,6 +96,7 @@ class OscDatasetStacGenerator:
         thumbnail_media_type: str | None = None,
         sci_doi: str | None = None,
         sci_citation: str | None = None,
+        coord_position: Literal["left", "center", "right"] = "center",
     ):
         if " " in collection_id:
             raise ValueError(
@@ -128,10 +133,28 @@ class OscDatasetStacGenerator:
         self.thumbnail_media_type = thumbnail_media_type
         self.sci_doi = sci_doi
         self.sci_citation = sci_citation
+        self.coord_position = coord_position
         self.logger = logging.getLogger(__name__)
 
-    def _get_spatial_extent(self, dataset: xr.Dataset) -> SpatialExtent:
-        """Extract the spatial extent and return it in EPSG:4326."""
+    def _get_spatial_extent(
+        self,
+        dataset: xr.Dataset,
+        coord_position: Literal["left", "center", "right"] = "center",
+    ) -> SpatialExtent:
+        """Extract the spatial extent and return it in EPSG:4326.
+
+        Args:
+            dataset: Input dataset.
+            coord_position: Position of the coordinates within each grid cell.
+                ``"center"`` assumes coordinates represent cell centers,
+                ``"left"`` assumes they represent the left/bottom edge, and
+                ``"right"`` assumes they represent the right/top edge.
+        """
+        if coord_position not in {"left", "center", "right"}:
+            raise ValueError(
+                f"Invalid coord_position: {coord_position!r}. "
+                "Must be 'left', 'center', or 'right'."
+            )
 
         if {"lon", "lat"}.issubset(dataset.coords):
             x_name, y_name = "lon", "lat"
@@ -145,10 +168,29 @@ class OscDatasetStacGenerator:
                 "('lon', 'lat'), ('longitude', 'latitude'), or ('x', 'y')."
             )
 
-        x_min = float(dataset[x_name].min())
-        x_max = float(dataset[x_name].max())
-        y_min = float(dataset[y_name].min())
-        y_max = float(dataset[y_name].max())
+        x = dataset[x_name]
+        y = dataset[y_name]
+
+        x_min = float(x.min())
+        x_max = float(x.max())
+        y_min = float(y.min())
+        y_max = float(y.max())
+
+        # Calculate the grid resolution from adjacent coordinates.
+        x_res = float(abs(x.diff(x_name).median()))
+        y_res = float(abs(y.diff(y_name).median()))
+
+        if coord_position == "center":
+            x_min -= x_res / 2
+            x_max += x_res / 2
+            y_min -= y_res / 2
+            y_max += y_res / 2
+        elif coord_position == "left":
+            x_max += x_res
+            y_max += y_res
+        elif coord_position == "right":
+            x_min -= x_res
+            y_min -= y_res
 
         crs = self._get_crs(dataset)
 
@@ -623,7 +665,7 @@ class OscDatasetStacGenerator:
             f"for collection '{self.collection_id}'."
         )
         dataset = open_dataset(item_config.dataset_id, logger=self.logger)
-        spatial_extent = self._get_spatial_extent(dataset)
+        spatial_extent = self._get_spatial_extent(dataset, self.coord_position)
         temporal_extent = self._get_temporal_extent(dataset)
         general_metadata = self._get_general_metadata(dataset)
 
@@ -793,38 +835,69 @@ class OscDatasetStacGenerator:
                                 pass
         return pyproj.CRS.from_epsg(4326)
 
-    def _get_cube_dimensions(self, dataset: xr.Dataset) -> dict[str, dict]:
+    def _get_cube_dimensions(
+        self,
+        dataset: xr.Dataset,
+        coord_position: Literal["left", "center", "right"] = "center",
+    ) -> dict[str, dict]:
         """Build the ``cube:dimensions`` object from the dataset coordinates.
 
         Follows the datacube STAC extension: horizontal spatial dimensions are
         classified by axis (x/y), the ``time`` coordinate becomes a temporal
         dimension, and any remaining index coordinate is emitted as an
         additional dimension.
+
+        Args:
+            dataset: Dataset from which to extract the cube dimensions.
+            coord_position: Position of spatial coordinates within each grid cell.
+                ``"center"`` assumes cell-center coordinates,
+                ``"left"`` assumes left/bottom edge coordinates, and
+                ``"right"`` assumes right/top edge coordinates.
         """
+        if coord_position not in {"left", "center", "right"}:
+            raise ValueError(
+                f"Invalid coord_position: {coord_position!r}. "
+                "Must be 'left', 'center', or 'right'."
+            )
+
         crs = self._get_crs(dataset)
         x_names = {"lon", "longitude", "x"}
         y_names = {"lat", "latitude", "y"}
         dimensions: dict[str, dict] = {}
+
         for name, coord in dataset.coords.items():
             if name not in dataset.dims:
                 # Skip non-dimension coordinates (e.g. scalar or auxiliary coords).
                 continue
+
             name = str(name)
             lname = name.lower()
-            if lname in x_names:
+
+            if lname in x_names or lname in y_names:
+                coord_min = float(coord.min())
+                coord_max = float(coord.max())
+
+                if coord_position == "center":
+                    resolution = float(abs(coord[:2].diff(name))[0])
+                    extent_min = coord_min - resolution / 2
+                    resolution = float(abs(coord[-2:].diff(name))[0])
+                    extent_max = coord_max + resolution / 2
+                elif coord_position == "left":
+                    extent_min = coord_min
+                    resolution = float(abs(coord[-2:].diff(name))[0])
+                    extent_max = coord_max + resolution
+                else:  # coord_position == "right"
+                    resolution = float(abs(coord[:2].diff(name))[0])
+                    extent_min = coord_min - resolution
+                    extent_max = coord_max
+
                 dimensions[name] = {
                     "type": "spatial",
-                    "axis": "x",
-                    "extent": [float(coord.min()), float(coord.max())],
+                    "axis": "x" if lname in x_names else "y",
+                    "extent": [extent_min, extent_max],
                     "reference_system": crs.to_epsg(),
                 }
-            elif lname in y_names:
-                dimensions[name] = {
-                    "type": "spatial",
-                    "axis": "y",
-                    "extent": [float(coord.min()), float(coord.max())],
-                    "reference_system": crs.to_epsg(),
-                }
+
             elif lname == "time":
                 time_min = pd.to_datetime(coord.min().values).to_pydatetime()
                 time_max = pd.to_datetime(coord.max().values).to_pydatetime()
@@ -832,6 +905,7 @@ class OscDatasetStacGenerator:
                     "type": "temporal",
                     "extent": [time_min.isoformat(), time_max.isoformat()],
                 }
+
             else:
                 try:
                     dimensions[name] = {
@@ -843,6 +917,7 @@ class OscDatasetStacGenerator:
                         "type": lname,
                         "values": [str(v) for v in coord.values.tolist()],
                     }
+
         return dimensions
 
     @staticmethod
@@ -880,7 +955,7 @@ class OscDatasetStacGenerator:
             f"for collection '{self.collection_id}'."
         )
         dataset = open_dataset(item_config.dataset_id, logger=self.logger)
-        spatial_extent = self._get_spatial_extent(dataset)
+        spatial_extent = self._get_spatial_extent(dataset, self.coord_position)
         temporal_extent = self._get_temporal_extent(dataset)
         general_metadata = self._get_general_metadata(dataset)
 
@@ -918,7 +993,9 @@ class OscDatasetStacGenerator:
                 "description": general_metadata.get("description", ""),
                 "created": now_iso,
                 "updated": now_iso,
-                "cube:dimensions": self._get_cube_dimensions(dataset),
+                "cube:dimensions": self._get_cube_dimensions(
+                    dataset, self.coord_position
+                ),
                 "cube:variables": self._get_cube_variables(dataset),
             },
         )
@@ -1160,7 +1237,7 @@ class OscDatasetStacGenerator:
         try:
             assert len(self.items_config) == 1
             dataset = open_dataset(self.items_config[0].dataset_id, logger=self.logger)
-            spatial_extent = self._get_spatial_extent(dataset)
+            spatial_extent = self._get_spatial_extent(dataset, self.coord_position)
             temporal_extent = self._get_temporal_extent(dataset)
             variables = self.get_variable_ids(dataset)
             general_metadata = self._get_general_metadata(dataset)

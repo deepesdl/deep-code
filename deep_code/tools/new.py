@@ -86,6 +86,7 @@ class TemplateGenerator:
             "osc_project_title": "[OPTIONAL: display title of the OSC project as it appears in the catalog (e.g. DeepESDL). Defaults to a formatted version of osc_project if omitted]",
             "access_link_root": "[OPTIONAL: public S3 URL of the Zarr store — defaults to s3://deep-esdl-public]",
             "collection_title": "[OPTIONAL: title present in the collection and in the STAC browser]",
+            "coord_position": "[OPTIONAL: Position of the coordinates within each grid cell. 'center' assumes coordinates represent cell centers, 'left' assumes they represent the left/bottom edge, and 'right' assumes they represent the right/top edge.]",
             "cf_parameter": [
                 {"name": "[OPTIONAL: CF standard name]", "units": "[unit string]"}
             ],
