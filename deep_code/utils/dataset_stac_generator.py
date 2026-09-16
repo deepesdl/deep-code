@@ -850,9 +850,9 @@ class OscDatasetStacGenerator:
         Args:
             dataset: Dataset from which to extract the cube dimensions.
             coord_position: Position of spatial coordinates within each grid cell.
-                ``"center"`` assumes cell-center coordinates, ``"left"`` assumes
-                left/bottom edge coordinates, and ``"right"`` assumes
-                right/top edge coordinates.
+                ``"center"`` assumes cell-center coordinates,
+                ``"left"`` assumes left/bottom edge coordinates, and
+                ``"right"`` assumes right/top edge coordinates.
         """
         if coord_position not in {"left", "center", "right"}:
             raise ValueError(
@@ -876,21 +876,24 @@ class OscDatasetStacGenerator:
             if lname in x_names or lname in y_names:
                 coord_min = float(coord.min())
                 coord_max = float(coord.max())
-                resolution = float(abs(coord.diff(name).median()))
 
                 if coord_position == "center":
+                    resolution = float(abs(coord[:2].diff(name)))
                     extent_min = coord_min - resolution / 2
+                    resolution = float(abs(coord[-2:].diff(name)))
                     extent_max = coord_max + resolution / 2
                 elif coord_position == "left":
                     extent_min = coord_min
+                    resolution = float(abs(coord[-2:].diff(name)))
                     extent_max = coord_max + resolution
                 else:  # coord_position == "right"
+                    resolution = float(abs(coord[:2].diff(name)))
                     extent_min = coord_min - resolution
                     extent_max = coord_max
 
                 dimensions[name] = {
                     "type": "spatial",
-                    "axis": "x" if lname in x_names else "y",
+                    "axis": lname,
                     "extent": [extent_min, extent_max],
                     "reference_system": crs.to_epsg(),
                 }
