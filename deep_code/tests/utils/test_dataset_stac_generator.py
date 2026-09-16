@@ -85,7 +85,6 @@ class TestOSCProductSTACGenerator(unittest.TestCase):
             ],
             workflow_id="dummy",
             workflow_title="test",
-            access_link_root="s3://mock-bucket/",
             documentation_link="https://example.com/docs",
             license_type="proprietary",
             osc_project="deep-earth-system-data-lab",
@@ -912,7 +911,6 @@ class TestPRRCollection(unittest.TestCase):
             workflow_title="WF",
             license_type="CC-BY-4.0",
             osc_project="deep-earth-system-data-lab",
-            access_link_root="s3://bucket",
             osc_status="ongoing",
             osc_region="Global",
             osc_themes=["oceans"],
@@ -1067,7 +1065,6 @@ class TestPRRCollection(unittest.TestCase):
                 workflow_id="wf",
                 workflow_title="WF",
                 license_type="CC-BY-4.0",
-                access_link_root="s3://bucket/",
                 osc_status="ongoing",
                 osc_region="Global",
                 osc_themes=["oceans"],
@@ -1140,7 +1137,6 @@ class TestPRRCollection(unittest.TestCase):
             workflow_title="WF",
             license_type="CC-BY-4.0",
             osc_project="deep-earth-system-data-lab",
-            access_link_root="s3://bucket",
         )
         coll = gen.build_prr_collection()
         self.assertNotIn("themes", coll.extra_fields)

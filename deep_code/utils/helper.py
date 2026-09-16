@@ -95,6 +95,8 @@ def open_dataset(
                 storage_options=config["params"]["storage_options"],
             )
             dataset = store.open_data(dataset_id)
+            files = store.fs.find(dataset_id)
+            dataset.attrs["size"] = sum(store.fs.info(file)["size"] for file in files)
             logger.info(
                 f"Successfully opened dataset '{dataset_id}' with configuration: "
                 f"{config['description']}"

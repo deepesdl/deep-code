@@ -73,7 +73,6 @@ def generate_prr_collection(
         license_type=license_type,
         documentation_link=config.get("documentation_link"),
         collection_title=config.get("collection_title"),
-        access_link_root=config.get("access_link_root"),
         osc_status=config.get("dataset_status") or "ongoing",
         osc_region=config.get("osc_region") or "Global",
         osc_themes=config.get("osc_themes"),
