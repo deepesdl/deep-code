@@ -147,7 +147,7 @@ class OscDatasetStacGenerator:
             dataset: Input dataset.
             coord_position: Position of the coordinates within each grid cell.
                 ``"center"`` assumes coordinates represent cell centers,
-                ``"left"`` assumes they represent the left/top edge, and
+                ``"left"`` assumes they represent the left/bottom edge, and
                 ``"right"`` assumes they represent the right/top edge.
         """
         if coord_position not in {"left", "center", "right"}:
