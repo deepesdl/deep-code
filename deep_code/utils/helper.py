@@ -97,6 +97,8 @@ def open_dataset(
             dataset = store.open_data(dataset_id)
             files = store.fs.find(dataset_id)
             dataset.attrs["size"] = sum(store.fs.info(file)["size"] for file in files)
+            metadata_path = f"{dataset_id}/.zmetadata"
+            dataset.attrs["metadata_size"] = store.fs.info(metadata_path)["size"]
             logger.info(
                 f"Successfully opened dataset '{dataset_id}' with configuration: "
                 f"{config['description']}"

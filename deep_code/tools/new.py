@@ -79,6 +79,7 @@ class TemplateGenerator:
                 "[OPTIONAL: OSC theme slug, e.g. land, ocean, atmosphere — auto-lowercased]"
             ],
             "osc_region": "[OPTIONAL: geographical coverage, e.g. Global]",
+            "osc_status": "[OPTIONAL: status of the dataset, can be one of 'planned', 'ongoing', 'completed', defaults to 'completed']",
             "dataset_status": "[OPTIONAL: ongoing | completed | planned (default: ongoing)]",
             "description": "[OPTIONAL: human-readable description of the dataset. Overrides the description attribute in the Zarr store if set]",
             "documentation_link": "[OPTIONAL: link to documentation, publication, or handbook]",

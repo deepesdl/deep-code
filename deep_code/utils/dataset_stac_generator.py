@@ -56,7 +56,7 @@ class OscDatasetStacGenerator:
             dataset_id to one item_id
         collection_title: Title present in the collection and in the STAC browser
         documentation_link: Link to dataset documentation.
-        osc_status: Status of the dataset (e.g., "ongoing").
+        osc_status: Status of the dataset (one of "planned", "ongoing", "completed").
         osc_region: Geographical region associated with the dataset.
         osc_themes: List of themes related to the dataset (e.g., ["climate"]).
         osc_missions: List of satellite missions associated with the dataset.
@@ -78,7 +78,7 @@ class OscDatasetStacGenerator:
         osc_project: str,
         collection_title: str | None = None,
         documentation_link: str | None = None,
-        osc_status: str = "ongoing",
+        osc_status: str = "completed",
         osc_region: str = "Global",
         osc_themes: list[str] | None = None,
         osc_missions: list[str] | None = None,
@@ -729,6 +729,7 @@ class OscDatasetStacGenerator:
                 media_type=ZARR_MEDIA_TYPE,
                 title="Zarr Data Store",
                 roles=["data"],
+                extra_fields={"file:size": dataset.attrs["size"]},
             ),
         )
         item.add_asset(
@@ -738,6 +739,7 @@ class OscDatasetStacGenerator:
                 media_type="application/json",
                 title="Consolidated Zarr Metadata",
                 roles=["metadata"],
+                extra_fields={"file:size": dataset.attrs["metadata_size"]},
             ),
         )
         self.logger.info(f"STAC Item built: {item_href}")
@@ -1002,10 +1004,7 @@ class OscDatasetStacGenerator:
                 media_type=ZARR_MEDIA_TYPE,
                 title="Zarr Data Store",
                 roles=["data"],
-                extra_fields={
-                    "file:size": file_size,
-                    "file:checksum": checksum,
-                },
+                extra_fields={"file:size": dataset.attrs["size"]},
             ),
         )
         item.add_asset(
@@ -1015,10 +1014,7 @@ class OscDatasetStacGenerator:
                 media_type="application/json",
                 title="Consolidated Zarr Metadata",
                 roles=["metadata"],
-                extra_fields={
-                    "file:size": file_size,
-                    "file:checksum": checksum,
-                },
+                extra_fields={"file:size": dataset.attrs["metadata_size"]},
             ),
         )
 
