@@ -36,8 +36,8 @@ class TestOSCProductSTACGenerator(unittest.TestCase):
         """Set up a mock dataset and generator."""
         self.mock_dataset = Dataset(
             coords={
-                "lon": ("lon", np.linspace(-180, 180, 10)),
-                "lat": ("lat", np.linspace(-90, 90, 5)),
+                "lon": ("lon", np.arange(-175, 176, 10)),
+                "lat": ("lat", np.arange(-87.5, 88, 5)),
                 "time": (
                     "time",
                     [
@@ -50,7 +50,7 @@ class TestOSCProductSTACGenerator(unittest.TestCase):
             data_vars={
                 "var1": (
                     ("time", "lat", "lon"),
-                    np.random.rand(2, 5, 10),
+                    np.random.rand(2, 36, 36),
                     {
                         "description": "dummy",
                         "standard_name": "var1",
@@ -59,7 +59,7 @@ class TestOSCProductSTACGenerator(unittest.TestCase):
                 ),
                 "var2": (
                     ("time", "lat", "lon"),
-                    np.random.rand(2, 5, 10),
+                    np.random.rand(2, 36, 36),
                     {
                         "description": "dummy",
                         "standard_name": "var2",
@@ -751,8 +751,8 @@ class TestOscDatasetStacGeneratorExtra(unittest.TestCase):
         mock_open_ds.return_value = ds
         gen = self._make_generator(ds)
         extent = gen._get_spatial_extent(ds)
-        self.assertAlmostEqual(extent.bboxes[0][0], -10.0)
-        self.assertAlmostEqual(extent.bboxes[0][1], -5.0)
+        self.assertAlmostEqual(extent.bboxes[0][0], -15.0)
+        self.assertAlmostEqual(extent.bboxes[0][1], -10.0)
 
     @patch("deep_code.utils.dataset_stac_generator.open_dataset")
     def test_spatial_extent_x_y(self, mock_open_ds):
@@ -760,7 +760,7 @@ class TestOscDatasetStacGeneratorExtra(unittest.TestCase):
         mock_open_ds.return_value = ds
         gen = self._make_generator(ds)
         extent = gen._get_spatial_extent(ds)
-        self.assertAlmostEqual(extent.bboxes[0][0], 0.0)
+        self.assertAlmostEqual(extent.bboxes[0][0], -25.0)
 
     @patch("deep_code.utils.dataset_stac_generator.open_dataset")
     def test_spatial_extent_unknown_coords_raises(self, mock_open_ds):
@@ -861,7 +861,7 @@ class TestPRRCollection(unittest.TestCase):
     def setUp(self):
         self.dataset = Dataset(
             coords={
-                "lon": ("lon", np.linspace(-20, 20, 4)),
+                "lon": ("lon", np.linspace(-20, 20, 3)),
                 "lat": ("lat", np.linspace(-10, 10, 3)),
                 "time": (
                     "time",
@@ -874,12 +874,12 @@ class TestPRRCollection(unittest.TestCase):
             data_vars={
                 "sst": (
                     ("time", "lat", "lon"),
-                    np.random.rand(2, 3, 4),
+                    np.random.rand(2, 3, 3),
                     {"units": "K", "long_name": "Sea surface temperature"},
                 ),
                 "chl": (
                     ("time", "lat", "lon"),
-                    np.random.rand(2, 3, 4),
+                    np.random.rand(2, 3, 3),
                     {"units": "mg m-3"},
                 ),
                 # A CRS var that must be excluded from cube:variables and drive EPSG.
@@ -944,9 +944,9 @@ class TestPRRCollection(unittest.TestCase):
         self.assertEqual(dims["lon"]["type"], "spatial")
         self.assertEqual(dims["lon"]["axis"], "x")
         self.assertEqual(dims["lon"]["reference_system"], 3035)
-        self.assertEqual(dims["lon"]["extent"], [-20.0, 20.0])
+        self.assertEqual(dims["lon"]["extent"], [-30.0, 30.0])
         self.assertEqual(dims["lat"]["axis"], "y")
-        self.assertEqual(dims["lat"]["extent"], [-10.0, 10.0])
+        self.assertEqual(dims["lat"]["extent"], [-15.0, 15.0])
         self.assertEqual(dims["time"]["type"], "temporal")
         self.assertEqual(len(dims["time"]["extent"]), 2)
 
