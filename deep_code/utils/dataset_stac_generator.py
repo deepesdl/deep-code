@@ -65,7 +65,7 @@ class OscDatasetStacGenerator:
         coord_position: Position of the coordinates within each grid cell.
             ``"center"`` assumes coordinates represent cell centers,
             ``"left"`` assumes they represent the left/top edge, and
-            ``"right"`` assumes they represent the right/bottom edge.
+            ``"right"`` assumes they represent the right/top edge.
     """
 
     def __init__(
