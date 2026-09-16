@@ -103,8 +103,18 @@ class TestOSCProductSTACGenerator(unittest.TestCase):
 
     def test_get_spatial_extent(self):
         """Test spatial extent extraction."""
+
+        # center
         extent = self.generator._get_spatial_extent(self.mock_dataset)
         self.assertEqual(extent.bboxes[0], [-180.0, -90.0, 180.0, 90.0])
+
+        # left
+        extent = self.generator._get_spatial_extent(self.mock_dataset, "left")
+        self.assertEqual(extent.bboxes[0], [-175.0, -87.5, 185.0, 92.5])
+
+        # right
+        extent = self.generator._get_spatial_extent(self.mock_dataset, "right")
+        self.assertEqual(extent.bboxes[0], [-185.0, -92.5, 175.0, 87.5])
 
     def test_get_temporal_extent(self):
         """Test temporal extent extraction."""
@@ -938,7 +948,7 @@ class TestPRRCollection(unittest.TestCase):
         )
         self.assertEqual(gen._get_crs(ds).to_epsg(), 4326)
 
-    def test_get_cube_dimensions(self):
+    def test_get_cube_dimensions_center(self):
         dims = self.gen._get_cube_dimensions(self.dataset)
         self.assertEqual(set(dims), {"lon", "lat", "time"})
         self.assertEqual(dims["lon"]["type"], "spatial")
@@ -947,6 +957,30 @@ class TestPRRCollection(unittest.TestCase):
         self.assertEqual(dims["lon"]["extent"], [-30.0, 30.0])
         self.assertEqual(dims["lat"]["axis"], "y")
         self.assertEqual(dims["lat"]["extent"], [-15.0, 15.0])
+        self.assertEqual(dims["time"]["type"], "temporal")
+        self.assertEqual(len(dims["time"]["extent"]), 2)
+
+    def test_get_cube_dimensions_left(self):
+        dims = self.gen._get_cube_dimensions(self.dataset, "left")
+        self.assertEqual(set(dims), {"lon", "lat", "time"})
+        self.assertEqual(dims["lon"]["type"], "spatial")
+        self.assertEqual(dims["lon"]["axis"], "x")
+        self.assertEqual(dims["lon"]["reference_system"], 3035)
+        self.assertEqual(dims["lon"]["extent"], [-20.0, 40.0])
+        self.assertEqual(dims["lat"]["axis"], "y")
+        self.assertEqual(dims["lat"]["extent"], [-10.0, 20.0])
+        self.assertEqual(dims["time"]["type"], "temporal")
+        self.assertEqual(len(dims["time"]["extent"]), 2)
+
+    def test_get_cube_dimensions_right(self):
+        dims = self.gen._get_cube_dimensions(self.dataset, "right")
+        self.assertEqual(set(dims), {"lon", "lat", "time"})
+        self.assertEqual(dims["lon"]["type"], "spatial")
+        self.assertEqual(dims["lon"]["axis"], "x")
+        self.assertEqual(dims["lon"]["reference_system"], 3035)
+        self.assertEqual(dims["lon"]["extent"], [-40.0, 20.0])
+        self.assertEqual(dims["lat"]["axis"], "y")
+        self.assertEqual(dims["lat"]["extent"], [-20.0, 10.0])
         self.assertEqual(dims["time"]["type"], "temporal")
         self.assertEqual(len(dims["time"]["extent"]), 2)
 
