@@ -721,7 +721,7 @@ class OscDatasetStacGenerator:
                 title=self.collection_id,
             )
         )
-        access_link = f"../{item_config.dataset_id}"
+        access_link = f"./{item_config.dataset_id}"
         item.add_asset(
             "zarr-data",
             Asset(
@@ -996,7 +996,7 @@ class OscDatasetStacGenerator:
         item.stac_extensions.append(DATACUBE_SCHEMA_URI)
         # Asset hrefs stay absolute (the Zarr lives on S3); only the structural
         # links become relative when the tree is normalised locally.
-        access_link = f"../{item_config.dataset_id}"
+        access_link = f"./{item_config.dataset_id}"
         item.add_asset(
             "zarr-data",
             Asset(
