@@ -262,8 +262,10 @@ class OscDatasetStacGenerator:
     def extract_metadata_for_variable(self, variable_data) -> dict:
         """Extract metadata for a single variable."""
         long_name = variable_data.attrs.get("long_name")
-        standard_name = variable_data.attrs.get("standard_name")
-        variable_id = standard_name or variable_data.name
+        standard_name = variable_data.attrs.get("standard_name", "unknown")
+        variable_id = (
+            variable_data.name if standard_name == "unknown" else standard_name
+        )
         description = variable_data.attrs.get("description", long_name)
         gcmd_keyword_url = variable_data.attrs.get("gcmd_keyword_url")
         return {
@@ -1056,6 +1058,7 @@ class OscDatasetStacGenerator:
         osc_extension.osc_type = "product"
         osc_extension.osc_status = self.osc_status
         osc_extension.osc_region = self.osc_region
+        print(variables)
         osc_extension.osc_variables = variables
         osc_extension.osc_missions = self.osc_missions
         osc_extension.cf_parameter = self.cf_params or [{"name": self.collection_id}]
