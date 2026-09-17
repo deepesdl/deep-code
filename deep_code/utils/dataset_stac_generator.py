@@ -1058,7 +1058,6 @@ class OscDatasetStacGenerator:
         osc_extension.osc_type = "product"
         osc_extension.osc_status = self.osc_status
         osc_extension.osc_region = self.osc_region
-        print(variables)
         osc_extension.osc_variables = variables
         osc_extension.osc_missions = self.osc_missions
         osc_extension.cf_parameter = self.cf_params or [{"name": self.collection_id}]
