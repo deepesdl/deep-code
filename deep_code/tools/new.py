@@ -79,12 +79,11 @@ class TemplateGenerator:
                 "[OPTIONAL: OSC theme slug, e.g. land, ocean, atmosphere — auto-lowercased]"
             ],
             "osc_region": "[OPTIONAL: geographical coverage, e.g. Global]",
-            "dataset_status": "[OPTIONAL: ongoing | completed | planned (default: ongoing)]",
+            "osc_status": "[OPTIONAL: ongoing | completed | planned (default: completed)]",
             "description": "[OPTIONAL: human-readable description of the dataset. Overrides the description attribute in the Zarr store if set]",
             "documentation_link": "[OPTIONAL: link to documentation, publication, or handbook]",
             "visualisation_link": "[OPTIONAL: URL to a visualisation of the dataset (e.g. xcube Viewer, WMS)]",
             "osc_project_title": "[OPTIONAL: display title of the OSC project as it appears in the catalog (e.g. DeepESDL). Defaults to a formatted version of osc_project if omitted]",
-            "access_link_root": "[OPTIONAL: public S3 URL of the Zarr store — defaults to s3://deep-esdl-public]",
             "collection_title": "[OPTIONAL: title present in the collection and in the STAC browser]",
             "coord_position": "[OPTIONAL: Position of the coordinates within each grid cell. 'center' assumes coordinates represent cell centers, 'left' assumes they represent the left/bottom edge, and 'right' assumes they represent the right/top edge.]",
             "cf_parameter": [

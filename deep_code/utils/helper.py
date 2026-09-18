@@ -26,6 +26,7 @@ def open_dataset(
     root: str = "deep-esdl-public",
     storage_configs: list[dict] | None = None,
     logger: logging.Logger | None = None,
+    calc_filesizes: bool = True,
 ) -> xr.Dataset:
     """Open an xarray dataset from a specified store.
 
@@ -35,6 +36,8 @@ def open_dataset(
         root: Root path or bucket for the store. Defaults to 'deep-esdl-public'.
         storage_configs: List of storage configurations. If None, uses default S3 configs.
         logger: Optional logger for logging messages. If None, uses default logger.
+        calc_filesizes: Boolean for size calculation of the Zarr store and the Zarr
+            metadata. Defaults to True.
 
     Returns:
         xarray.Dataset: The opened dataset.
@@ -95,6 +98,13 @@ def open_dataset(
                 storage_options=config["params"]["storage_options"],
             )
             dataset = store.open_data(dataset_id)
+            if calc_filesizes:
+                files = store.fs.find(f"{store.root}/{dataset_id}")
+                dataset.attrs["size"] = sum(
+                    store.fs.info(file)["size"] for file in files
+                )
+                metadata_path = f"{store.root}/{dataset_id}/.zmetadata"
+                dataset.attrs["metadata_size"] = store.fs.info(metadata_path)["size"]
             logger.info(
                 f"Successfully opened dataset '{dataset_id}' with configuration: "
                 f"{config['description']}"

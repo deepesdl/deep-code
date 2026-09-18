@@ -28,6 +28,7 @@ from pystac import (
 from deep_code.constants import (
     CONTACTS_SCHEMA_URI,
     DATACUBE_SCHEMA_URI,
+    FILE_SCHEMA_URI,
     OSC_SCHEMA_URI,
     OSC_THEME_SCHEME,
     PROCESSING_SCHEMA_URI,
@@ -54,9 +55,8 @@ class OscDatasetStacGenerator:
         items_config: List of item configuration entries. Each item maps one
             dataset_id to one item_id
         collection_title: Title present in the collection and in the STAC browser
-        access_link_root: Public access link to the root of the datasets.
         documentation_link: Link to dataset documentation.
-        osc_status: Status of the dataset (e.g., "ongoing").
+        osc_status: Status of the dataset (one of "planned", "ongoing", "completed").
         osc_region: Geographical region associated with the dataset.
         osc_themes: List of themes related to the dataset (e.g., ["climate"]).
         osc_missions: List of satellite missions associated with the dataset.
@@ -77,10 +77,9 @@ class OscDatasetStacGenerator:
         license_type: str,
         osc_project: str,
         collection_title: str | None = None,
-        access_link_root: str | None = None,
         documentation_link: str | None = None,
-        osc_status: str = "ongoing",
-        osc_region: str = "Global",
+        osc_status: str | None = "completed",
+        osc_region: str | None = "Global",
         osc_themes: list[str] | None = None,
         osc_missions: list[str] | None = None,
         cf_params: list[dict[str, Any]] | None = None,
@@ -111,7 +110,6 @@ class OscDatasetStacGenerator:
         self.osc_project = osc_project
         self.osc_project_title = osc_project_title or osc_project
         self.osc_project_url = osc_project_url
-        self.access_link_root = access_link_root or "s3://deep-esdl-public/"
         self.collection_title = collection_title or collection_id
         self.documentation_link = documentation_link
         self.osc_status = osc_status
@@ -223,13 +221,6 @@ class OscDatasetStacGenerator:
             return name.replace(" ", "-").replace("_", "-").lower()
         return None
 
-    def _build_access_link(self, item_config: ItemConfig) -> str:
-        """Return the asset href for an item, supporting prefix and full URLs."""
-        root = self.access_link_root
-        if root.endswith("/"):
-            root = root.rstrip("/")
-        return f"{root}/{item_config.dataset_id}"
-
     @staticmethod
     def _union_spatial_extent(items: list[Item]) -> SpatialExtent:
         """Merge multiple dataset spatial extents into a single bounding box."""
@@ -271,8 +262,10 @@ class OscDatasetStacGenerator:
     def extract_metadata_for_variable(self, variable_data) -> dict:
         """Extract metadata for a single variable."""
         long_name = variable_data.attrs.get("long_name")
-        standard_name = variable_data.attrs.get("standard_name")
-        variable_id = standard_name or variable_data.name
+        standard_name = variable_data.attrs.get("standard_name", "unknown")
+        variable_id = (
+            variable_data.name if standard_name == "unknown" else standard_name
+        )
         description = variable_data.attrs.get("description", long_name)
         gcmd_keyword_url = variable_data.attrs.get("gcmd_keyword_url")
         return {
@@ -730,7 +723,7 @@ class OscDatasetStacGenerator:
                 title=self.collection_id,
             )
         )
-        access_link = self._build_access_link(item_config)
+        access_link = f"./{item_config.dataset_id}"
         item.add_asset(
             "zarr-data",
             Asset(
@@ -738,6 +731,7 @@ class OscDatasetStacGenerator:
                 media_type=ZARR_MEDIA_TYPE,
                 title="Zarr Data Store",
                 roles=["data"],
+                extra_fields={"file:size": dataset.attrs["size"]},
             ),
         )
         item.add_asset(
@@ -747,6 +741,7 @@ class OscDatasetStacGenerator:
                 media_type="application/json",
                 title="Consolidated Zarr Metadata",
                 roles=["metadata"],
+                extra_fields={"file:size": dataset.attrs["metadata_size"]},
             ),
         )
         self.logger.info(f"STAC Item built: {item_href}")
@@ -999,10 +994,11 @@ class OscDatasetStacGenerator:
                 "cube:variables": self._get_cube_variables(dataset),
             },
         )
+        item.stac_extensions.append(FILE_SCHEMA_URI)
         item.stac_extensions.append(DATACUBE_SCHEMA_URI)
         # Asset hrefs stay absolute (the Zarr lives on S3); only the structural
         # links become relative when the tree is normalised locally.
-        access_link = self._build_access_link(item_config)
+        access_link = f"./{item_config.dataset_id}"
         item.add_asset(
             "zarr-data",
             Asset(
@@ -1010,6 +1006,7 @@ class OscDatasetStacGenerator:
                 media_type=ZARR_MEDIA_TYPE,
                 title="Zarr Data Store",
                 roles=["data"],
+                extra_fields={"file:size": dataset.attrs["size"]},
             ),
         )
         item.add_asset(
@@ -1019,6 +1016,7 @@ class OscDatasetStacGenerator:
                 media_type="application/json",
                 title="Consolidated Zarr Metadata",
                 roles=["metadata"],
+                extra_fields={"file:size": dataset.attrs["metadata_size"]},
             ),
         )
 
@@ -1041,7 +1039,9 @@ class OscDatasetStacGenerator:
         ]
         spatial_extent = self._union_spatial_extent(items)
         temporal_extent = self._union_temporal_extent(items)
-        dataset_ref = open_dataset(self.items_config[0].dataset_id, logger=self.logger)
+        dataset_ref = open_dataset(
+            self.items_config[0].dataset_id, logger=self.logger, calc_filesizes=False
+        )
         variables = self.get_variable_ids(dataset_ref)
 
         collection = Collection(
@@ -1236,7 +1236,11 @@ class OscDatasetStacGenerator:
         """
         try:
             assert len(self.items_config) == 1
-            dataset = open_dataset(self.items_config[0].dataset_id, logger=self.logger)
+            dataset = open_dataset(
+                self.items_config[0].dataset_id,
+                logger=self.logger,
+                calc_filesizes=False,
+            )
             spatial_extent = self._get_spatial_extent(dataset, self.coord_position)
             temporal_extent = self._get_temporal_extent(dataset)
             variables = self.get_variable_ids(dataset)

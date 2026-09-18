@@ -288,8 +288,7 @@ class Publisher:
             )
         self.collection_id = self.dataset_config.get("collection_id")
         documentation_link = self.dataset_config.get("documentation_link")
-        access_link_root = self.dataset_config.get("access_link_root")
-        dataset_status = self.dataset_config.get("dataset_status") or "ongoing"
+        osc_status = self.dataset_config.get("osc_status") or "completed"
         osc_region = self.dataset_config.get("osc_region")
         osc_themes = self.dataset_config.get("osc_themes")
         cf_params = self.dataset_config.get("cf_parameter")
@@ -330,8 +329,7 @@ class Publisher:
             workflow_title=self.workflow_title,
             license_type=license_type,
             documentation_link=documentation_link,
-            access_link_root=access_link_root,
-            osc_status=dataset_status,
+            osc_status=osc_status,
             osc_region=osc_region,
             osc_themes=osc_themes,
             cf_params=cf_params,
