@@ -71,14 +71,14 @@ publisher.publish(write_to_file=False, mode="dataset")
 over individual artifacts.
 
 ```python
-from deep_code.utils.dataset_stac_generator import OscDatasetStacGenerator
+from deep_code.utils.dataset_stac_generator import ItemConfig, OscDatasetStacGenerator
 
 generator = OscDatasetStacGenerator(
-    dataset_id="my-dataset.zarr",
     collection_id="my-collection",
     workflow_id="my-workflow",
     workflow_title="My Workflow",
     license_type="CC-BY-4.0",
+    items_config=[ItemConfig(dataset_id="my-dataset.zarr", item_id="my-item")],
     osc_themes=["cryosphere"],
     osc_region="Global",
     osc_status="completed",
@@ -124,3 +124,26 @@ file_dict = generator.build_zarr_stac_catalog_file_dict(
 
 See [STAC Catalog on S3](configuration.md#stac-catalog-on-s3) for details on the
 generated structure.
+
+### PRR collection generation
+
+Build a self-contained PRR (Project Results Repository) `Collection → Item → Assets`
+tree as local files. The high-level helper reads the same dataset config as the CLI:
+
+```python
+from deep_code.tools.prr import generate_prr_collection
+
+out_dir = generate_prr_collection("dataset.yaml", output_dir="./prr")
+# ./prr/collection.json  +  ./prr/<collection_id>/items/<item_id>.json
+```
+
+Or drive the generator directly:
+
+```python
+generator.save_prr_collection("./prr")   # writes a self-contained tree
+```
+
+The Item includes the `datacube` extension; the Collection declares the OSC, Scientific,
+Processing, Themes and CF extensions and the PRR-mandatory fields. See
+[PRR collection output](configuration.md#prr-collection-output) and
+[Generate a PRR collection](cli.md#generate-a-prr-collection).
