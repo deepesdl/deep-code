@@ -46,6 +46,7 @@ osc_project_website: https://project.example.org
 osc_project_description: A detailed multi-line description of the project.
 thumbnail: https://example.org/thumbnail.jpeg
 sci_doi: 10.1000/xyz123
+coord_position: center           # center | left | right (default: center)
 prr_output_dir: ./prr/your-collection
 ```
 
@@ -84,11 +85,35 @@ prr_output_dir: ./prr/your-collection
 | `thumbnail_media_type` | No | Thumbnail MIME type. Guessed from the URL suffix when omitted. |
 | `sci_doi` | No | Dataset DOI, e.g. `10.1000/xyz123` (a DOI name, not a link). |
 | `sci_citation` | No | Human-readable citation for the dataset. |
+| `coord_position` | No | Where each coordinate value sits within its grid cell: `center` (cell centres), `left` (left/bottom edge) or `right` (right/top edge). Default `center`. Controls how the bounding box and `cube:dimensions` extents are expanded from the coordinate values to the outer edges of the data — see [Coordinate position](#coordinate-position). |
 | `prr_output_dir` | No | Local directory for the PRR collection tree. Defaults to `prr/{collection_id}`. |
 
 `themes` for a PRR collection must be drawn from the allowed set:
 `atmosphere`, `cryosphere`, `land`, `magnetosphere-ionosphere`, `oceans`, `solid-earth`
 (configured via `osc_themes`). See [PRR collection output](#prr-collection-output).
+
+### Coordinate position
+
+A dataset's spatial coordinates are single values per grid cell, but a STAC
+bounding box describes the *outer edges* of the area covered. `coord_position`
+tells deep-code which part of the cell the stored coordinates refer to, so the
+extent can be expanded by the right amount:
+
+| Value | Coordinates represent | Extent derived as |
+|---|---|---|
+| `center` (default) | cell centres | `min - res/2` … `max + res/2` |
+| `left` | the left/bottom edge of each cell | `min` … `max + res` |
+| `right` | the right/top edge of each cell | `min - res` … `max` |
+
+`res` is the grid resolution, taken from the spacing between adjacent
+coordinates. For example, a 1° global grid stored with cell centres at
+`-179.5 … 179.5` covers `-180 … 180`; with `coord_position: center` the
+reported bbox is the full `-180 … 180` rather than the 1°-too-small
+`-179.5 … 179.5`.
+
+The setting applies to both the collection/item `bbox` and the
+`cube:dimensions` extents of the datacube extension, and to the `x`/`y` axes
+alike. An invalid value raises a `ValueError`.
 
 ### STAC Catalog on S3
 
