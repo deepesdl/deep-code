@@ -31,18 +31,24 @@ def _make_dataset():
                 {"units": "K", "long_name": "Sea surface temperature"},
             )
         },
-        attrs={"description": "PRR tool test cube"},
+        attrs={
+            "description": "PRR tool test cube",
+            # set by open_dataset from the store's file sizes
+            "size": 123456,
+            "metadata_size": 123,
+        },
     )
 
 
 class TestGeneratePrrCollection(unittest.TestCase):
     def _write_config(self, tmp, **overrides):
         config = {
-            "dataset_id": "test.zarr",
             "collection_id": "tool-prr",
+            "items_config": [{"dataset_id": "test.zarr", "item_id": "tool-item"}],
             "license_type": "CC-BY-4.0",
-            "access_link": "s3://bucket/test.zarr",
-            "dataset_status": "ongoing",
+            "osc_project": "tool-project",
+            "osc_project_url": "https://project.example.org",
+            "osc_status": "ongoing",
             "osc_region": "Global",
             "osc_themes": ["oceans"],
             "documentation_link": "https://example.org",
@@ -55,7 +61,7 @@ class TestGeneratePrrCollection(unittest.TestCase):
 
     @patch(
         "deep_code.utils.dataset_stac_generator.open_dataset",
-        side_effect=lambda dataset_id, logger=None: _make_dataset(),
+        side_effect=lambda *args, **kwargs: _make_dataset(),
     )
     def test_writes_collection_tree(self, _mock_open_ds):
         with tempfile.TemporaryDirectory() as tmp:
@@ -64,19 +70,24 @@ class TestGeneratePrrCollection(unittest.TestCase):
             result = generate_prr_collection(config_path, output_dir=out)
 
             self.assertEqual(result, out)
-            self.assertTrue(os.path.isfile(os.path.join(out, "collection.json")))
-            self.assertTrue(
-                os.path.isfile(os.path.join(out, "tool-prr", "tool-prr.json"))
-            )
-            with open(os.path.join(out, "collection.json")) as f:
+            coll_path = os.path.join(out, "tool-prr", "collection.json")
+            item_path = os.path.join(out, "tool-prr", "items", "tool-item.json")
+            self.assertTrue(os.path.isfile(coll_path))
+            self.assertTrue(os.path.isfile(item_path))
+            with open(coll_path) as f:
                 coll = json.load(f)
             self.assertEqual(coll["id"], "tool-prr")
             self.assertEqual(coll["type"], "Collection")
             self.assertEqual(coll["osc:type"], "product")
+            self.assertEqual(coll["osc:status"], "ongoing")
+            with open(item_path) as f:
+                item = json.load(f)
+            # PRR ingests the Zarr next to the item, so asset hrefs are relative.
+            self.assertEqual(item["assets"]["zarr-data"]["href"], "./test.zarr")
 
     @patch(
         "deep_code.utils.dataset_stac_generator.open_dataset",
-        side_effect=lambda dataset_id, logger=None: _make_dataset(),
+        side_effect=lambda *args, **kwargs: _make_dataset(),
     )
     def test_default_output_dir_from_collection_id(self, _mock_open_ds):
         with tempfile.TemporaryDirectory() as tmp:
@@ -85,14 +96,16 @@ class TestGeneratePrrCollection(unittest.TestCase):
             os.chdir(tmp)
             try:
                 out = generate_prr_collection(config_path)
-                self.assertEqual(out, "prr/tool-prr")
-                self.assertTrue(os.path.isfile(os.path.join(out, "collection.json")))
+                self.assertEqual(out, "prr")
+                self.assertTrue(
+                    os.path.isfile(os.path.join(out, "tool-prr", "collection.json"))
+                )
             finally:
                 os.chdir(cwd)
 
     @patch(
         "deep_code.utils.dataset_stac_generator.open_dataset",
-        side_effect=lambda dataset_id, logger=None: _make_dataset(),
+        side_effect=lambda *args, **kwargs: _make_dataset(),
     )
     def test_output_dir_from_config(self, _mock_open_ds):
         with tempfile.TemporaryDirectory() as tmp:
@@ -100,11 +113,13 @@ class TestGeneratePrrCollection(unittest.TestCase):
             config_path = self._write_config(tmp, prr_output_dir=out)
             result = generate_prr_collection(config_path)
             self.assertEqual(result, out)
-            self.assertTrue(os.path.isfile(os.path.join(out, "collection.json")))
+            self.assertTrue(
+                os.path.isfile(os.path.join(out, "tool-prr", "collection.json"))
+            )
 
     @patch(
         "deep_code.utils.dataset_stac_generator.open_dataset",
-        side_effect=lambda dataset_id, logger=None: _make_dataset(),
+        side_effect=lambda *args, **kwargs: _make_dataset(),
     )
     def test_prr_spec_fields_plumbed_from_config(self, _mock_open_ds):
         with tempfile.TemporaryDirectory() as tmp:
@@ -119,7 +134,7 @@ class TestGeneratePrrCollection(unittest.TestCase):
                 sci_doi="10.1000/xyz123",
             )
             generate_prr_collection(config_path, output_dir=out)
-            with open(os.path.join(out, "collection.json")) as f:
+            with open(os.path.join(out, "tool-prr", "collection.json")) as f:
                 coll = json.load(f)
             self.assertEqual(coll["osc:initiative"], "earthcode")
             self.assertEqual(coll["osc:project_website"], "https://project.example.org")
@@ -129,21 +144,46 @@ class TestGeneratePrrCollection(unittest.TestCase):
             self.assertIn("thumbnail", coll["assets"])
             self.assertEqual(coll["assets"]["thumbnail"]["roles"], ["thumbnail"])
 
-    def test_missing_license_raises(self):
+    @patch(
+        "deep_code.utils.dataset_stac_generator.open_dataset",
+        side_effect=lambda *args, **kwargs: _make_dataset(),
+    )
+    def test_deprecated_dataset_status(self, _mock_open_ds):
         with tempfile.TemporaryDirectory() as tmp:
-            config_path = os.path.join(tmp, "cfg.yaml")
+            out = os.path.join(tmp, "out")
+            config_path = self._write_config(tmp, osc_status=None)
+            with open(config_path) as f:
+                config = yaml.safe_load(f)
+            del config["osc_status"]
+            config["dataset_status"] = "planned"
             with open(config_path, "w") as f:
-                yaml.safe_dump({"dataset_id": "test.zarr", "collection_id": "c"}, f)
-            with self.assertRaisesRegex(ValueError, "license_type is required"):
+                yaml.safe_dump(config, f)
+            generate_prr_collection(config_path, output_dir=out)
+            with open(os.path.join(out, "tool-prr", "collection.json")) as f:
+                coll = json.load(f)
+            self.assertEqual(coll["osc:status"], "planned")
+
+    def _assert_missing_raises(self, field: str):
+        with tempfile.TemporaryDirectory() as tmp:
+            config_path = self._write_config(tmp)
+            with open(config_path) as f:
+                config = yaml.safe_load(f)
+            del config[field]
+            with open(config_path, "w") as f:
+                yaml.safe_dump(config, f)
+            with self.assertRaisesRegex(ValueError, f"{field} is required"):
                 generate_prr_collection(config_path)
 
-    def test_missing_ids_raises(self):
-        with tempfile.TemporaryDirectory() as tmp:
-            config_path = os.path.join(tmp, "cfg.yaml")
-            with open(config_path, "w") as f:
-                yaml.safe_dump({"license_type": "CC-BY-4.0"}, f)
-            with self.assertRaisesRegex(ValueError, "dataset_id.*collection_id"):
-                generate_prr_collection(config_path)
+    def test_missing_required_fields_raise(self):
+        for field in (
+            "collection_id",
+            "osc_project",
+            "osc_project_url",
+            "license_type",
+            "items_config",
+        ):
+            with self.subTest(field=field):
+                self._assert_missing_raises(field)
 
 
 if __name__ == "__main__":
