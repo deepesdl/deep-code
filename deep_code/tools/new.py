@@ -63,7 +63,6 @@ class TemplateGenerator:
         required = {
             "collection_id": "[REQUIRED: unique identifier, no spaces — use hyphens (e.g. My-Dataset-2024)]",
             "license_type": "[REQUIRED: SPDX license identifier, e.g. CC-BY-4.0, MIT, proprietary]",
-            "stac_catalog_s3_root": "[REQUIRED: S3 root for the STAC Catalog + Item, e.g. s3://my-bucket/stac/my-collection/]",
             "items_config": [
                 {
                     "dataset_id": "[REQUIRED: name of the Zarr store in your S3 bucket, e.g. my-dataset.zarr]",
@@ -84,6 +83,7 @@ class TemplateGenerator:
             "documentation_link": "[OPTIONAL: link to documentation, publication, or handbook]",
             "visualisation_link": "[OPTIONAL: URL to a visualisation of the dataset (e.g. xcube Viewer, WMS)]",
             "access_link": "[OPTIONAL: absolute URL of the Zarr store — defaults to the Zarr asset of the dataset's PRR item]",
+            "stac_catalog_s3_root": "[OPTIONAL: S3 root to publish a STAC Catalog + Item to, e.g. s3://my-bucket/stac/my-collection/ — omit to link the dataset's PRR collection]",
             "osc_project_title": "[OPTIONAL: display title of the OSC project as it appears in the catalog (e.g. DeepESDL). Defaults to a formatted version of osc_project if omitted]",
             "collection_title": "[OPTIONAL: title present in the collection and in the STAC browser]",
             "coord_position": "[OPTIONAL: Position of the coordinates within each grid cell. 'center' assumes coordinates represent cell centers, 'left' assumes they represent the left/bottom edge, and 'right' assumes they represent the right/top edge.]",
@@ -111,7 +111,10 @@ class TemplateGenerator:
         }
 
         stac_catalog_comment = (
-            "\n# stac_catalog_s3_root: deep-code writes the following files to this S3 root:\n"
+            "\n# By default the OSC collection links to the dataset's collection in PRR\n"
+            "# (https://eoresults.esa.int), so ingest the dataset into PRR first.\n"
+            "# Set stac_catalog_s3_root only for datasets not in PRR; deep-code then\n"
+            "# writes the following files to this S3 root:\n"
             "#   {stac_catalog_s3_root}/catalog.json               (STAC Catalog root)\n"
             "#   {stac_catalog_s3_root}/{collection_id}/items/{item_id}.json  (STAC Item for each Zarr)\n"
             "# items_config can contain multiple dataset/item pairs, but publish\n"

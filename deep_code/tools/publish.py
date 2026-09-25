@@ -299,13 +299,8 @@ class Publisher:
                 "Provide an SPDX identifier (e.g. 'CC-BY-4.0', 'MIT', 'proprietary')."
             )
 
+        # Optional: without it, the collection links to the dataset in PRR.
         stac_catalog_s3_root = self.dataset_config.get("stac_catalog_s3_root")
-        if not stac_catalog_s3_root:
-            raise ValueError(
-                "stac_catalog_s3_root is required in the dataset config. "
-                "Provide the S3 root where the STAC catalog should be published "
-                "(e.g. 's3://my-bucket/stac/my-collection/')."
-            )
 
         logger.info("Generating STAC collection...")
 
@@ -637,16 +632,20 @@ class Publisher:
             ds_files = self.publish_dataset(write_to_file=False, mode=mode)
             files.update(ds_files)
 
-            # Publish STAC catalog + item to S3 (stac_catalog_s3_root is mandatory).
+            # Publish STAC catalog + item to S3 only if requested; otherwise the
+            # OSC collection links to the dataset in PRR.
             stac_catalog_s3_root = self.dataset_config.get("stac_catalog_s3_root")
-            logger.info(f"Publishing STAC catalog to S3: {stac_catalog_s3_root}")
-            zarr_stac_files = self._last_generator.build_zarr_stac_catalog_file_dict(
-                stac_catalog_s3_root
-            )
-            self._write_stac_catalog_to_s3(
-                zarr_stac_files, self._get_stac_s3_storage_options()
-            )
-            logger.info("STAC catalog written to S3.")
+            if stac_catalog_s3_root:
+                logger.info(f"Publishing STAC catalog to S3: {stac_catalog_s3_root}")
+                zarr_stac_files = (
+                    self._last_generator.build_zarr_stac_catalog_file_dict(
+                        stac_catalog_s3_root
+                    )
+                )
+                self._write_stac_catalog_to_s3(
+                    zarr_stac_files, self._get_stac_s3_storage_options()
+                )
+                logger.info("STAC catalog written to S3.")
 
         if mode in ("workflow", "all"):
             wf_files = self.generate_workflow_experiment_records(

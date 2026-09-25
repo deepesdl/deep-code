@@ -18,7 +18,6 @@ The sections below document every field in those templates.
 # Required
 collection_id: your-collection       # no spaces — use hyphens
 license_type: CC-BY-4.0
-stac_catalog_s3_root: s3://bucket/stac/your-collection/
 items_config:
   - dataset_id: your-dataset.zarr
     item_id: your-item               # no spaces — use hyphens
@@ -31,7 +30,8 @@ osc_region: global
 osc_status: completed           # ongoing | completed | planned (default: completed)
 documentation_link: https://example.com/docs
 visualisation_link: https://example.com/viewer   # URL to a visualisation of the dataset
-access_link: https://eoresults.esa.int/d/<collection>/.../<dataset>.zarr   # defaults to the PRR item's Zarr asset
+stac_catalog_s3_root: s3://bucket/stac/your-collection/   # only for datasets not in PRR
+access_link: https://example.com/your-dataset.zarr   # only with stac_catalog_s3_root; defaults to the PRR item's Zarr asset
 
 # CF parameter overrides (list of {name, units, ...} dicts)
 cf_parameter:
@@ -62,12 +62,12 @@ prr_output_dir: ./prr/your-collection
 | `osc_themes`           | No       | List of OSC theme slugs (e.g. `[cryosphere, oceans]`). Values are automatically lowercased so `Land` and `land` are equivalent.                              |
 | `osc_region`           | No       | Geographical region label (default: `Global`).                                                                                                               |
 | `osc_status`           | No       | One of `ongoing`, `completed`, or `planned` (default: `completed`).                                                                                          |
-| `access_link`          | No       | Absolute URL of the Zarr store, used as the asset href of the OSC STAC item. Defaults to the `zarr-data` asset of the dataset's item in the PRR STAC API (`https://eoresults.esa.int/stac/collections/{collection_id}/items/{item_id}`), so ingest into PRR before publishing to OSC. |
+| `stac_catalog_s3_root` | No       | S3 root to publish a deep-code STAC Catalog and Item to, for datasets **not** in PRR. When omitted (the default), the OSC collection links to the dataset's PRR collection instead. See [Data links](#data-links). |
+| `access_link`          | No       | Only used with `stac_catalog_s3_root`. Absolute URL of the Zarr store, used as the asset href of the S3 STAC item. Defaults to the `zarr-data` asset of the dataset's item in the PRR STAC API. |
 | `description`          | No       | Human-readable description of the dataset. Overrides the `description` attribute in the Zarr store; falls back to `"No description available."` if neither is set. |
 | `documentation_link`   | No       | URL to dataset documentation.                                                                                                                                |
 | `visualisation_link`   | No       | URL to a visualisation of the dataset (e.g. xcube Viewer, WMS). Added as a `visualisation` link with title `"Dataset visualisation"`.                        |
 | `cf_parameter`         | No       | List of CF metadata dicts to override variable attributes (e.g. `name`, `units`).                                                                            |
-| `stac_catalog_s3_root` | Yes      | S3 root where the STAC Catalog and Item are published. Publishing fails if this field is absent. See [STAC Catalog on S3](#stac-catalog-on-s3).              |
 
 > The fields below are only read by [`deep-code generate-prr-collection`](cli.md#generate-a-prr-collection); `publish` ignores them. "PRR-required" means the field is required by the [PRR specification](https://eoresults.esa.int/prr_collection_specifications.html), not by the command (which still runs and warns).
 
@@ -114,9 +114,28 @@ The setting applies to both the collection/item `bbox` and the
 `cube:dimensions` extents of the datacube extension, and to the `x`/`y` axes
 alike. An invalid value raises a `ValueError`.
 
-### STAC Catalog on S3
+### Data links
 
-`stac_catalog_s3_root` is required. deep-code writes a two-file STAC hierarchy to S3 alongside the data:
+The OSC collection links to where the data can be accessed, following the OSC
+convention of a `via` link (human-browsable) and a `child` link (machine-readable).
+
+#### Default: PRR collection
+
+By default the dataset is expected to be in the ESA Project Results Repository
+(PRR), and the OSC collection links to its PRR collection:
+
+- `via` (title `Access`) — `https://eoresults.esa.int/browser/#/external/eoresults.esa.int/stac/collections/{collection_id}`
+- `child` — `https://eoresults.esa.int/stac/collections/{collection_id}`
+
+Nothing is written to S3 and no S3 credentials are needed. **Ingest the dataset
+into PRR before publishing to OSC** (see
+[Generate a PRR collection](cli.md#generate-a-prr-collection)); publishing fails
+with an error if the PRR collection does not exist.
+
+#### STAC Catalog on S3
+
+For datasets that are not in PRR, set `stac_catalog_s3_root`. deep-code then
+writes a two-file STAC hierarchy to S3 and links it instead of PRR:
 
 ```
 s3://bucket/stac/your-collection/
@@ -131,15 +150,13 @@ The item has two assets:
 - `zarr-data` — points to the Zarr store (`application/vnd+zarr`).
 - `zarr-consolidated-metadata` — points to `.zmetadata` (`application/json`).
 
-Both asset hrefs are absolute and point to the Zarr store served by the ESA
-Project Results Repository (PRR). deep-code looks the href up from the `zarr-data`
-asset of the dataset's PRR item
-(`https://eoresults.esa.int/stac/collections/{collection_id}/items/{item_id}`),
-so **ingest the dataset into PRR before publishing to OSC**. If the PRR item cannot
-be found, publishing fails with an error. Set `access_link` in the dataset config to
-use a different Zarr URL and skip the lookup.
+Both asset hrefs are absolute. Set `access_link` to the Zarr store's URL; if it
+is omitted, deep-code looks the href up from the `zarr-data` asset of the
+dataset's PRR item
+(`https://eoresults.esa.int/stac/collections/{collection_id}/items/{item_id}`)
+and fails with an error if that item cannot be found.
 
-The OSC collection links to the S3 catalog following the OSC convention:
+The OSC collection links to the S3 catalog:
 
 - `via` — the catalog in the OSC STAC browser (human-browsable).
 - `child` — the direct HTTPS URL of `catalog.json` (machine-readable).

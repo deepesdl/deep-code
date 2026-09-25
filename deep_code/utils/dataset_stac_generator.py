@@ -35,6 +35,7 @@ from deep_code.constants import (
     OSC_THEME_SCHEME,
     PROCESSING_SCHEMA_URI,
     PRR_STAC_API_ROOT,
+    PRR_STAC_BROWSER_ROOT,
     SCIENTIFIC_SCHEMA_URI,
     THEMES_SCHEMA_URI,
     ZARR_MEDIA_TYPE,
@@ -261,6 +262,25 @@ class OscDatasetStacGenerator:
         if name:
             return name.replace(" ", "-").replace("_", "-").lower()
         return None
+
+    def _get_prr_collection_url(self) -> str:
+        """Return the PRR STAC API URL of the collection, checking that it exists.
+
+        Raises:
+            ValueError: If the collection cannot be fetched from PRR.
+        """
+        collection_url = f"{PRR_STAC_API_ROOT}/collections/{self.collection_id}"
+        self.logger.info(f"Checking PRR collection {collection_url}")
+        try:
+            response = requests.get(collection_url, timeout=30)
+            response.raise_for_status()
+        except requests.RequestException as e:
+            raise ValueError(
+                f"PRR collection {collection_url} not found: {e}. Ingest the "
+                "dataset into PRR first, or set 'stac_catalog_s3_root' in the "
+                "dataset config to publish a STAC catalog to S3 instead."
+            ) from e
+        return collection_url
 
     def _resolve_access_link(self, item_config: ItemConfig) -> str:
         """Return the absolute URL of the Zarr store for the OSC item.
@@ -1303,6 +1323,12 @@ class OscDatasetStacGenerator:
     ) -> Collection:
         """Build an OSC STAC Collection for the dataset.
 
+        Args:
+            mode: Publishing mode (``"dataset"``, ``"workflow"`` or ``"all"``).
+            stac_catalog_s3_root: S3 root of a deep-code STAC catalog to link. If
+                omitted, the collection links to the dataset's collection in PRR,
+                which must already exist.
+
         Returns:
             A pystac.Collection object.
         """
@@ -1432,12 +1458,30 @@ class OscDatasetStacGenerator:
 
         collection.license = self.license_type
 
-        # Add links to the S3-hosted STAC catalog following the OSC convention:
+        # Link the data following the OSC convention:
         #   via   → STAC browser URL (human-browsable, HTTPS)
-        #   child → direct HTTPS URL to catalog.json (machine-readable)
-        # The s3:// URL is never used directly in the collection as it fails the
-        # products/children.json uri-reference format check.
-        if stac_catalog_s3_root:
+        #   child → STAC collection/catalog URL (machine-readable)
+        # By default the data lives in PRR. With stac_catalog_s3_root, link the
+        # S3-hosted catalog instead; the s3:// URL is never used directly as it
+        # fails the products/children.json uri-reference format check.
+        if not stac_catalog_s3_root:
+            prr_collection_url = self._get_prr_collection_url()
+            collection.add_link(
+                Link(
+                    rel="via",
+                    target=f"{PRR_STAC_BROWSER_ROOT}/collections/{self.collection_id}",
+                    title="Access",
+                )
+            )
+            collection.add_link(
+                Link(
+                    rel="child",
+                    target=prr_collection_url,
+                    media_type="application/json",
+                    title=self.collection_title,
+                )
+            )
+        else:
             catalog_s3 = stac_catalog_s3_root.rstrip("/") + "/catalog.json"
             catalog_https = self._s3_to_https(catalog_s3)
             stac_browser_href = (

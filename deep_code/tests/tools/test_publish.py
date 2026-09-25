@@ -396,16 +396,19 @@ class TestPublisher(unittest.TestCase):
         update_methods = [call.args[2] for call in mock_update.call_args_list]
         self.assertIn(mock_gen.update_deepesdl_collection, update_methods)
 
-    def test_publish_dataset_raises_when_stac_root_missing(self):
-        self.publisher.dataset_config = {
-            "collection_id": "test-collection",
-            "items_config": [{"dataset_id": "test-dataset", "item_id": "test-item"}],
-            "osc_project": "test-project",
-            "osc_project_url": "https://example.com/projects/test-project",
-            "license_type": "CC-BY-4.0",
-        }
-        with pytest.raises(ValueError, match="stac_catalog_s3_root"):
-            self.publisher.publish_dataset(write_to_file=False)
+    @patch.object(Publisher, "_write_stac_catalog_to_s3")
+    @patch.object(Publisher, "publish_dataset", return_value={"x": {}})
+    def test_publish_without_stac_root_skips_s3(self, mock_ds, mock_s3):
+        """Without stac_catalog_s3_root nothing is written to S3 (PRR is linked)."""
+        self.publisher.gh_publisher.publish_files.return_value = "PR_URL"
+        self.publisher.collection_id = "col"
+        mock_generator = MagicMock()
+        self.publisher._last_generator = mock_generator
+        self.publisher.dataset_config = {}
+
+        assert self.publisher.publish(write_to_file=False, mode="dataset") == "PR_URL"
+        mock_generator.build_zarr_stac_catalog_file_dict.assert_not_called()
+        mock_s3.assert_not_called()
 
     def test_publish_dataset_raises_when_no_dataset_config(self):
         self.publisher.dataset_config = None

@@ -52,3 +52,6 @@ SCIENTIFIC_SCHEMA_URI = (
 # STAC API of the ESA Project Results Repository (PRR). The OSC item points its
 # assets at the Zarr store PRR serves, looked up from this API.
 PRR_STAC_API_ROOT = "https://eoresults.esa.int/stac"
+PRR_STAC_BROWSER_ROOT = (
+    "https://eoresults.esa.int/browser/#/external/eoresults.esa.int/stac"
+)

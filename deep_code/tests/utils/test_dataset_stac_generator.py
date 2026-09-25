@@ -686,15 +686,47 @@ class TestOSCProductSTACGenerator(unittest.TestCase):
         self.assertIsNotNone(child_link, "Expected a 'child' HTTPS catalog link")
         self.assertEqual(child_link.target, https_catalog)
 
-    def test_build_dataset_stac_collection_no_s3_via_link_by_default(self):
-        """No S3 catalog 'via' link is added when stac_catalog_s3_root is absent."""
+    def test_build_dataset_stac_collection_links_prr_by_default(self):
+        """Without stac_catalog_s3_root, the collection links the PRR collection."""
         collection = self.generator.build_dataset_stac_collection(mode="dataset")
-        s3_catalog_links = [
+
+        prr_collection = "https://eoresults.esa.int/stac/collections/mock-collection-id"
+        self.mock_requests_get.assert_called_once_with(prr_collection, timeout=30)
+
+        via_link = next(
             lnk
             for lnk in collection.links
-            if lnk.rel == "via" and "catalog.json" in str(getattr(lnk, "target", ""))
-        ]
-        self.assertEqual(len(s3_catalog_links), 0)
+            if lnk.rel == "via" and lnk.title == "Access"
+        )
+        self.assertEqual(
+            via_link.target,
+            "https://eoresults.esa.int/browser/#/external/"
+            "eoresults.esa.int/stac/collections/mock-collection-id",
+        )
+        child_link = next(lnk for lnk in collection.links if lnk.rel == "child")
+        self.assertEqual(child_link.target, prr_collection)
+        self.assertEqual(child_link.media_type, "application/json")
+        self.assertFalse(
+            any("amazonaws.com" in str(lnk.target) for lnk in collection.links)
+        )
+
+    def test_build_dataset_stac_collection_prr_collection_missing(self):
+        """A missing PRR collection raises with a hint to ingest or use S3."""
+        self.mock_requests_get.return_value.raise_for_status.side_effect = (
+            requests.HTTPError("404 Not Found")
+        )
+        with self.assertRaisesRegex(ValueError, "stac_catalog_s3_root"):
+            self.generator.build_dataset_stac_collection(mode="dataset")
+
+    def test_build_dataset_stac_collection_s3_root_skips_prr(self):
+        """With stac_catalog_s3_root, PRR is neither checked nor linked."""
+        collection = self.generator.build_dataset_stac_collection(
+            mode="dataset", stac_catalog_s3_root="s3://test-bucket/stac/"
+        )
+        self.mock_requests_get.assert_not_called()
+        self.assertFalse(
+            any("eoresults.esa.int" in str(lnk.target) for lnk in collection.links)
+        )
 
 
 class TestFormatString(unittest.TestCase):
@@ -757,6 +789,12 @@ class TestFormatString(unittest.TestCase):
 
 class TestOscDatasetStacGeneratorExtra(unittest.TestCase):
     """Additional tests to cover branches not exercised by TestOSCProductSTACGenerator."""
+
+    def setUp(self):
+        # The collection links the PRR collection; stub the existence check.
+        patcher = patch("deep_code.utils.dataset_stac_generator.requests.get")
+        patcher.start()
+        self.addCleanup(patcher.stop)
 
     @staticmethod
     def _make_generator(mock_ds, collection_id="my-collection", **kwargs):
