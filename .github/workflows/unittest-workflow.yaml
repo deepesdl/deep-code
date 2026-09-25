@@ -25,7 +25,8 @@ jobs:
 
       - name: Lint with ruff
         run: |
-            pip install ruff
+            # TODO upgrade to latest later
+            pip install ruff==0.9.10
             ruff check
 
       - name: Run unit tests

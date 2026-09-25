@@ -5,15 +5,38 @@
 
 import json
 import logging
+from dataclasses import dataclass
 from datetime import datetime, timezone
+from typing import Any, Literal
+from urllib.parse import urljoin
 
+import numpy as np
 import pandas as pd
-from pystac import Catalog, Collection, Extent, Item, Asset, Link, SpatialExtent, TemporalExtent
+import pyproj
+import requests
+import xarray as xr
+from pystac import (
+    Asset,
+    Catalog,
+    CatalogType,
+    Collection,
+    Extent,
+    Item,
+    Link,
+    SpatialExtent,
+    TemporalExtent,
+)
 
 from deep_code.constants import (
     CONTACTS_SCHEMA_URI,
+    DATACUBE_SCHEMA_URI,
+    FILE_SCHEMA_URI,
     OSC_SCHEMA_URI,
     OSC_THEME_SCHEME,
+    PROCESSING_SCHEMA_URI,
+    PRR_STAC_API_ROOT,
+    PRR_STAC_BROWSER_ROOT,
+    SCIENTIFIC_SCHEMA_URI,
     THEMES_SCHEMA_URI,
     ZARR_MEDIA_TYPE,
 )
@@ -22,114 +45,212 @@ from deep_code.utils.ogc_api_record import Theme, ThemeConcept
 from deep_code.utils.osc_extension import OscExtension
 
 
+@dataclass
+class ItemConfig:
+    dataset_id: str
+    item_id: str
+
+
+def build_items_config(dataset_config: dict[str, Any]) -> list[ItemConfig]:
+    """Build item configs from the ``items_config`` list of a dataset config.
+
+    Raises:
+        ValueError: If ``items_config`` is missing or an entry lacks
+            ``dataset_id`` or ``item_id``.
+    """
+    items_config_raw = dataset_config.get("items_config")
+    if not items_config_raw:
+        raise ValueError("items_config is required in the dataset config.")
+    items_config = []
+    for index, item_config in enumerate(items_config_raw):
+        if not isinstance(item_config, dict):
+            raise ValueError(
+                f"items_config entry {index} must be a mapping with "
+                "'dataset_id' and 'item_id'."
+            )
+        missing = [key for key in ("dataset_id", "item_id") if not item_config.get(key)]
+        if missing:
+            raise ValueError(
+                f"{' and '.join(missing)} {'is' if len(missing) == 1 else 'are'} "
+                f"required in items_config entry {index}."
+            )
+        items_config.append(
+            ItemConfig(
+                dataset_id=item_config["dataset_id"],
+                item_id=item_config["item_id"],
+            )
+        )
+    return items_config
+
+
 class OscDatasetStacGenerator:
     """Generates OSC STAC Collections for a product from Zarr datasets.
 
     Args:
-        dataset_id: ID of the Zarr dataset.
         collection_id: Unique identifier for the STAC collection.
-        access_link: Public access link to the dataset.
+        items_config: List of item configuration entries. Each item maps one
+            dataset_id to one item_id
+        collection_title: Title present in the collection and in the STAC browser
         documentation_link: Link to dataset documentation.
-        osc_status: Status of the dataset (e.g., "ongoing").
+        osc_status: Status of the dataset (one of "planned", "ongoing", "completed").
         osc_region: Geographical region associated with the dataset.
         osc_themes: List of themes related to the dataset (e.g., ["climate"]).
         osc_missions: List of satellite missions associated with the dataset.
         cf_params: CF metadata parameters for the dataset.
         osc_project: OSC project identifier (default: "deep-earth-system-data-lab").
+        coord_position: Position of the coordinates within each grid cell.
+            ``"center"`` assumes coordinates represent cell centers,
+            ``"left"`` assumes they represent the left/bottom edge, and
+            ``"right"`` assumes they represent the right/top edge.
+        access_link: Absolute URL of the Zarr store, used as the asset href of
+            the S3-hosted OSC item. If omitted, the href is looked up from the
+            dataset's item in the PRR STAC API, so PRR ingestion must be done
+            before publishing to OSC.
     """
 
     def __init__(
         self,
-        dataset_id: str,
         collection_id: str,
+        items_config: list[ItemConfig],
         workflow_id: str,
         workflow_title: str,
         license_type: str,
-        access_link: str | None = None,
+        osc_project: str,
+        collection_title: str | None = None,
         documentation_link: str | None = None,
-        osc_status: str = "ongoing",
-        osc_region: str = "Global",
+        osc_status: str | None = "completed",
+        osc_region: str | None = "Global",
         osc_themes: list[str] | None = None,
         osc_missions: list[str] | None = None,
-        cf_params: list[dict[str]] | None = None,
-        osc_project: str = "deep-earth-system-data-lab",
-        osc_project_title: str = "DeepESDL",
+        cf_params: list[dict[str, Any]] | None = None,
+        osc_project_title: str | None = None,
         osc_project_url: str | None = None,
         visualisation_link: str | None = None,
         description: str | None = None,
+        osc_initiative: str = "earthcode",
+        osc_contract_number: str | None = None,
+        osc_project_website: str | None = None,
+        osc_project_description: str | None = None,
+        thumbnail: str | None = None,
+        thumbnail_media_type: str | None = None,
+        sci_doi: str | None = None,
+        sci_citation: str | None = None,
+        coord_position: Literal["left", "center", "right"] = "center",
+        access_link: str | None = None,
     ):
         if " " in collection_id:
             raise ValueError(
                 f"collection_id must not contain spaces: {collection_id!r}. "
-                "Use hyphens as word separators (e.g. 'My-Dataset-2024')."
+                "Use hyphens as word separators (e.g. 'My-Collection-2024')."
             )
-        self.dataset_id = dataset_id
         self.collection_id = collection_id
+        self.items_config = items_config
         self.workflow_id = workflow_id
         self.workflow_title = workflow_title
         self.license_type = license_type
         self.osc_project = osc_project
-        self.osc_project_title = osc_project_title
+        self.osc_project_title = osc_project_title or osc_project
         self.osc_project_url = osc_project_url
-        self.access_link = access_link or f"s3://deep-esdl-public/{dataset_id}"
+        self.collection_title = collection_title or collection_id
         self.documentation_link = documentation_link
         self.osc_status = osc_status
         self.osc_region = osc_region
-        self.osc_themes = [t.lower() for t in (osc_themes or [])]
+        if osc_themes is None:
+            osc_themes = []
+        assert isinstance(osc_themes, list)
+        self.osc_themes = [t.lower() for t in osc_themes]
         self.osc_missions = osc_missions or []
         self.cf_params = cf_params or {}
         self.visualisation_link = visualisation_link
         self.description = description
+        # PRR-specific project metadata (see PRR collection specification).
+        self.osc_initiative = osc_initiative or "earthcode"
+        self.osc_contract_number = osc_contract_number
+        self.osc_project_website = osc_project_website
+        self.osc_project_description = osc_project_description
+        self.thumbnail = thumbnail
+        self.thumbnail_media_type = thumbnail_media_type
+        self.sci_doi = sci_doi
+        self.sci_citation = sci_citation
+        self.coord_position = coord_position
+        self.access_link = access_link
         self.logger = logging.getLogger(__name__)
-        self.dataset = open_dataset(dataset_id=dataset_id, logger=self.logger)
-        self.variables_metadata = self.get_variables_metadata()
 
-    def _get_spatial_extent(self) -> SpatialExtent:
-        """Extract spatial extent from the dataset."""
-        if {"lon", "lat"}.issubset(self.dataset.coords):
-            # For regular gridding
-            lon_min, lon_max = (
-                float(self.dataset.lon.min()),
-                float(self.dataset.lon.max()),
+    def _get_spatial_extent(
+        self,
+        dataset: xr.Dataset,
+        coord_position: Literal["left", "center", "right"] = "center",
+    ) -> SpatialExtent:
+        """Extract the spatial extent and return it in EPSG:4326.
+
+        Args:
+            dataset: Input dataset.
+            coord_position: Position of the coordinates within each grid cell.
+                ``"center"`` assumes coordinates represent cell centers,
+                ``"left"`` assumes they represent the left/bottom edge, and
+                ``"right"`` assumes they represent the right/top edge.
+        """
+        if coord_position not in {"left", "center", "right"}:
+            raise ValueError(
+                f"Invalid coord_position: {coord_position!r}. "
+                "Must be 'left', 'center', or 'right'."
             )
-            lat_min, lat_max = (
-                float(self.dataset.lat.min()),
-                float(self.dataset.lat.max()),
-            )
-            return SpatialExtent([[lon_min, lat_min, lon_max, lat_max]])
-        elif {"longitude", "latitude"}.issubset(self.dataset.coords):
-            # For regular gridding with 'longitude' and 'latitude'
-            lon_min, lon_max = (
-                float(self.dataset.longitude.min()),
-                float(self.dataset.longitude.max()),
-            )
-            lat_min, lat_max = (
-                float(self.dataset.latitude.min()),
-                float(self.dataset.latitude.max()),
-            )
-            return SpatialExtent([[lon_min, lat_min, lon_max, lat_max]])
-        elif {"x", "y"}.issubset(self.dataset.coords):
-            # For irregular gridding
-            x_min, x_max = (float(self.dataset.x.min()), float(self.dataset.x.max()))
-            y_min, y_max = (float(self.dataset.y.min()), float(self.dataset.y.max()))
-            return SpatialExtent([[x_min, y_min, x_max, y_max]])
+
+        if {"lon", "lat"}.issubset(dataset.coords):
+            x_name, y_name = "lon", "lat"
+        elif {"longitude", "latitude"}.issubset(dataset.coords):
+            x_name, y_name = "longitude", "latitude"
+        elif {"x", "y"}.issubset(dataset.coords):
+            x_name, y_name = "x", "y"
         else:
             raise ValueError(
                 "Dataset does not have recognized spatial coordinates "
-                "('lon', 'lat' or 'x', 'y')."
+                "('lon', 'lat'), ('longitude', 'latitude'), or ('x', 'y')."
             )
 
-    def _get_temporal_extent(self) -> TemporalExtent:
+        x = dataset[x_name]
+        y = dataset[y_name]
+
+        x_min = float(x.min())
+        x_max = float(x.max())
+        y_min = float(y.min())
+        y_max = float(y.max())
+
+        # Calculate the grid resolution from adjacent coordinates.
+        x_res = float(abs(x.diff(x_name).median()))
+        y_res = float(abs(y.diff(y_name).median()))
+
+        if coord_position == "center":
+            x_min -= x_res / 2
+            x_max += x_res / 2
+            y_min -= y_res / 2
+            y_max += y_res / 2
+        elif coord_position == "left":
+            x_max += x_res
+            y_max += y_res
+        elif coord_position == "right":
+            x_min -= x_res
+            y_min -= y_res
+
+        crs = self._get_crs(dataset)
+
+        if crs.to_epsg() != 4326:
+            transformer = pyproj.Transformer.from_crs(crs, 4326, always_xy=True)
+            x_min, y_min, x_max, y_max = transformer.transform_bounds(
+                x_min, y_min, x_max, y_max
+            )
+
+        return SpatialExtent([[x_min, y_min, x_max, y_max]])
+
+    @staticmethod
+    def _get_temporal_extent(dataset: xr.Dataset) -> TemporalExtent:
         """Extract temporal extent from the dataset."""
-        if "time" in self.dataset.coords:
+        dataset = dataset
+        if "time" in dataset.coords:
             try:
                 # Convert the time bounds to datetime objects
-                time_min = pd.to_datetime(
-                    self.dataset.time.min().values
-                ).to_pydatetime()
-                time_max = pd.to_datetime(
-                    self.dataset.time.max().values
-                ).to_pydatetime()
+                time_min = pd.to_datetime(dataset.time.min().values).to_pydatetime()
+                time_max = pd.to_datetime(dataset.time.max().values).to_pydatetime()
                 return TemporalExtent([[time_min, time_max]])
             except Exception as e:
                 raise ValueError(f"Failed to parse temporal extent: {e}")
@@ -142,11 +263,87 @@ class OscDatasetStacGenerator:
             return name.replace(" ", "-").replace("_", "-").lower()
         return None
 
-    def _get_general_metadata(self) -> dict:
+    def _get_prr_collection_url(self) -> str:
+        """Return the PRR STAC API URL of the collection, checking that it exists.
+
+        Raises:
+            ValueError: If the collection cannot be fetched from PRR.
+        """
+        collection_url = f"{PRR_STAC_API_ROOT}/collections/{self.collection_id}"
+        self.logger.info(f"Checking PRR collection {collection_url}")
+        try:
+            response = requests.get(collection_url, timeout=30)
+            response.raise_for_status()
+        except requests.RequestException as e:
+            raise ValueError(
+                f"PRR collection {collection_url} not found: {e}. Ingest the "
+                "dataset into PRR first, or set 'stac_catalog_s3_root' in the "
+                "dataset config to publish a STAC catalog to S3 instead."
+            ) from e
+        return collection_url
+
+    def _resolve_access_link(self, item_config: ItemConfig) -> str:
+        """Return the absolute URL of the Zarr store for the OSC item.
+
+        Uses ``access_link`` if given, otherwise reads the ``zarr-data`` asset
+        href of the matching item from the PRR STAC API. PRR stores that href
+        relative to its server (e.g. ``/d/{collection}/{date}/{item}/x.zarr``),
+        so it is resolved against the item URL.
+        """
+        if self.access_link:
+            return self.access_link.rstrip("/")
+
+        item_url = (
+            f"{PRR_STAC_API_ROOT}/collections/{self.collection_id}"
+            f"/items/{item_config.item_id}"
+        )
+        self.logger.info(f"Looking up Zarr access link from PRR item {item_url}")
+        try:
+            response = requests.get(item_url, timeout=30)
+            response.raise_for_status()
+            href = response.json()["assets"]["zarr-data"]["href"]
+        except (requests.RequestException, ValueError, KeyError) as e:
+            raise ValueError(
+                f"Could not resolve the Zarr access link from the PRR item "
+                f"{item_url}: {e}. Ingest the dataset into PRR first, or set "
+                "'access_link' in the dataset config."
+            ) from e
+        return urljoin(item_url, href).rstrip("/")
+
+    @staticmethod
+    def _union_spatial_extent(items: list[Item]) -> SpatialExtent:
+        """Merge multiple dataset spatial extents into a single bounding box."""
+        bboxes = [item.bbox for item in items]
+        return SpatialExtent(
+            [
+                [
+                    min(bbox[0] for bbox in bboxes),
+                    min(bbox[1] for bbox in bboxes),
+                    max(bbox[2] for bbox in bboxes),
+                    max(bbox[3] for bbox in bboxes),
+                ]
+            ]
+        )
+
+    @staticmethod
+    def _union_temporal_extent(items: list[Item]) -> TemporalExtent:
+        """Merge multiple dataset temporal extents into a single interval."""
+        intervals = np.array(
+            [
+                [
+                    datetime.fromisoformat(item.properties["start_datetime"]),
+                    datetime.fromisoformat(item.properties["end_datetime"]),
+                ]
+                for item in items
+            ]
+        )
+        return TemporalExtent([[min(intervals[:, 0]), max(intervals[:, 1])]])
+
+    def _get_general_metadata(self, dataset: xr.Dataset) -> dict:
         return {
             "description": (
                 self.description
-                or self.dataset.attrs.get("description")
+                or dataset.attrs.get("description")
                 or "No description available."
             )
         }
@@ -154,8 +351,10 @@ class OscDatasetStacGenerator:
     def extract_metadata_for_variable(self, variable_data) -> dict:
         """Extract metadata for a single variable."""
         long_name = variable_data.attrs.get("long_name")
-        standard_name = variable_data.attrs.get("standard_name")
-        variable_id = standard_name or variable_data.name
+        standard_name = variable_data.attrs.get("standard_name", "unknown")
+        variable_id = (
+            variable_data.name if standard_name == "unknown" else standard_name
+        )
         description = variable_data.attrs.get("description", long_name)
         gcmd_keyword_url = variable_data.attrs.get("gcmd_keyword_url")
         return {
@@ -164,19 +363,19 @@ class OscDatasetStacGenerator:
             "gcmd_keyword_url": gcmd_keyword_url,
         }
 
-    def get_variable_ids(self) -> list[str]:
+    def get_variable_ids(self, dataset: xr.Dataset) -> list[str]:
         """Get variable IDs for all variables in the dataset."""
-        variable_ids = list(self.variables_metadata.keys())
+        variable_ids = list(self.get_variables_metadata(dataset).keys())
         #  Remove 'crs' and 'spatial_ref' from the list if they exist, note that
         #  spatial_ref will be normalized to spatial-ref in variable_ids and skipped.
         return [
             var_id for var_id in variable_ids if var_id not in ["crs", "spatial-ref"]
         ]
 
-    def get_variables_metadata(self) -> dict[str, dict]:
+    def get_variables_metadata(self, dataset: xr.Dataset) -> dict[str, dict]:
         """Extract metadata for all variables in the dataset."""
         variables_metadata = {}
-        for var_name, variable in self.dataset.data_vars.items():
+        for variable in dataset.data_vars.values():
             var_metadata = self.extract_metadata_for_variable(variable)
             variables_metadata[var_metadata.get("variable_id")] = var_metadata
         return variables_metadata
@@ -415,7 +614,9 @@ class OscDatasetStacGenerator:
                 CONTACTS_SCHEMA_URI,
             ],
             "title": self.format_string(self.osc_project_title or self.osc_project),
-            "description": self.format_string(self.osc_project_title or self.osc_project),
+            "description": self.format_string(
+                self.osc_project_title or self.osc_project
+            ),
             "keywords": [],
             "license": "various",
             "extent": {
@@ -472,7 +673,7 @@ class OscDatasetStacGenerator:
             )
         return data
 
-    def update_existing_variable_catalog(self, var_file_path, var_id) -> dict:
+    def update_existing_variable_catalog(self, var_file_path) -> dict:
         """Append child and theme links to an existing variable catalog."""
         with open(var_file_path, encoding="utf-8") as f:
             data = json.load(f)
@@ -506,7 +707,7 @@ class OscDatasetStacGenerator:
         Example:
             s3://my-bucket/path/to/file → https://my-bucket.s3.amazonaws.com/path/to/file
         """
-        without_scheme = s3_url[len("s3://"):]
+        without_scheme = s3_url[len("s3://") :]
         bucket, _, key = without_scheme.partition("/")
         return f"https://{bucket}.s3.amazonaws.com/{key}"
 
@@ -519,40 +720,50 @@ class OscDatasetStacGenerator:
 
     @staticmethod
     def build_theme(osc_themes: list[str]) -> Theme:
-        """Convert each string into a ThemeConcept
-        """
+        """Convert each string into a ThemeConcept"""
         concepts = [ThemeConcept(id=theme_str) for theme_str in osc_themes]
         return Theme(concepts=concepts, scheme=OSC_THEME_SCHEME)
 
-    def build_zarr_stac_item(self, stac_catalog_s3_root: str) -> Item:
+    def build_zarr_stac_item(
+        self,
+        item_config: ItemConfig,
+        stac_catalog_s3_root: str,
+    ) -> Item:
         """Build a single STAC Item representing the entire Zarr store.
 
         One item covers the full spatiotemporal extent of the dataset.
         Assets point to the Zarr store and its consolidated metadata.
 
         Args:
+            item_config: object containing `dataset_id` and `item_id`
             stac_catalog_s3_root: S3 root URL where the STAC catalog will be hosted
                 (e.g. ``s3://my-bucket/stac/``). Used to build self/root/parent hrefs.
 
         Returns:
             A :class:`pystac.Item` ready to be serialised to S3.
         """
-        self.logger.info(f"Building STAC Item for collection '{self.collection_id}'.")
-        spatial_extent = self._get_spatial_extent()
-        temporal_extent = self._get_temporal_extent()
-        general_metadata = self._get_general_metadata()
+        self.logger.info(
+            f"Building STAC Item {item_config.item_id} "
+            f"for collection '{self.collection_id}'."
+        )
+        dataset = open_dataset(item_config.dataset_id, logger=self.logger)
+        spatial_extent = self._get_spatial_extent(dataset, self.coord_position)
+        temporal_extent = self._get_temporal_extent(dataset)
+        general_metadata = self._get_general_metadata(dataset)
 
         bbox = spatial_extent.bboxes[0]  # [lon_min, lat_min, lon_max, lat_max]
         lon_min, lat_min, lon_max, lat_max = bbox
         geometry = {
             "type": "Polygon",
-            "coordinates": [[
-                [lon_min, lat_min],
-                [lon_max, lat_min],
-                [lon_max, lat_max],
-                [lon_min, lat_max],
-                [lon_min, lat_min],
-            ]],
+            "coordinates": [
+                [
+                    [lon_min, lat_min],
+                    [lon_max, lat_min],
+                    [lon_max, lat_max],
+                    [lon_min, lat_max],
+                    [lon_min, lat_min],
+                ]
+            ],
         }
 
         start_dt, end_dt = temporal_extent.intervals[0]
@@ -565,18 +776,19 @@ class OscDatasetStacGenerator:
         now_iso = datetime.now(timezone.utc).isoformat()
         root = stac_catalog_s3_root.rstrip("/")
         catalog_href = f"{root}/catalog.json"
-        item_href = f"{root}/{self.collection_id}/item.json"
+        item_href = f"{root}/{self.collection_id}/items/{item_config.item_id}.json"
         osc_collection_href = (
             "https://esa-earthcode.github.io/open-science-catalog-metadata"
             f"/products/{self.collection_id}/collection.json"
         )
 
         item = Item(
-            id=self.collection_id,
+            id=item_config.item_id,
             geometry=geometry,
             bbox=bbox,
             datetime=None,
             properties={
+                "title": self.format_string(item_config.item_id),
                 "start_datetime": start_dt.isoformat() if start_dt else None,
                 "end_datetime": end_dt.isoformat() if end_dt else None,
                 "description": general_metadata.get("description", ""),
@@ -586,26 +798,41 @@ class OscDatasetStacGenerator:
         )
         item.collection_id = self.collection_id
         item.set_self_href(item_href)
-        item.add_link(Link(rel="root", target=catalog_href, media_type="application/json"))
-        item.add_link(Link(rel="parent", target=catalog_href, media_type="application/json"))
-        item.add_link(Link(
-            rel="collection",
-            target=osc_collection_href,
-            media_type="application/json",
-            title=self.collection_id,
-        ))
-        item.add_asset("zarr-data", Asset(
-            href=self.access_link,
-            media_type=ZARR_MEDIA_TYPE,
-            title="Zarr Data Store",
-            roles=["data"],
-        ))
-        item.add_asset("zarr-consolidated-metadata", Asset(
-            href=f"{self.access_link}/.zmetadata",
-            media_type="application/json",
-            title="Consolidated Zarr Metadata",
-            roles=["metadata"],
-        ))
+        item.add_link(
+            Link(rel="root", target=catalog_href, media_type="application/json")
+        )
+        item.add_link(
+            Link(rel="parent", target=catalog_href, media_type="application/json")
+        )
+        item.add_link(
+            Link(
+                rel="collection",
+                target=osc_collection_href,
+                media_type="application/json",
+                title=self.collection_id,
+            )
+        )
+        access_link = self._resolve_access_link(item_config)
+        item.add_asset(
+            "zarr-data",
+            Asset(
+                href=access_link,
+                media_type=ZARR_MEDIA_TYPE,
+                title="Zarr Data Store",
+                roles=["data"],
+                extra_fields={"file:size": dataset.attrs["size"]},
+            ),
+        )
+        item.add_asset(
+            "zarr-consolidated-metadata",
+            Asset(
+                href=f"{access_link}/.zmetadata",
+                media_type="application/json",
+                title="Consolidated Zarr Metadata",
+                roles=["metadata"],
+                extra_fields={"file:size": dataset.attrs["metadata_size"]},
+            ),
+        )
         self.logger.info(f"STAC Item built: {item_href}")
         return item
 
@@ -620,7 +847,11 @@ class OscDatasetStacGenerator:
             {stac_catalog_s3_root}/
             ├── catalog.json                   # STAC Catalog (root)
             └── {collection_id}/
-                └── item.json                  # STAC Item (whole Zarr)
+                └── items/
+                    └── {item_id}.json         # STAC Item (whole Zarr)
+
+        The item's assets point at the Zarr store served by PRR (see
+        :meth:`_resolve_access_link`).
 
         Args:
             stac_catalog_s3_root: S3 root URL (e.g. ``s3://my-bucket/stac/``).
@@ -632,42 +863,486 @@ class OscDatasetStacGenerator:
             f"Building STAC Catalog file dict for collection '{self.collection_id}' "
             f"at root '{stac_catalog_s3_root}'."
         )
+
         root = stac_catalog_s3_root.rstrip("/")
         catalog_href = f"{root}/catalog.json"
-
-        item = self.build_zarr_stac_item(stac_catalog_s3_root)
-
         catalog = Catalog(
             id=f"{self.collection_id}-stac-catalog",
             description=f"STAC Catalog for {self.collection_id}",
         )
         catalog.set_self_href(catalog_href)
-        catalog.add_link(Link(rel="root", target=catalog_href, media_type="application/json"))
-        catalog.add_link(Link(
-            rel="item",
-            target=f"./{self.collection_id}/item.json",
-            media_type="application/json",
-            title=self.collection_id,
-        ))
+        catalog.add_link(
+            Link(rel="root", target=catalog_href, media_type="application/json")
+        )
 
-        item_href = f"{root}/{self.collection_id}/item.json"
+        item_config = self.items_config[0]
+        item = self.build_zarr_stac_item(item_config, stac_catalog_s3_root)
+        catalog.add_link(
+            Link(
+                rel="item",
+                target=f"./{self.collection_id}/items/{item_config.item_id}.json",
+                media_type="application/json",
+                title=item_config.item_id,
+            )
+        )
+        item_href = item.get_self_href()
+
         self.logger.info(f"STAC Catalog file dict ready: {catalog_href}, {item_href}")
         return {
             catalog_href: catalog.to_dict(transform_hrefs=False),
             item_href: item.to_dict(transform_hrefs=False),
         }
 
-    def build_dataset_stac_collection(self, mode: str, stac_catalog_s3_root: str | None = None) -> Collection:
+    # --------------------------------------------------------------------- #
+    # PRR (Project Results Repository) style output                         #
+    #                                                                       #
+    # A self-contained ``Collection -> Item -> Assets`` tree that mirrors   #
+    # the ESA EarthCODE PRR tutorial. Emitted alongside (not replacing)     #
+    # the plain {collection_id}/items/{item_id}.json under ``{root}/prr/``. #
+    # --------------------------------------------------------------------- #
+
+    @staticmethod
+    def _get_crs(dataset: xr.Dataset) -> pyproj.CRS:
+        """Best-effort EPSG code for the dataset, defaulting to 4326.
+
+        Reads an ``spatial_epsg``/``epsg`` attribute from a ``crs`` or
+        ``spatial_ref`` variable when present; otherwise assumes geographic
+        WGS 84 (EPSG:4326).
+        """
+        for var_name in ("spatial_ref", "crs"):
+            if var_name in dataset.variables:
+                attrs = dataset[var_name].attrs
+                try:
+                    return pyproj.CRS.from_cf(attrs)
+                except pyproj.exceptions.CRSError:
+                    for key in ("spatial_epsg", "epsg", "EPSG"):
+                        if key in attrs:
+                            try:
+                                return pyproj.CRS.from_epsg(attrs[key])
+                            except (TypeError, ValueError):
+                                pass
+        return pyproj.CRS.from_epsg(4326)
+
+    def _get_cube_dimensions(
+        self,
+        dataset: xr.Dataset,
+        coord_position: Literal["left", "center", "right"] = "center",
+    ) -> dict[str, dict]:
+        """Build the ``cube:dimensions`` object from the dataset coordinates.
+
+        Follows the datacube STAC extension: horizontal spatial dimensions are
+        classified by axis (x/y), the ``time`` coordinate becomes a temporal
+        dimension, and any remaining index coordinate is emitted as an
+        additional dimension.
+
+        Args:
+            dataset: Dataset from which to extract the cube dimensions.
+            coord_position: Position of spatial coordinates within each grid cell.
+                ``"center"`` assumes cell-center coordinates,
+                ``"left"`` assumes left/bottom edge coordinates, and
+                ``"right"`` assumes right/top edge coordinates.
+        """
+        if coord_position not in {"left", "center", "right"}:
+            raise ValueError(
+                f"Invalid coord_position: {coord_position!r}. "
+                "Must be 'left', 'center', or 'right'."
+            )
+
+        crs = self._get_crs(dataset)
+        x_names = {"lon", "longitude", "x"}
+        y_names = {"lat", "latitude", "y"}
+        dimensions: dict[str, dict] = {}
+
+        for name, coord in dataset.coords.items():
+            if name not in dataset.dims:
+                # Skip non-dimension coordinates (e.g. scalar or auxiliary coords).
+                continue
+
+            name = str(name)
+            lname = name.lower()
+
+            if lname in x_names or lname in y_names:
+                coord_min = float(coord.min())
+                coord_max = float(coord.max())
+
+                if coord_position == "center":
+                    resolution = float(abs(coord[:2].diff(name))[0])
+                    extent_min = coord_min - resolution / 2
+                    resolution = float(abs(coord[-2:].diff(name))[0])
+                    extent_max = coord_max + resolution / 2
+                elif coord_position == "left":
+                    extent_min = coord_min
+                    resolution = float(abs(coord[-2:].diff(name))[0])
+                    extent_max = coord_max + resolution
+                else:  # coord_position == "right"
+                    resolution = float(abs(coord[:2].diff(name))[0])
+                    extent_min = coord_min - resolution
+                    extent_max = coord_max
+
+                dimensions[name] = {
+                    "type": "spatial",
+                    "axis": "x" if lname in x_names else "y",
+                    "extent": [extent_min, extent_max],
+                    "reference_system": crs.to_epsg(),
+                }
+
+            elif lname == "time":
+                time_min = pd.to_datetime(coord.min().values).to_pydatetime()
+                time_max = pd.to_datetime(coord.max().values).to_pydatetime()
+                dimensions[name] = {
+                    "type": "temporal",
+                    "extent": [time_min.isoformat(), time_max.isoformat()],
+                }
+
+            else:
+                try:
+                    dimensions[name] = {
+                        "type": lname,
+                        "extent": [float(coord.min()), float(coord.max())],
+                    }
+                except (TypeError, ValueError):
+                    dimensions[name] = {
+                        "type": lname,
+                        "values": [str(v) for v in coord.values.tolist()],
+                    }
+
+        return dimensions
+
+    @staticmethod
+    def _get_cube_variables(dataset: xr.Dataset) -> dict[str, dict]:
+        """Build the ``cube:variables`` object from the dataset data variables."""
+        skip = {"crs", "spatial_ref"}
+        variables: dict[str, dict] = {}
+        for name, var in dataset.data_vars.items():
+            if name in skip:
+                continue
+            entry: dict = {
+                "type": "data",
+                "dimensions": [str(d) for d in var.dims],
+            }
+            unit = var.attrs.get("units")
+            if unit:
+                entry["unit"] = unit
+            description = var.attrs.get("long_name") or var.attrs.get("description")
+            if description:
+                entry["description"] = description
+            variables[str(name)] = entry
+        return variables
+
+    def build_prr_stac_item(self, item_config: ItemConfig) -> Item:
+        """Build the single datacube Item for the PRR collection.
+
+        One Item covers the full spatiotemporal extent of the Zarr store. It
+        carries the datacube extension (``cube:dimensions`` / ``cube:variables``)
+        and two assets pointing at the Zarr store. Structural links
+        (root/parent/collection/self) are left for :meth:`save_prr_collection`
+        to fill in via ``Collection.add_item`` + ``normalize_hrefs``.
+        """
+        self.logger.info(
+            f"Building PRR STAC Item '{item_config.item_id}' "
+            f"for collection '{self.collection_id}'."
+        )
+        dataset = open_dataset(item_config.dataset_id, logger=self.logger)
+        spatial_extent = self._get_spatial_extent(dataset, self.coord_position)
+        temporal_extent = self._get_temporal_extent(dataset)
+        general_metadata = self._get_general_metadata(dataset)
+
+        bbox = spatial_extent.bboxes[0]  # [lon_min, lat_min, lon_max, lat_max]
+        lon_min, lat_min, lon_max, lat_max = bbox
+        geometry = {
+            "type": "Polygon",
+            "coordinates": [
+                [
+                    [lon_min, lat_min],
+                    [lon_max, lat_min],
+                    [lon_max, lat_max],
+                    [lon_min, lat_max],
+                    [lon_min, lat_min],
+                ]
+            ],
+        }
+
+        start_dt, end_dt = temporal_extent.intervals[0]
+        if start_dt is not None and start_dt.tzinfo is None:
+            start_dt = start_dt.replace(tzinfo=timezone.utc)
+        if end_dt is not None and end_dt.tzinfo is None:
+            end_dt = end_dt.replace(tzinfo=timezone.utc)
+
+        now_iso = datetime.now(timezone.utc).isoformat()
+
+        item = Item(
+            id=item_config.item_id,
+            geometry=geometry,
+            bbox=bbox,
+            datetime=None,
+            properties={
+                "start_datetime": start_dt.isoformat() if start_dt else None,
+                "end_datetime": end_dt.isoformat() if end_dt else None,
+                "description": general_metadata.get("description", ""),
+                "created": now_iso,
+                "updated": now_iso,
+                "cube:dimensions": self._get_cube_dimensions(
+                    dataset, self.coord_position
+                ),
+                "cube:variables": self._get_cube_variables(dataset),
+            },
+        )
+        item.stac_extensions.append(FILE_SCHEMA_URI)
+        item.stac_extensions.append(DATACUBE_SCHEMA_URI)
+        # Asset hrefs are relative: PRR ingests the Zarr store next to the item.
+        access_link = f"./{item_config.dataset_id}"
+        item.add_asset(
+            "zarr-data",
+            Asset(
+                href=access_link,
+                media_type=ZARR_MEDIA_TYPE,
+                title="Zarr Data Store",
+                roles=["data"],
+                extra_fields={"file:size": dataset.attrs["size"]},
+            ),
+        )
+        item.add_asset(
+            "zarr-consolidated-metadata",
+            Asset(
+                href=f"{access_link}/.zmetadata",
+                media_type="application/json",
+                title="Consolidated Zarr Metadata",
+                roles=["metadata"],
+                extra_fields={"file:size": dataset.attrs["metadata_size"]},
+            ),
+        )
+
+        self.logger.info(
+            f"PRR STAC Item '{item_config.item_id}' built for '{self.collection_id}'."
+        )
+        return item
+
+    def build_prr_collection(self) -> Collection:
+        """Build the PRR parent Collection with its datacube Item(s) attached.
+
+        The Collection carries OSC extension fields (``osc:type``, ``osc:status``,
+        ``osc:variables``, ``osc:missions``, ``themes``), a ``cf:parameter`` list
+        and ``processing:datetime`` — aligning with the ESA EarthCODE PRR
+        endpoint (e.g. ``eoresults.esa.int``). The Item is added as a child, so
+        it produces a self-contained tree.
+        """
+        items = [
+            self.build_prr_stac_item(item_config) for item_config in self.items_config
+        ]
+        spatial_extent = self._union_spatial_extent(items)
+        temporal_extent = self._union_temporal_extent(items)
+        dataset_ref = open_dataset(
+            self.items_config[0].dataset_id, logger=self.logger, calc_filesizes=False
+        )
+        variables = self.get_variable_ids(dataset_ref)
+
+        collection = Collection(
+            id=self.collection_id,
+            description=self.description or "No description provided.",
+            extent=Extent(spatial=spatial_extent, temporal=temporal_extent),
+            license=self.license_type,
+            title=self.collection_title,
+        )
+        collection.stac_version = "1.0.0"
+
+        osc_extension = OscExtension.add_to(collection)
+        osc_extension.osc_project = self.osc_project
+        osc_extension.osc_type = "product"
+        osc_extension.osc_status = self.osc_status
+        osc_extension.osc_region = self.osc_region
+        osc_extension.osc_variables = variables
+        osc_extension.osc_missions = self.osc_missions
+        osc_extension.cf_parameter = self.cf_params or [{"name": self.collection_id}]
+
+        now_iso = datetime.now(timezone.utc).isoformat()
+        collection.extra_fields["created"] = now_iso
+        collection.extra_fields["updated"] = now_iso
+
+        # Processing extension — the PRR reference collection declares this and
+        # exposes 'processing:datetime' (the ingestion/generation timestamp).
+        if PROCESSING_SCHEMA_URI not in collection.stac_extensions:
+            collection.stac_extensions.append(PROCESSING_SCHEMA_URI)
+        collection.extra_fields["processing:datetime"] = now_iso
+
+        if self.osc_themes:
+            # Plain dicts (not Theme objects) so the collection serialises with a
+            # plain json encoder as well as pystac's own writer.
+            collection.extra_fields["themes"] = [
+                {
+                    "concepts": [{"id": theme} for theme in self.osc_themes],
+                    "scheme": OSC_THEME_SCHEME,
+                }
+            ]
+
+        # ---- Required PRR project-level metadata ----
+        # Scientific extension is REQUIRED in the PRR profile's extension list;
+        # 'sci:*' values themselves remain optional.
+        if SCIENTIFIC_SCHEMA_URI not in collection.stac_extensions:
+            collection.stac_extensions.append(SCIENTIFIC_SCHEMA_URI)
+
+        collection.extra_fields["osc:initiative"] = self.osc_initiative
+        project_website = (
+            self.osc_project_website or self.osc_project_url or self.documentation_link
+        )
+        if project_website:
+            collection.extra_fields["osc:project_website"] = project_website
+        project_description = (
+            self.osc_project_description
+            or self.description
+            or "No description provided."
+        )
+        if project_description:
+            collection.extra_fields["osc:project_description"] = project_description
+        if self.osc_contract_number:
+            collection.extra_fields["osc:contract-number"] = self.osc_contract_number
+
+        # Optional scientific metadata.
+        if self.sci_doi:
+            collection.extra_fields["sci:doi"] = self.sci_doi
+        if self.sci_citation:
+            collection.extra_fields["sci:citation"] = self.sci_citation
+
+        # Thumbnail asset (REQUIRED by the PRR spec: an asset named 'thumbnail'
+        # with the 'thumbnail' role).
+        if self.thumbnail:
+            collection.add_asset(
+                "thumbnail",
+                Asset(
+                    href=self.thumbnail,
+                    media_type=self._thumbnail_media_type(),
+                    title="Collection Thumbnail",
+                    roles=["thumbnail"],
+                ),
+            )
+
+        if self.documentation_link:
+            collection.add_link(
+                Link(rel="via", target=self.documentation_link, title="Documentation")
+            )
+        if self.visualisation_link:
+            collection.add_link(
+                Link(
+                    rel="visualisation",
+                    target=self.visualisation_link,
+                    title="Dataset visualisation",
+                )
+            )
+
+        try:
+            osc_extension.validate_extension()
+        except ValueError as e:
+            raise ValueError(f"OSC Extension validation failed: {e}")
+
+        self._warn_missing_prr_fields(collection, variables)
+        for item in items:
+            collection.add_item(item)
+        return collection
+
+    def _thumbnail_media_type(self) -> str:
+        """Return the thumbnail media type, guessed from the href suffix."""
+        if self.thumbnail_media_type:
+            return self.thumbnail_media_type
+        href = (self.thumbnail or "").lower()
+        if href.endswith((".jpg", ".jpeg")):
+            return "image/jpeg"
+        if href.endswith(".webp"):
+            return "image/webp"
+        return "image/png"
+
+    def _warn_missing_prr_fields(
+        self, collection: Collection, variables: list[str]
+    ) -> None:
+        """Log a warning for PRR-required fields that are absent, so the caller
+        knows the output is not yet spec-conformant."""
+        ef = collection.extra_fields
+        missing = []
+        if "thumbnail" not in collection.assets:
+            missing.append("thumbnail asset")
+        if not ef.get("osc:contract-number"):
+            missing.append("osc:contract-number")
+        if not ef.get("osc:project_website"):
+            missing.append("osc:project_website")
+        if not ef.get("osc:project_description"):
+            missing.append("osc:project_description")
+        if not ef.get("themes"):
+            missing.append("themes")
+        if not variables:
+            missing.append("osc:variables")
+        if not self.osc_missions:
+            missing.append("osc:missions")
+        if missing:
+            self.logger.warning(
+                "PRR collection is missing required field(s): %s. "
+                "The collection will not fully conform to the PRR specification "
+                "until these are provided in the dataset config.",
+                ", ".join(missing),
+            )
+
+    def save_prr_collection(self, output_dir: str) -> str:
+        """Write the PRR ``Collection -> Item -> Assets`` tree to a local folder.
+
+        Produces a self-contained STAC tree with relative structural links,
+        ready to inspect or submit to the ESA EarthCODE PRR endpoint::
+
+            {output_dir}/
+            └── {collection_id}/
+                └── collection.json            # STAC Collection (root)
+                └── items
+                    └── {item_id_0}.json       # datacube Item (whole Zarr)
+                    └── {item_id_1}.json       # datacube Item (whole Zarr)
+
+        Zarr asset hrefs are relative (``./{dataset_id}``): PRR ingests the
+        Zarr store next to the item.
+
+        Args:
+            output_dir: Local directory to write the collection tree into.
+
+        Returns:
+            The ``output_dir`` that was written.
+        """
+        self.logger.info(
+            f"Writing PRR STAC collection for '{self.collection_id}' to "
+            f"'{output_dir}'."
+        )
+        collection = self.build_prr_collection()
+
+        # Set absolute HREFs for writing.
+        collection_dir = f"{output_dir}/{self.collection_id}"
+        items_dir = f"{collection_dir}/items"
+        collection.set_self_href(f"{collection_dir}/collection.json")
+        for item in collection.get_items():
+            item.set_self_href(f"{items_dir}/{item.id}.json")
+
+        # Write the collection and its children.
+        collection.save(catalog_type=CatalogType.SELF_CONTAINED)
+        self.logger.info(f"PRR STAC collection written to '{output_dir}'.")
+        return output_dir
+
+    def build_dataset_stac_collection(
+        self, mode: str, stac_catalog_s3_root: str | None = None
+    ) -> Collection:
         """Build an OSC STAC Collection for the dataset.
+
+        Args:
+            mode: Publishing mode (``"dataset"``, ``"workflow"`` or ``"all"``).
+            stac_catalog_s3_root: S3 root of a deep-code STAC catalog to link. If
+                omitted, the collection links to the dataset's collection in PRR,
+                which must already exist.
 
         Returns:
             A pystac.Collection object.
         """
         try:
-            spatial_extent = self._get_spatial_extent()
-            temporal_extent = self._get_temporal_extent()
-            variables = self.get_variable_ids()
-            general_metadata = self._get_general_metadata()
+            assert len(self.items_config) == 1
+            dataset = open_dataset(
+                self.items_config[0].dataset_id,
+                logger=self.logger,
+                calc_filesizes=False,
+            )
+            spatial_extent = self._get_spatial_extent(dataset, self.coord_position)
+            temporal_extent = self._get_temporal_extent(dataset)
+            variables = self.get_variable_ids(dataset)
+            general_metadata = self._get_general_metadata(dataset)
         except ValueError as e:
             raise ValueError(f"Metadata extraction failed: {e}")
 
@@ -714,7 +1389,11 @@ class OscDatasetStacGenerator:
             )
         if self.visualisation_link:
             collection.add_link(
-                Link(rel="visualisation", target=self.visualisation_link, title="Dataset visualisation")
+                Link(
+                    rel="visualisation",
+                    target=self.visualisation_link,
+                    title="Dataset visualisation",
+                )
             )
         collection.add_link(
             Link(
@@ -767,7 +1446,7 @@ class OscDatasetStacGenerator:
             )
         )
 
-        if mode in "all":
+        if mode == "all":
             collection.add_link(
                 Link(
                     rel="related",
@@ -779,29 +1458,51 @@ class OscDatasetStacGenerator:
 
         collection.license = self.license_type
 
-        # Add links to the S3-hosted STAC catalog following the OSC convention:
+        # Link the data following the OSC convention:
         #   via   → STAC browser URL (human-browsable, HTTPS)
-        #   child → direct HTTPS URL to catalog.json (machine-readable)
-        # The s3:// URL is never used directly in the collection as it fails the
-        # products/children.json uri-reference format check.
-        if stac_catalog_s3_root:
+        #   child → STAC collection/catalog URL (machine-readable)
+        # By default the data lives in PRR. With stac_catalog_s3_root, link the
+        # S3-hosted catalog instead; the s3:// URL is never used directly as it
+        # fails the products/children.json uri-reference format check.
+        if not stac_catalog_s3_root:
+            prr_collection_url = self._get_prr_collection_url()
+            collection.add_link(
+                Link(
+                    rel="via",
+                    target=f"{PRR_STAC_BROWSER_ROOT}/collections/{self.collection_id}",
+                    title="Access",
+                )
+            )
+            collection.add_link(
+                Link(
+                    rel="child",
+                    target=prr_collection_url,
+                    media_type="application/json",
+                    title=self.collection_title,
+                )
+            )
+        else:
             catalog_s3 = stac_catalog_s3_root.rstrip("/") + "/catalog.json"
             catalog_https = self._s3_to_https(catalog_s3)
             stac_browser_href = (
                 "https://opensciencedata.esa.int/stac-browser/#/external/"
-                + catalog_https[len("https://"):]
+                + catalog_https[len("https://") :]
             )
-            collection.add_link(Link(
-                rel="via",
-                target=stac_browser_href,
-                title="Access",
-            ))
-            collection.add_link(Link(
-                rel="child",
-                target=catalog_https,
-                media_type="application/json",
-                title="Items",
-            ))
+            collection.add_link(
+                Link(
+                    rel="via",
+                    target=stac_browser_href,
+                    title="Access",
+                )
+            )
+            collection.add_link(
+                Link(
+                    rel="child",
+                    target=catalog_https,
+                    media_type="application/json",
+                    title="Items",
+                )
+            )
 
         # Validate OSC extension fields
         try:

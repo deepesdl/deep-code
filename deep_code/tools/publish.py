@@ -22,8 +22,13 @@ from deep_code.constants import (
     OSC_REPO_OWNER,
     WORKFLOW_BASE_CATALOG_SELF_HREF,
 )
-from deep_code.utils.dataset_stac_generator import OscDatasetStacGenerator
+from deep_code.utils.dataset_stac_generator import (
+    OscDatasetStacGenerator,
+    build_items_config,
+    open_dataset,
+)
 from deep_code.utils.github_automation import GitHubAutomation
+from deep_code.utils.helper import get_osc_status
 from deep_code.utils.ogc_api_record import (
     ExperimentAsOgcRecord,
     LinksBuilder,
@@ -160,6 +165,8 @@ class Publisher:
 
         # Values that may be set from configs
         self.collection_id: str | None = None
+        self.osc_project: str | None = None
+        self.osc_project_url: str | None = None
         self.workflow_title: str | None = None
         self.workflow_id: str | None = None
 
@@ -245,7 +252,7 @@ class Publisher:
                     / var_file_path
                 )
                 file_dict[var_file_path] = generator.update_existing_variable_catalog(
-                    full_path, var_id
+                    full_path
                 )
 
     def publish_dataset(
@@ -260,23 +267,31 @@ class Publisher:
             raise ValueError(
                 "No dataset config loaded. Provide dataset_config_path to publish dataset."
             )
-        dataset_id = self.dataset_config.get("dataset_id")
+        items_config = build_items_config(self.dataset_config)
+        if len(items_config) != 1:
+            raise ValueError(
+                "publish currently supports exactly one item configuration."
+            )
         self.collection_id = self.dataset_config.get("collection_id")
         documentation_link = self.dataset_config.get("documentation_link")
-        access_link = self.dataset_config.get("access_link")
-        dataset_status = self.dataset_config.get("dataset_status") or "ongoing"
+        osc_status = get_osc_status(self.dataset_config, logger)
         osc_region = self.dataset_config.get("osc_region")
         osc_themes = self.dataset_config.get("osc_themes")
         cf_params = self.dataset_config.get("cf_parameter")
         license_type = self.dataset_config.get("license_type")
         visualisation_link = self.dataset_config.get("visualisation_link")
-        osc_project = self.dataset_config.get("osc_project")
+        self.osc_project = self.dataset_config.get("osc_project")
         osc_project_title = self.dataset_config.get("osc_project_title")
-        osc_project_url = self.dataset_config.get("osc_project_url")
+        self.osc_project_url = self.dataset_config.get("osc_project_url")
         description = self.dataset_config.get("description")
+        access_link = self.dataset_config.get("access_link")
 
-        if not dataset_id or not self.collection_id:
-            raise ValueError("Dataset ID or Collection ID missing in the config.")
+        if not self.collection_id:
+            raise ValueError("collection_id missing in the config.")
+        if not self.osc_project:
+            raise ValueError("osc_project missing in the config.")
+        if not self.osc_project_url:
+            raise ValueError("osc_project missing in the config.")
 
         if not license_type:
             raise ValueError(
@@ -284,38 +299,34 @@ class Publisher:
                 "Provide an SPDX identifier (e.g. 'CC-BY-4.0', 'MIT', 'proprietary')."
             )
 
+        # Optional: without it, the collection links to the dataset in PRR.
         stac_catalog_s3_root = self.dataset_config.get("stac_catalog_s3_root")
-        if not stac_catalog_s3_root:
-            raise ValueError(
-                "stac_catalog_s3_root is required in the dataset config. "
-                "Provide the S3 root where the STAC catalog should be published "
-                "(e.g. 's3://my-bucket/stac/my-collection/')."
-            )
 
         logger.info("Generating STAC collection...")
 
         generator = OscDatasetStacGenerator(
-            dataset_id=dataset_id,
+            items_config=items_config,
             collection_id=self.collection_id,
             workflow_id=self.workflow_id,
             workflow_title=self.workflow_title,
             license_type=license_type,
             documentation_link=documentation_link,
-            access_link=access_link,
-            osc_status=dataset_status,
+            osc_status=osc_status,
             osc_region=osc_region,
             osc_themes=osc_themes,
             cf_params=cf_params,
             visualisation_link=visualisation_link,
-            **({"osc_project": osc_project} if osc_project else {}),
+            osc_project=self.osc_project,
             osc_project_title=osc_project_title,
-            osc_project_url=osc_project_url,
+            osc_project_url=self.osc_project_url,
             description=description,
+            access_link=access_link,
         )
         # Store so publish() can reuse it for zarr STAC catalog generation
         self._last_generator = generator
 
-        variable_ids = generator.get_variable_ids()
+        dataset = open_dataset(generator.items_config[0].dataset_id)
+        variable_ids = generator.get_variable_ids(dataset)
         ds_collection = generator.build_dataset_stac_collection(
             mode=mode, stac_catalog_s3_root=stac_catalog_s3_root
         )
@@ -352,7 +363,9 @@ class Publisher:
             file_dict[project_collection_path] = generator.build_project_collection()
             # Add child link in the projects base catalog
             self._update_and_add_to_file_dict(
-                file_dict, "projects/catalog.json", generator.update_project_base_catalog
+                file_dict,
+                "projects/catalog.json",
+                generator.update_project_base_catalog,
             )
         else:
             self._update_and_add_to_file_dict(
@@ -619,16 +632,20 @@ class Publisher:
             ds_files = self.publish_dataset(write_to_file=False, mode=mode)
             files.update(ds_files)
 
-            # Publish STAC catalog + item to S3 (stac_catalog_s3_root is mandatory).
+            # Publish STAC catalog + item to S3 only if requested; otherwise the
+            # OSC collection links to the dataset in PRR.
             stac_catalog_s3_root = self.dataset_config.get("stac_catalog_s3_root")
-            logger.info(f"Publishing STAC catalog to S3: {stac_catalog_s3_root}")
-            zarr_stac_files = self._last_generator.build_zarr_stac_catalog_file_dict(
-                stac_catalog_s3_root
-            )
-            self._write_stac_catalog_to_s3(
-                zarr_stac_files, self._get_stac_s3_storage_options()
-            )
-            logger.info("STAC catalog written to S3.")
+            if stac_catalog_s3_root:
+                logger.info(f"Publishing STAC catalog to S3: {stac_catalog_s3_root}")
+                zarr_stac_files = (
+                    self._last_generator.build_zarr_stac_catalog_file_dict(
+                        stac_catalog_s3_root
+                    )
+                )
+                self._write_stac_catalog_to_s3(
+                    zarr_stac_files, self._get_stac_s3_storage_options()
+                )
+                logger.info("STAC catalog written to S3.")
 
         if mode in ("workflow", "all"):
             wf_files = self.generate_workflow_experiment_records(

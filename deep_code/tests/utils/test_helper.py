@@ -10,7 +10,7 @@ from unittest.mock import MagicMock, call, patch
 import xarray
 import xarray as xr
 
-from deep_code.utils.helper import open_dataset, serialize
+from deep_code.utils.helper import get_osc_status, open_dataset, serialize
 
 
 def make_dummy_dataset():
@@ -176,3 +176,20 @@ class TestSerialize(unittest.TestCase):
     def test_unserializable_raises_type_error(self):
         with self.assertRaises(TypeError):
             serialize(42)
+
+
+class TestGetOscStatus(unittest.TestCase):
+    def test_osc_status(self):
+        self.assertEqual(get_osc_status({"osc_status": "ongoing"}), "ongoing")
+
+    def test_default(self):
+        self.assertEqual(get_osc_status({}), "completed")
+
+    def test_deprecated_dataset_status(self):
+        with self.assertLogs("deep_code.utils.helper", level="WARNING") as logs:
+            self.assertEqual(get_osc_status({"dataset_status": "planned"}), "planned")
+        self.assertIn("dataset_status", logs.output[0])
+
+    def test_osc_status_wins_over_dataset_status(self):
+        config = {"osc_status": "ongoing", "dataset_status": "planned"}
+        self.assertEqual(get_osc_status(config), "ongoing")

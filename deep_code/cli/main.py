@@ -8,18 +8,19 @@ import click
 
 from deep_code.cli.generate_config import generate_config
 from deep_code.cli.lint import lint_dataset
+from deep_code.cli.prr import generate_prr_collection_cmd
 from deep_code.cli.publish import publish
 
 
 @click.group()
 def main():
     """Deep Code CLI."""
-    pass
 
 
 main.add_command(publish)
 main.add_command(generate_config)
 main.add_command(lint_dataset)
+main.add_command(generate_prr_collection_cmd)
 
 if __name__ == "__main__":
     main()
