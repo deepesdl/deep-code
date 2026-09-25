@@ -28,6 +28,7 @@ from deep_code.utils.dataset_stac_generator import (
     open_dataset,
 )
 from deep_code.utils.github_automation import GitHubAutomation
+from deep_code.utils.helper import get_osc_status
 from deep_code.utils.ogc_api_record import (
     ExperimentAsOgcRecord,
     LinksBuilder,
@@ -288,7 +289,7 @@ class Publisher:
             )
         self.collection_id = self.dataset_config.get("collection_id")
         documentation_link = self.dataset_config.get("documentation_link")
-        osc_status = self.dataset_config.get("osc_status") or "completed"
+        osc_status = get_osc_status(self.dataset_config, logger)
         osc_region = self.dataset_config.get("osc_region")
         osc_themes = self.dataset_config.get("osc_themes")
         cf_params = self.dataset_config.get("cf_parameter")
@@ -298,6 +299,7 @@ class Publisher:
         osc_project_title = self.dataset_config.get("osc_project_title")
         self.osc_project_url = self.dataset_config.get("osc_project_url")
         description = self.dataset_config.get("description")
+        access_link = self.dataset_config.get("access_link")
 
         if not self.collection_id:
             raise ValueError("collection_id missing in the config.")
@@ -338,6 +340,7 @@ class Publisher:
             osc_project_title=osc_project_title,
             osc_project_url=self.osc_project_url,
             description=description,
+            access_link=access_link,
         )
         # Store so publish() can reuse it for zarr STAC catalog generation
         self._last_generator = generator

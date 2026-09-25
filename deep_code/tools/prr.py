@@ -17,6 +17,7 @@ import fsspec
 import yaml
 
 from deep_code.utils.dataset_stac_generator import ItemConfig, OscDatasetStacGenerator
+from deep_code.utils.helper import get_osc_status
 
 logger = logging.getLogger(__name__)
 
@@ -73,7 +74,7 @@ def generate_prr_collection(
         license_type=license_type,
         documentation_link=config.get("documentation_link"),
         collection_title=config.get("collection_title"),
-        osc_status=config.get("osc_status") or "completed",
+        osc_status=get_osc_status(config, logger),
         osc_region=config.get("osc_region") or "Global",
         osc_themes=config.get("osc_themes"),
         osc_missions=config.get("osc_missions"),

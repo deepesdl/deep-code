@@ -8,9 +8,10 @@ import os
 import tempfile
 import unittest
 from datetime import datetime
-from unittest.mock import patch
+from unittest.mock import MagicMock, patch
 
 import numpy as np
+import requests
 from pystac import Catalog, Collection, Item
 from xarray import DataArray, Dataset
 
@@ -79,6 +80,18 @@ class TestOSCProductSTACGenerator(unittest.TestCase):
         )
         self.mock_open_dataset = self.open_dataset_patcher.start()
         self.addCleanup(self.open_dataset_patcher.stop)
+
+        # PRR STAC API lookup of the Zarr access link for the OSC item.
+        prr_response = MagicMock()
+        prr_response.json.return_value = {
+            "assets": {"zarr-data": {"href": "/d/mock-collection-id/mock.zarr"}}
+        }
+        self.requests_get_patcher = patch(
+            "deep_code.utils.dataset_stac_generator.requests.get",
+            return_value=prr_response,
+        )
+        self.mock_requests_get = self.requests_get_patcher.start()
+        self.addCleanup(self.requests_get_patcher.stop)
 
         self.generator = OscDatasetStacGenerator(
             collection_id="mock-collection-id",
@@ -473,21 +486,29 @@ class TestOSCProductSTACGenerator(unittest.TestCase):
         self.assertIn("zarr-consolidated-metadata", item.assets)
 
         zarr_asset = item.assets["zarr-data"]
-        self.assertEqual(zarr_asset.href, "./mock-dataset-id")
+        self.assertEqual(
+            zarr_asset.href, "https://eoresults.esa.int/d/mock-collection-id/mock.zarr"
+        )
         self.assertEqual(zarr_asset.media_type, ZARR_MEDIA_TYPE)
         self.assertIn("data", zarr_asset.roles)
 
         meta_asset = item.assets["zarr-consolidated-metadata"]
         self.assertEqual(
             meta_asset.href,
-            "./mock-dataset-id/.zmetadata",
+            "https://eoresults.esa.int/d/mock-collection-id/mock.zarr/.zmetadata",
         )
         self.assertIn("metadata", meta_asset.roles)
+        self.mock_requests_get.assert_called_once_with(
+            "https://eoresults.esa.int/stac/collections/mock-collection-id"
+            "/items/mock-collection-id",
+            timeout=30,
+        )
 
-        # Self href
+        # Self href matches the path the item is written to
         self.assertEqual(
             item.self_href,
-            "s3://test-bucket/stac/my-collection/mock-collection-id/item.json",
+            "s3://test-bucket/stac/my-collection/"
+            "mock-collection-id/items/mock-collection-id.json",
         )
 
         # Required link rels
@@ -507,6 +528,37 @@ class TestOSCProductSTACGenerator(unittest.TestCase):
         coll_link = next(lnk for lnk in item.links if lnk.rel == "collection")
         self.assertIn("open-science-catalog-metadata", coll_link.target)
         self.assertIn("mock-collection-id", coll_link.target)
+
+    def test_build_zarr_stac_item_explicit_access_link(self):
+        """An explicit access_link is used as-is and skips the PRR lookup."""
+        self.generator.access_link = "s3://my-bucket/my-cube.zarr/"
+        item = self.generator.build_zarr_stac_item(
+            self.generator.items_config[0], "s3://bucket/stac/"
+        )
+        self.assertEqual(item.assets["zarr-data"].href, "s3://my-bucket/my-cube.zarr")
+        self.assertEqual(
+            item.assets["zarr-consolidated-metadata"].href,
+            "s3://my-bucket/my-cube.zarr/.zmetadata",
+        )
+        self.mock_requests_get.assert_not_called()
+
+    def test_build_zarr_stac_item_prr_lookup_fails(self):
+        """A missing PRR item raises with a hint to set access_link."""
+        self.mock_requests_get.return_value.raise_for_status.side_effect = (
+            requests.HTTPError("404 Not Found")
+        )
+        with self.assertRaisesRegex(ValueError, "access_link"):
+            self.generator.build_zarr_stac_item(
+                self.generator.items_config[0], "s3://bucket/stac/"
+            )
+
+    def test_build_zarr_stac_item_prr_lookup_missing_asset(self):
+        """A PRR item without a zarr-data asset raises with a hint."""
+        self.mock_requests_get.return_value.json.return_value = {"assets": {}}
+        with self.assertRaisesRegex(ValueError, "access_link"):
+            self.generator.build_zarr_stac_item(
+                self.generator.items_config[0], "s3://bucket/stac/"
+            )
 
     def test_build_zarr_stac_item_trailing_slash_normalised(self):
         """Trailing slash on s3_root should not produce double slashes."""
@@ -550,6 +602,12 @@ class TestOSCProductSTACGenerator(unittest.TestCase):
         self.assertIn("assets", item_dict)
         self.assertIn("zarr-data", item_dict["assets"])
         self.assertIn("zarr-consolidated-metadata", item_dict["assets"])
+        self_link = next(lnk for lnk in item_dict["links"] if lnk["rel"] == "self")
+        self.assertEqual(
+            self_link["href"],
+            "s3://test-bucket/stac/my-collection/"
+            "mock-collection-id/items/mock-collection-id.json",
+        )
 
     @patch("deep_code.utils.dataset_stac_generator.open_dataset")
     def test_build_zarr_stac_catalog_file_dict_multiple_items(self, mock_open_ds):

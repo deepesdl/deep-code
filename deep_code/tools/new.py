@@ -83,6 +83,7 @@ class TemplateGenerator:
             "description": "[OPTIONAL: human-readable description of the dataset. Overrides the description attribute in the Zarr store if set]",
             "documentation_link": "[OPTIONAL: link to documentation, publication, or handbook]",
             "visualisation_link": "[OPTIONAL: URL to a visualisation of the dataset (e.g. xcube Viewer, WMS)]",
+            "access_link": "[OPTIONAL: absolute URL of the Zarr store — defaults to the Zarr asset of the dataset's PRR item]",
             "osc_project_title": "[OPTIONAL: display title of the OSC project as it appears in the catalog (e.g. DeepESDL). Defaults to a formatted version of osc_project if omitted]",
             "collection_title": "[OPTIONAL: title present in the collection and in the STAC browser]",
             "coord_position": "[OPTIONAL: Position of the coordinates within each grid cell. 'center' assumes coordinates represent cell centers, 'left' assumes they represent the left/bottom edge, and 'right' assumes they represent the right/top edge.]",

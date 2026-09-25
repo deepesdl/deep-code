@@ -21,6 +21,21 @@ def serialize(obj):
     raise TypeError(f"Object of type {type(obj).__name__} is not JSON serializable")
 
 
+def get_osc_status(config: dict, logger: logging.Logger | None = None) -> str:
+    """Return ``osc_status`` from a dataset config, defaulting to ``"completed"``.
+
+    Falls back to the deprecated ``dataset_status`` key with a warning.
+    """
+    osc_status = config.get("osc_status")
+    if not osc_status and config.get("dataset_status"):
+        osc_status = config["dataset_status"]
+        (logger or logging.getLogger(__name__)).warning(
+            "'dataset_status' is deprecated; rename it to 'osc_status' "
+            "in the dataset config."
+        )
+    return osc_status or "completed"
+
+
 def open_dataset(
     dataset_id: str,
     root: str = "deep-esdl-public",

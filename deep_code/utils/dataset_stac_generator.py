@@ -8,10 +8,12 @@ import logging
 from dataclasses import dataclass
 from datetime import datetime, timezone
 from typing import Any, Literal
+from urllib.parse import urljoin
 
 import numpy as np
 import pandas as pd
 import pyproj
+import requests
 import xarray as xr
 from pystac import (
     Asset,
@@ -32,6 +34,7 @@ from deep_code.constants import (
     OSC_SCHEMA_URI,
     OSC_THEME_SCHEME,
     PROCESSING_SCHEMA_URI,
+    PRR_STAC_API_ROOT,
     SCIENTIFIC_SCHEMA_URI,
     THEMES_SCHEMA_URI,
     ZARR_MEDIA_TYPE,
@@ -66,6 +69,10 @@ class OscDatasetStacGenerator:
             ``"center"`` assumes coordinates represent cell centers,
             ``"left"`` assumes they represent the left/bottom edge, and
             ``"right"`` assumes they represent the right/top edge.
+        access_link: Absolute URL of the Zarr store, used as the asset href of
+            the S3-hosted OSC item. If omitted, the href is looked up from the
+            dataset's item in the PRR STAC API, so PRR ingestion must be done
+            before publishing to OSC.
     """
 
     def __init__(
@@ -96,6 +103,7 @@ class OscDatasetStacGenerator:
         sci_doi: str | None = None,
         sci_citation: str | None = None,
         coord_position: Literal["left", "center", "right"] = "center",
+        access_link: str | None = None,
     ):
         if " " in collection_id:
             raise ValueError(
@@ -132,6 +140,7 @@ class OscDatasetStacGenerator:
         self.sci_doi = sci_doi
         self.sci_citation = sci_citation
         self.coord_position = coord_position
+        self.access_link = access_link
         self.logger = logging.getLogger(__name__)
 
     def _get_spatial_extent(
@@ -220,6 +229,34 @@ class OscDatasetStacGenerator:
         if name:
             return name.replace(" ", "-").replace("_", "-").lower()
         return None
+
+    def _resolve_access_link(self, item_config: ItemConfig) -> str:
+        """Return the absolute URL of the Zarr store for the OSC item.
+
+        Uses ``access_link`` if given, otherwise reads the ``zarr-data`` asset
+        href of the matching item from the PRR STAC API. PRR stores that href
+        relative to its server (e.g. ``/d/{collection}/{date}/{item}/x.zarr``),
+        so it is resolved against the item URL.
+        """
+        if self.access_link:
+            return self.access_link.rstrip("/")
+
+        item_url = (
+            f"{PRR_STAC_API_ROOT}/collections/{self.collection_id}"
+            f"/items/{item_config.item_id}"
+        )
+        self.logger.info(f"Looking up Zarr access link from PRR item {item_url}")
+        try:
+            response = requests.get(item_url, timeout=30)
+            response.raise_for_status()
+            href = response.json()["assets"]["zarr-data"]["href"]
+        except (requests.RequestException, ValueError, KeyError) as e:
+            raise ValueError(
+                f"Could not resolve the Zarr access link from the PRR item "
+                f"{item_url}: {e}. Ingest the dataset into PRR first, or set "
+                "'access_link' in the dataset config."
+            ) from e
+        return urljoin(item_url, href).rstrip("/")
 
     @staticmethod
     def _union_spatial_extent(items: list[Item]) -> SpatialExtent:
@@ -687,7 +724,7 @@ class OscDatasetStacGenerator:
         now_iso = datetime.now(timezone.utc).isoformat()
         root = stac_catalog_s3_root.rstrip("/")
         catalog_href = f"{root}/catalog.json"
-        item_href = f"{root}/{self.collection_id}/item.json"
+        item_href = f"{root}/{self.collection_id}/items/{item_config.item_id}.json"
         osc_collection_href = (
             "https://esa-earthcode.github.io/open-science-catalog-metadata"
             f"/products/{self.collection_id}/collection.json"
@@ -723,7 +760,7 @@ class OscDatasetStacGenerator:
                 title=self.collection_id,
             )
         )
-        access_link = f"./{item_config.dataset_id}"
+        access_link = self._resolve_access_link(item_config)
         item.add_asset(
             "zarr-data",
             Asset(
@@ -758,7 +795,11 @@ class OscDatasetStacGenerator:
             {stac_catalog_s3_root}/
             ├── catalog.json                   # STAC Catalog (root)
             └── {collection_id}/
-                └── item.json       # STAC Item (whole Zarr)
+                └── items/
+                    └── {item_id}.json         # STAC Item (whole Zarr)
+
+        The item's assets point at the Zarr store served by PRR (see
+        :meth:`_resolve_access_link`).
 
         Args:
             stac_catalog_s3_root: S3 root URL (e.g. ``s3://my-bucket/stac/``).
@@ -792,7 +833,7 @@ class OscDatasetStacGenerator:
                 title=item_config.item_id,
             )
         )
-        item_href = f"{root}/{self.collection_id}/items/{item_config.item_id}.json"
+        item_href = item.get_self_href()
 
         self.logger.info(f"STAC Catalog file dict ready: {catalog_href}, {item_href}")
         return {
@@ -996,8 +1037,7 @@ class OscDatasetStacGenerator:
         )
         item.stac_extensions.append(FILE_SCHEMA_URI)
         item.stac_extensions.append(DATACUBE_SCHEMA_URI)
-        # Asset hrefs stay absolute (the Zarr lives on S3); only the structural
-        # links become relative when the tree is normalised locally.
+        # Asset hrefs are relative: PRR ingests the Zarr store next to the item.
         access_link = f"./{item_config.dataset_id}"
         item.add_asset(
             "zarr-data",
@@ -1199,8 +1239,8 @@ class OscDatasetStacGenerator:
                     └── {item_id_0}.json       # datacube Item (whole Zarr)
                     └── {item_id_1}.json       # datacube Item (whole Zarr)
 
-        Zarr asset hrefs remain absolute (``s3://…``) since that is where the
-        data lives.
+        Zarr asset hrefs are relative (``./{dataset_id}``): PRR ingests the
+        Zarr store next to the item.
 
         Args:
             output_dir: Local directory to write the collection tree into.

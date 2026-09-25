@@ -85,7 +85,7 @@
 - Removed redundant `via` access link from the OSC STAC collection; access is already expressed via typed assets (`zarr-data`, `zarr-consolidated-metadata`) on the STAC item.
 - `osc_project` is now omitted from `OscDatasetStacGenerator` when not provided, preserving the callee's default instead of passing `None`.
 
-## Changes in 0.1.10 (in Development)
+## Changes in 0.2.0 (in Development)
 
 - Generated project collection now includes required STAC extensions (`osc`, `themes`, `contacts`) and OSC-mandatory fields (`osc:type`, `osc:status`, `themes`, `contacts`) to pass OSC catalog validation.
 - Added optional `osc_project_url` field to the dataset config; used as the `via` link in the project collection. Falls back to `documentation_link` if omitted; defaults to the existing DeepESDL project collection when neither is provided.
@@ -94,3 +94,7 @@
 - The PRR command produces a self-contained `Collection → Item → Assets` tree: the Item carries the `datacube` extension (`cube:dimensions` / `cube:variables` extracted from the Zarr) with `zarr-data` and `zarr-consolidated-metadata` assets, and the Collection declares the OSC, Scientific, Processing, Themes and CF extensions.
 - Added PRR-specific dataset config fields: `osc_initiative` (default `earthcode`), `osc_missions`, `osc_contract_number`, `osc_project_website`, `osc_project_description`, `thumbnail`, `thumbnail_media_type`, `sci_doi`, `sci_citation`, and `prr_output_dir`. Missing PRR-required fields produce a warning rather than a failure.
 - `generate-config` templates now document the PRR fields under a dedicated section.
+- The OSC STAC item's `zarr-data` and `zarr-consolidated-metadata` assets now point to the Zarr store served by PRR. The href is looked up from the dataset's item in the PRR STAC API (`https://eoresults.esa.int/stac/collections/{collection_id}/items/{item_id}`), so PRR ingestion must happen before OSC publishing; publishing fails with a descriptive error if the PRR item cannot be found. Previously the href was relative (`./{dataset_id}`) and resolved to a non-existent path next to the item on S3.
+- Added optional `access_link` field to the dataset config to set the Zarr store URL of the OSC STAC item explicitly, skipping the PRR lookup.
+- Fixed the OSC STAC item's `self` link to match the path it is written to (`{stac_catalog_s3_root}/{collection_id}/items/{item_id}.json` instead of `.../{collection_id}/item.json`).
+- Renamed the dataset config field `dataset_status` to `osc_status`, now defaulting to `"completed"` (used by both `publish` and `generate-prr-collection`). The old `dataset_status` key is still read as a fallback but logs a deprecation warning; rename it in existing dataset configs.
