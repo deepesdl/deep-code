@@ -174,6 +174,16 @@ class TestGeneratePrrCollection(unittest.TestCase):
             with self.assertRaisesRegex(ValueError, f"{field} is required"):
                 generate_prr_collection(config_path)
 
+    def test_items_config_entry_missing_dataset_id_raises(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            config_path = self._write_config(
+                tmp, items_config=[{"item_id": "tool-item"}]
+            )
+            with self.assertRaisesRegex(
+                ValueError, "dataset_id is required in items_config entry 0"
+            ):
+                generate_prr_collection(config_path)
+
     def test_missing_required_fields_raise(self):
         for field in (
             "collection_id",

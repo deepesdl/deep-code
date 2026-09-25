@@ -29,6 +29,7 @@ from deep_code.utils.dataset_stac_generator import (
     ItemConfig,
     OscDatasetStacGenerator,
     Theme,
+    build_items_config,
 )
 
 
@@ -1248,3 +1249,38 @@ class TestPRRCollection(unittest.TestCase):
             items = list(coll.get_items())
             self.assertEqual(len(items), 1)
             self.assertIn(DATACUBE_SCHEMA_URI, items[0].stac_extensions)
+
+
+class TestBuildItemsConfig(unittest.TestCase):
+    def test_valid(self):
+        items = build_items_config(
+            {"items_config": [{"dataset_id": "a.zarr", "item_id": "a"}]}
+        )
+        self.assertEqual(items, [ItemConfig(dataset_id="a.zarr", item_id="a")])
+
+    def test_missing_items_config(self):
+        with self.assertRaisesRegex(ValueError, "items_config is required"):
+            build_items_config({"dataset_id": "a.zarr"})
+
+    def test_missing_dataset_id(self):
+        with self.assertRaisesRegex(
+            ValueError, "dataset_id is required in items_config entry 1"
+        ):
+            build_items_config(
+                {
+                    "items_config": [
+                        {"dataset_id": "a.zarr", "item_id": "a"},
+                        {"item_id": "b"},
+                    ]
+                }
+            )
+
+    def test_missing_both_ids(self):
+        with self.assertRaisesRegex(
+            ValueError, "dataset_id and item_id are required in items_config entry 0"
+        ):
+            build_items_config({"items_config": [{}]})
+
+    def test_entry_not_a_mapping(self):
+        with self.assertRaisesRegex(ValueError, "entry 0 must be a mapping"):
+            build_items_config({"items_config": ["a.zarr"]})

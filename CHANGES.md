@@ -98,3 +98,4 @@
 - Added optional `access_link` field to the dataset config to set the Zarr store URL of the OSC STAC item explicitly, skipping the PRR lookup.
 - Fixed the OSC STAC item's `self` link to match the path it is written to (`{stac_catalog_s3_root}/{collection_id}/items/{item_id}.json` instead of `.../{collection_id}/item.json`).
 - Renamed the dataset config field `dataset_status` to `osc_status`, now defaulting to `"completed"` (used by both `publish` and `generate-prr-collection`). The old `dataset_status` key is still read as a fallback but logs a deprecation warning; rename it in existing dataset configs.
+- `publish` and `generate-prr-collection` now report a clear error when an `items_config` entry is missing `dataset_id` or `item_id` (e.g. `dataset_id is required in items_config entry 0.`), instead of a bare `KeyError`.

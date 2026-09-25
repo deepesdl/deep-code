@@ -23,8 +23,8 @@ from deep_code.constants import (
     WORKFLOW_BASE_CATALOG_SELF_HREF,
 )
 from deep_code.utils.dataset_stac_generator import (
-    ItemConfig,
     OscDatasetStacGenerator,
+    build_items_config,
     open_dataset,
 )
 from deep_code.utils.github_automation import GitHubAutomation
@@ -255,21 +255,6 @@ class Publisher:
                     full_path
                 )
 
-    @staticmethod
-    def _build_items_config(dataset_config: dict[str, Any]) -> list[ItemConfig]:
-        """Build item configs from the dataset config."""
-        items_config_raw = dataset_config.get("items_config")
-        if not items_config_raw:
-            raise ValueError("items_config is required in the dataset config.")
-        items_config = [
-            ItemConfig(
-                dataset_id=item_config["dataset_id"],
-                item_id=item_config["item_id"],
-            )
-            for item_config in items_config_raw
-        ]
-        return items_config
-
     def publish_dataset(
         self,
         write_to_file: bool = False,
@@ -282,7 +267,7 @@ class Publisher:
             raise ValueError(
                 "No dataset config loaded. Provide dataset_config_path to publish dataset."
             )
-        items_config = self._build_items_config(self.dataset_config)
+        items_config = build_items_config(self.dataset_config)
         if len(items_config) != 1:
             raise ValueError(
                 "publish currently supports exactly one item configuration."

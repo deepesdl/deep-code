@@ -16,7 +16,10 @@ import logging
 import fsspec
 import yaml
 
-from deep_code.utils.dataset_stac_generator import ItemConfig, OscDatasetStacGenerator
+from deep_code.utils.dataset_stac_generator import (
+    OscDatasetStacGenerator,
+    build_items_config,
+)
 from deep_code.utils.helper import get_osc_status
 
 logger = logging.getLogger(__name__)
@@ -43,7 +46,6 @@ def generate_prr_collection(
     osc_project = config.get("osc_project")
     osc_project_url = config.get("osc_project_url")
     license_type = config.get("license_type")
-    items_config_raw = config.get("items_config")
     if not collection_id:
         raise ValueError("collection_id is required in the dataset config.")
     if not osc_project:
@@ -55,15 +57,7 @@ def generate_prr_collection(
             "license_type is required in the dataset config. "
             "Provide an SPDX identifier (e.g. 'CC-BY-4.0', 'MIT', 'proprietary')."
         )
-    if not items_config_raw:
-        raise ValueError("items_config is required in the dataset config.")
-    items_config = [
-        ItemConfig(
-            dataset_id=item_config["dataset_id"],
-            item_id=item_config["item_id"],
-        )
-        for item_config in items_config_raw
-    ]
+    items_config = build_items_config(config)
 
     logger.info(f"Generating PRR STAC collection for '{collection_id}'.")
     generator = OscDatasetStacGenerator(

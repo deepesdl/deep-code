@@ -50,6 +50,38 @@ class ItemConfig:
     item_id: str
 
 
+def build_items_config(dataset_config: dict[str, Any]) -> list[ItemConfig]:
+    """Build item configs from the ``items_config`` list of a dataset config.
+
+    Raises:
+        ValueError: If ``items_config`` is missing or an entry lacks
+            ``dataset_id`` or ``item_id``.
+    """
+    items_config_raw = dataset_config.get("items_config")
+    if not items_config_raw:
+        raise ValueError("items_config is required in the dataset config.")
+    items_config = []
+    for index, item_config in enumerate(items_config_raw):
+        if not isinstance(item_config, dict):
+            raise ValueError(
+                f"items_config entry {index} must be a mapping with "
+                "'dataset_id' and 'item_id'."
+            )
+        missing = [key for key in ("dataset_id", "item_id") if not item_config.get(key)]
+        if missing:
+            raise ValueError(
+                f"{' and '.join(missing)} {'is' if len(missing) == 1 else 'are'} "
+                f"required in items_config entry {index}."
+            )
+        items_config.append(
+            ItemConfig(
+                dataset_id=item_config["dataset_id"],
+                item_id=item_config["item_id"],
+            )
+        )
+    return items_config
+
+
 class OscDatasetStacGenerator:
     """Generates OSC STAC Collections for a product from Zarr datasets.
 
