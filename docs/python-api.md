@@ -85,6 +85,9 @@ generator = OscDatasetStacGenerator(
     # Optional: override the default project identifier.
     # Controls osc:project on the collection and the link to the project collection.
     osc_project="deep-earth-system-data-lab",
+    # Optional: absolute URL of the Zarr store for the S3-hosted OSC item.
+    # If omitted, it is looked up from the dataset's item in the PRR STAC API.
+    access_link=None,
 )
 ```
 
@@ -119,8 +122,13 @@ file_dict = generator.build_zarr_stac_catalog_file_dict(
 )
 # file_dict contains:
 #   "s3://bucket/stac/my-collection/catalog.json"
-#   "s3://bucket/stac/my-collection/my-collection/item.json"
+#   "s3://bucket/stac/my-collection/my-collection/items/my-item.json"
 ```
+
+The item's assets point to the Zarr store served by PRR, looked up from
+`https://eoresults.esa.int/stac/collections/{collection_id}/items/{item_id}`.
+The dataset must be ingested into PRR first, unless `access_link` is passed to
+the generator.
 
 See [STAC Catalog on S3](configuration.md#stac-catalog-on-s3) for details on the
 generated structure.
@@ -134,7 +142,7 @@ tree as local files. The high-level helper reads the same dataset config as the 
 from deep_code.tools.prr import generate_prr_collection
 
 out_dir = generate_prr_collection("dataset.yaml", output_dir="./prr")
-# ./prr/collection.json  +  ./prr/<collection_id>/items/<item_id>.json
+# ./prr/<collection_id>/collection.json  +  ./prr/<collection_id>/items/<item_id>.json
 ```
 
 Or drive the generator directly:

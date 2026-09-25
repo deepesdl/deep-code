@@ -28,10 +28,10 @@ osc_project_url: osc-project-url
 # Optional
 osc_themes: [cryosphere]        # must match slugs at opensciencedata.esa.int/themes/catalog — auto-lowercased
 osc_region: global
-dataset_status: completed       # ongoing | completed | planned (default: ongoing)
+osc_status: completed           # ongoing | completed | planned (default: completed)
 documentation_link: https://example.com/docs
 visualisation_link: https://example.com/viewer   # URL to a visualisation of the dataset
-access_link_root: s3://bucket/   # defaults to s3://deep-esdl-public
+access_link: https://eoresults.esa.int/d/<collection>/.../<dataset>.zarr   # defaults to the PRR item's Zarr asset
 
 # CF parameter overrides (list of {name, units, ...} dicts)
 cf_parameter:
@@ -61,12 +61,11 @@ prr_output_dir: ./prr/your-collection
 | `osc_project_url`      | Yes      | OSC project url used to link to project.                                                                                                                     |
 | `osc_themes`           | No       | List of OSC theme slugs (e.g. `[cryosphere, oceans]`). Values are automatically lowercased so `Land` and `land` are equivalent.                              |
 | `osc_region`           | No       | Geographical region label (default: `Global`).                                                                                                               |
-| `dataset_status`       | No       | One of `ongoing`, `completed`, or `planned` (default: `ongoing`).                                                                                            |
-| `access_link`          | No       | Public S3 URL of the Zarr store. Defaults to `s3://deep-esdl-public/{dataset_id}`.                                                                           |
+| `osc_status`           | No       | One of `ongoing`, `completed`, or `planned` (default: `completed`).                                                                                          |
+| `access_link`          | No       | Absolute URL of the Zarr store, used as the asset href of the OSC STAC item. Defaults to the `zarr-data` asset of the dataset's item in the PRR STAC API (`https://eoresults.esa.int/stac/collections/{collection_id}/items/{item_id}`), so ingest into PRR before publishing to OSC. |
 | `description`          | No       | Human-readable description of the dataset. Overrides the `description` attribute in the Zarr store; falls back to `"No description available."` if neither is set. |
 | `documentation_link`   | No       | URL to dataset documentation.                                                                                                                                |
 | `visualisation_link`   | No       | URL to a visualisation of the dataset (e.g. xcube Viewer, WMS). Added as a `visualisation` link with title `"Dataset visualisation"`.                        |
-| `osc_project`          | No       | OSC project ID this dataset belongs to (e.g. `deep-earth-system-data-lab`). Defaults to `deep-earth-system-data-lab`.                                        |
 | `cf_parameter`         | No       | List of CF metadata dicts to override variable attributes (e.g. `name`, `units`).                                                                            |
 | `stac_catalog_s3_root` | Yes      | S3 root where the STAC Catalog and Item are published. Publishing fails if this field is absent. See [STAC Catalog on S3](#stac-catalog-on-s3).              |
 
@@ -132,9 +131,21 @@ The item has two assets:
 - `zarr-data` — points to the Zarr store (`application/vnd+zarr`).
 - `zarr-consolidated-metadata` — points to `.zmetadata` (`application/json`).
 
-The OSC collection gains a `via` link to `catalog.json` so STAC-aware clients
-can discover the data path. `rel="child"` is intentionally avoided because the
-OSC validator requires every `child` link to resolve inside the metadata repository.
+Both asset hrefs are absolute and point to the Zarr store served by the ESA
+Project Results Repository (PRR). deep-code looks the href up from the `zarr-data`
+asset of the dataset's PRR item
+(`https://eoresults.esa.int/stac/collections/{collection_id}/items/{item_id}`),
+so **ingest the dataset into PRR before publishing to OSC**. If the PRR item cannot
+be found, publishing fails with an error. Set `access_link` in the dataset config to
+use a different Zarr URL and skip the lookup.
+
+The OSC collection links to the S3 catalog following the OSC convention:
+
+- `via` — the catalog in the OSC STAC browser (human-browsable).
+- `child` — the direct HTTPS URL of `catalog.json` (machine-readable).
+
+The `s3://` URL is converted to HTTPS because raw `s3://` URLs fail the
+`uri-reference` format check of the OSC products schema.
 
 S3 credentials for writing the STAC catalog are resolved in this order:
 `STAC_S3_KEY` / `STAC_S3_SECRET` env vars (STAC-specific, can target any bucket),
@@ -162,8 +173,8 @@ prr/
   `license`) plus a required `thumbnail` asset.
 - **Item** — carries the `datacube` extension (`cube:dimensions` / `cube:variables`
   read from the Zarr) and the `zarr-data` / `zarr-consolidated-metadata` assets. Asset
-  hrefs stay absolute (`s3://…`) since that is where the data lives; structural links
-  are relative so the folder is portable.
+  hrefs are relative (`./{dataset_id}`) because PRR ingests the Zarr store next to
+  the item; structural links are relative too, so the folder is portable.
 
 The output targets the
 [PRR collection specification](https://eoresults.esa.int/prr_collection_specifications.html).

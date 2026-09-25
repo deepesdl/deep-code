@@ -41,8 +41,13 @@ Options:
 
 ## How publishing works
 1. Reads your configs and builds dataset STAC collections plus variable catalogs.
-2. Builds workflow and experiment OGC API Records.
-3. Forks/clones the target metadata repo (production, staging, or testing), commits generated JSON, and opens a pull request on your behalf.
+2. Writes a STAC catalog and item for the Zarr store to `stac_catalog_s3_root`. The
+   item's assets point to the Zarr store in PRR, so
+   [generate](#generate-a-prr-collection) and ingest the PRR collection **before**
+   publishing to OSC, or set `access_link` in the dataset config
+   (see [STAC Catalog on S3](configuration.md#stac-catalog-on-s3)).
+3. Builds workflow and experiment OGC API Records.
+4. Forks/clones the target metadata repo (production, staging, or testing), commits generated JSON, and opens a pull request on your behalf.
 
 The pull request description includes a "Generated with deep-code" attribution note.
 
