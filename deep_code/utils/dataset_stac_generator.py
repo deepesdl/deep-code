@@ -363,9 +363,21 @@ class OscDatasetStacGenerator:
             "gcmd_keyword_url": gcmd_keyword_url,
         }
 
-    def get_variable_ids(self, dataset: xr.Dataset) -> list[str]:
-        """Get variable IDs for all variables in the dataset."""
-        variable_ids = list(self.get_variables_metadata(dataset).keys())
+    def get_variable_ids(
+        self,
+        dataset: xr.Dataset,
+        variables_metadata: dict[str, dict] | None = None,
+    ) -> list[str]:
+        """Get variable IDs for all variables in the dataset.
+
+        Args:
+            dataset: Input dataset.
+            variables_metadata: Result of :meth:`get_variables_metadata`, to avoid
+                extracting (and prompting for) the metadata again.
+        """
+        if variables_metadata is None:
+            variables_metadata = self.get_variables_metadata(dataset)
+        variable_ids = list(variables_metadata.keys())
         #  Remove 'crs' and 'spatial_ref' from the list if they exist, note that
         #  spatial_ref will be normalized to spatial-ref in variable_ids and skipped.
         return [

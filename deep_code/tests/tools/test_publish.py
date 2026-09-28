@@ -10,6 +10,7 @@ import yaml
 from pystac import Catalog
 
 from deep_code.tools.publish import Publisher
+from deep_code.utils.dataset_stac_generator import OscDatasetStacGenerator
 from deep_code.utils.ogc_api_record import LinksBuilder
 
 
@@ -464,17 +465,22 @@ class TestPublisher(unittest.TestCase):
         assert any("some/catalog.json" in str(k) for k in file_dict)
 
     def test_update_variable_catalogs_creates_new_when_missing(self):
-        mock_gen = MagicMock()
-        mock_gen.variables_metadata = {"var1": {"variable_id": "var1"}}
+        # spec=... so accessing a removed attribute (e.g. variables_metadata) fails
+        mock_gen = MagicMock(spec=OscDatasetStacGenerator)
         mock_gen.build_variable_catalog.return_value.to_dict.return_value = {
             "id": "var1"
         }
         self.publisher.gh_publisher.github_automation.file_exists.return_value = False
+        variables_metadata = {"var1": {"variable_id": "var1"}}
 
         file_dict = {}
-        self.publisher._update_variable_catalogs(mock_gen, file_dict, ["var1"])
+        self.publisher._update_variable_catalogs(
+            mock_gen, file_dict, ["var1"], variables_metadata
+        )
 
-        mock_gen.build_variable_catalog.assert_called_once()
+        mock_gen.build_variable_catalog.assert_called_once_with(
+            variables_metadata["var1"]
+        )
         assert "variables/var1/catalog.json" in file_dict
 
     def test_update_variable_catalogs_updates_existing(self):
@@ -484,7 +490,9 @@ class TestPublisher(unittest.TestCase):
         mock_gen.update_existing_variable_catalog.return_value = {"id": "var1"}
 
         file_dict = {}
-        self.publisher._update_variable_catalogs(mock_gen, file_dict, ["var1"])
+        self.publisher._update_variable_catalogs(
+            mock_gen, file_dict, ["var1"], {"var1": {"variable_id": "var1"}}
+        )
 
         mock_gen.update_existing_variable_catalog.assert_called_once()
         assert "variables/var1/catalog.json" in file_dict

@@ -226,13 +226,17 @@ class Publisher:
         )
         file_dict[full_path] = update_method(full_path, *args)
 
-    def _update_variable_catalogs(self, generator, file_dict, variable_ids):
+    def _update_variable_catalogs(
+        self, generator, file_dict, variable_ids, variables_metadata
+    ):
         """Update or create variable catalogs and add them to file_dict.
 
         Args:
             generator: The generator object.
             file_dict: The dictionary to which the updated catalogs will be added.
             variable_ids: A list of variable IDs.
+            variables_metadata: Variable metadata keyed by variable ID, as
+                returned by ``generator.get_variables_metadata``.
         """
         for var_id in variable_ids:
             var_file_path = f"variables/{var_id}/catalog.json"
@@ -240,7 +244,7 @@ class Publisher:
                 logger.info(
                     f"Variable catalog for {var_id} does not exist. Creating..."
                 )
-                var_metadata = generator.variables_metadata.get(var_id)
+                var_metadata = variables_metadata[var_id]
                 var_catalog = generator.build_variable_catalog(var_metadata)
                 file_dict[var_file_path] = var_catalog.to_dict()
             else:
@@ -325,8 +329,12 @@ class Publisher:
         # Store so publish() can reuse it for zarr STAC catalog generation
         self._last_generator = generator
 
-        dataset = open_dataset(generator.items_config[0].dataset_id)
-        variable_ids = generator.get_variable_ids(dataset)
+        dataset = open_dataset(
+            generator.items_config[0].dataset_id, calc_filesizes=False
+        )
+        # Extract once: it may prompt for missing GCMD keyword URLs.
+        variables_metadata = generator.get_variables_metadata(dataset)
+        variable_ids = generator.get_variable_ids(dataset, variables_metadata)
         ds_collection = generator.build_dataset_stac_collection(
             mode=mode, stac_catalog_s3_root=stac_catalog_s3_root
         )
@@ -337,7 +345,9 @@ class Publisher:
         file_dict[product_path] = ds_collection.to_dict()
 
         # Update or create variable catalogs for each osc:variable
-        self._update_variable_catalogs(generator, file_dict, variable_ids)
+        self._update_variable_catalogs(
+            generator, file_dict, variable_ids, variables_metadata
+        )
 
         # Update variable base catalog
         variable_base_catalog_path = "variables/catalog.json"

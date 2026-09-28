@@ -36,6 +36,28 @@ def get_osc_status(config: dict, logger: logging.Logger | None = None) -> str:
     return osc_status or "completed"
 
 
+def _open_zarr_url(
+    url: str, logger: logging.Logger, calc_filesizes: bool
+) -> xr.Dataset:
+    """Open a consolidated Zarr store over HTTP(S).
+
+    The total store size cannot be computed over HTTP (no directory listing),
+    so ``calc_filesizes`` is not supported for URLs.
+    """
+    if calc_filesizes:
+        raise ValueError(
+            f"Cannot compute file sizes for the Zarr store at {url!r} over HTTP. "
+            "Use the store's S3 path as dataset_id instead."
+        )
+    logger.info(f"Attempting to open dataset from URL '{url}'")
+    try:
+        dataset = xr.open_zarr(url.rstrip("/"), consolidated=True)
+    except Exception as e:
+        raise ValueError(f"Failed to open dataset from URL {url!r}: {e}") from e
+    logger.info(f"Successfully opened dataset from URL '{url}'")
+    return dataset
+
+
 def open_dataset(
     dataset_id: str,
     root: str = "deep-esdl-public",
@@ -46,7 +68,8 @@ def open_dataset(
     """Open an xarray dataset from a specified store.
 
     Args:
-        dataset_id: ID of the dataset (e.g., path to Zarr or NetCDF file).
+        dataset_id: ID of the dataset (e.g., path to Zarr or NetCDF file), or the
+            ``https://`` URL of a consolidated Zarr store (e.g. one served by PRR).
         storage_type: Type of storage (e.g., 's3', 'file'). Defaults to 's3'.
         root: Root path or bucket for the store. Defaults to 'deep-esdl-public'.
         storage_configs: List of storage configurations. If None, uses default S3 configs.
@@ -62,6 +85,9 @@ def open_dataset(
     """
     if logger is None:
         logger = logging.getLogger(__name__)
+
+    if dataset_id.startswith(("https://", "http://")):
+        return _open_zarr_url(dataset_id, logger, calc_filesizes)
 
     # Default S3 configurations
     default_configs = [

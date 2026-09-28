@@ -246,6 +246,18 @@ class LinksBuilder:
         ]
 
 
+def _project_link(properties: RecordProperties) -> dict[str, str]:
+    """Link a record to the OSC project given by its ``osc:project``."""
+    project = properties.osc_project or PROJECT_COLLECTION_NAME
+    title = "DeepESDL" if project == PROJECT_COLLECTION_NAME else project
+    return {
+        "rel": "related",
+        "href": f"../../projects/{project}/collection.json",
+        "type": "application/json",
+        "title": f"Project: {title}",
+    }
+
+
 class WorkflowAsOgcRecord(MappingConstructible["OgcRecord"], JsonSerializable):
     def __init__(
         self,
@@ -308,12 +320,7 @@ class WorkflowAsOgcRecord(MappingConstructible["OgcRecord"], JsonSerializable):
                 "application:platform_supports": ["jupyter-notebook"],
                 "application:preferred_app": "JupyterLab",
             },
-            {
-                "rel": "related",
-                "href": f"../../projects/{PROJECT_COLLECTION_NAME}/collection.json",
-                "type": "application/json",
-                "title": "Project: DeepESDL",
-            },
+            _project_link(self.properties),
             {
                 "rel": "self",
                 "href": f"{BASE_URL_OSC}/workflows/{self.id}/record.json",
@@ -372,12 +379,7 @@ class ExperimentAsOgcRecord(MappingConstructible["OgcRecord"], JsonSerializable)
                 "type": "application/json",
                 "title": f"Workflow: {self.title}",
             },
-            {
-                "rel": "related",
-                "href": f"../../projects/{PROJECT_COLLECTION_NAME}/collection.json",
-                "type": "application/json",
-                "title": "Project: DeepESDL",
-            },
+            _project_link(self.properties),
             {
                 "rel": "application-originating-platform",
                 "title": "DeepESDL platform",
