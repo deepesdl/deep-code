@@ -439,9 +439,18 @@ class Publisher:
                 )
             )
 
-        # 2) Ensure there is exactly one "self" link
-        base_catalog.links = [link for link in base_catalog.links if link.rel != "self"]
-        base_catalog.set_self_href(self_href)
+        # 2) Ensure there is exactly one "self" link, updating an existing one in
+        # place so its position in the catalog (and the PR diff) is unchanged
+        self_links = [link for link in base_catalog.links if link.rel == "self"]
+        if self_links:
+            self_links[0].target = self_href
+            base_catalog.links = [
+                link
+                for link in base_catalog.links
+                if link.rel != "self" or link is self_links[0]
+            ]
+        else:
+            base_catalog.set_self_href(self_href)
 
         # 3) Defense-in-depth: deduplicate by (rel, href)
         seen: set[tuple[str, str | None]] = set()

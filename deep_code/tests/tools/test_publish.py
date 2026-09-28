@@ -108,6 +108,40 @@ class TestPublisher(unittest.TestCase):
         self.assertEqual(updated_catalog.get_self_href(), self_href)
         self.assertIsInstance(updated_catalog, Catalog)
 
+    def test_update_base_catalog_keeps_self_link_position(self):
+        self_href = "https://example.com/workflows/catalog.json"
+        catalog = Catalog.from_dict(
+            {
+                "type": "Catalog",
+                "id": "workflows",
+                "stac_version": "1.0.0",
+                "description": "Workflows",
+                "links": [
+                    {"rel": "self", "href": self_href, "type": "application/json"},
+                    {"rel": "item", "href": "./existing/record.json"},
+                ],
+            }
+        )
+        self.publisher.workflow_title = "Test Workflow"
+
+        with patch("pystac.Catalog.from_file", return_value=catalog):
+            updated_catalog = self.publisher._update_base_catalog(
+                "workflows/catalog.json", "new-workflow", self_href
+            )
+
+        # PySTAC adds its own root link; only the order of the others matters here
+        links = [
+            link for link in updated_catalog.to_dict()["links"] if link["rel"] != "root"
+        ]
+        self.assertEqual(
+            [(link["rel"], link["href"]) for link in links],
+            [
+                ("self", self_href),
+                ("item", "./existing/record.json"),
+                ("item", "./new-workflow/record.json"),
+            ],
+        )
+
     def test_read_config_files(self):
         # Mock dataset and workflow config files
         dataset_config = {
