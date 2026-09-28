@@ -112,6 +112,62 @@ class TestOSCProductSTACGenerator(unittest.TestCase):
             osc_themes=["climate", "environment"],
         )
 
+    def test_build_project_collection_meets_osc_rules(self):
+        """The new project collection keeps the title verbatim, carries the
+        configured contacts and links its themes, as OSC validation requires."""
+        self.generator.osc_project = "arnetlab"
+        self.generator.osc_project_title = "Atmospheric River Networks (ARNETLAB)"
+        self.generator.osc_project_url = "https://example.com/arnetlab"
+        contacts = [
+            {
+                "name": "Jane Doe",
+                "roles": ["technical_officer"],
+                "emails": [{"value": "jane.doe@esa.int"}],
+            }
+        ]
+        self.generator.osc_project_contacts = contacts
+
+        collection = self.generator.build_project_collection()
+
+        self.assertEqual(collection["title"], "Atmospheric River Networks (ARNETLAB)")
+        self.assertEqual(collection["contacts"], contacts)
+        self.assertIn(
+            "https://stac-extensions.github.io/contacts/v0.1.1/schema.json",
+            collection["stac_extensions"],
+        )
+        theme_hrefs = [
+            link["href"]
+            for link in collection["links"]
+            if link["rel"] == "related" and link["type"] == "application/json"
+        ]
+        self.assertEqual(
+            theme_hrefs,
+            [
+                "../../themes/climate/catalog.json",
+                "../../themes/environment/catalog.json",
+            ],
+        )
+
+    def test_build_project_collection_warns_without_technical_officer(self):
+        self.generator.osc_project_url = "https://example.com/project"
+        with self.assertLogs(self.generator.logger, level="WARNING") as logs:
+            collection = self.generator.build_project_collection()
+        self.assertEqual(collection["contacts"], [])
+        self.assertTrue(any("technical_officer" in msg for msg in logs.output))
+
+    def test_update_project_base_catalog_uses_project_title(self):
+        self.generator.osc_project = "arnetlab"
+        self.generator.osc_project_title = "Atmospheric River Networks (ARNETLAB)"
+        with tempfile.NamedTemporaryFile("w", suffix=".json", delete=False) as f:
+            json.dump({"links": []}, f)
+        self.addCleanup(os.unlink, f.name)
+
+        data = self.generator.update_project_base_catalog(f.name)
+
+        self.assertEqual(
+            data["links"][-1]["title"], "Atmospheric River Networks (ARNETLAB)"
+        )
+
     def test_open_dataset(self):
         """Test if the dataset is opened correctly."""
         dataset = self.mock_dataset

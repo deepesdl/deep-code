@@ -98,6 +98,9 @@ class OscDatasetStacGenerator:
         osc_missions: List of satellite missions associated with the dataset.
         cf_params: CF metadata parameters for the dataset.
         osc_project: OSC project identifier (default: "deep-earth-system-data-lab").
+        osc_project_contacts: STAC contacts for the project collection, used when
+            the project does not exist in OSC yet. OSC requires one with the role
+            ``technical_officer`` and an email.
         coord_position: Position of the coordinates within each grid cell.
             ``"center"`` assumes coordinates represent cell centers,
             ``"left"`` assumes they represent the left/bottom edge, and
@@ -137,6 +140,7 @@ class OscDatasetStacGenerator:
         sci_citation: str | None = None,
         coord_position: Literal["left", "center", "right"] = "center",
         access_link: str | None = None,
+        osc_project_contacts: list[dict[str, Any]] | None = None,
     ):
         if " " in collection_id:
             raise ValueError(
@@ -151,6 +155,7 @@ class OscDatasetStacGenerator:
         self.osc_project = osc_project
         self.osc_project_title = osc_project_title or osc_project
         self.osc_project_url = osc_project_url
+        self.osc_project_contacts = osc_project_contacts or []
         self.collection_title = collection_title or collection_id
         self.documentation_link = documentation_link
         self.osc_status = osc_status
@@ -606,6 +611,24 @@ class OscDatasetStacGenerator:
                 "No 'osc_project_url' or 'documentation_link' provided. "
                 "The project collection will be missing a required 'via' link."
             )
+        for theme in self.osc_themes:
+            links.append(
+                {
+                    "rel": "related",
+                    "href": f"../../themes/{theme}/catalog.json",
+                    "type": "application/json",
+                    "title": f"Theme: {self.format_string(theme)}",
+                }
+            )
+        if not any(
+            "technical_officer" in (contact.get("roles") or [])
+            for contact in self.osc_project_contacts
+        ):
+            self.logger.warning(
+                "No 'osc_project_contacts' entry with role 'technical_officer'. "
+                "OSC validation requires the project's ESA technical officer "
+                "(name and email)."
+            )
         themes = (
             [
                 {
@@ -625,10 +648,9 @@ class OscDatasetStacGenerator:
                 THEMES_SCHEMA_URI,
                 CONTACTS_SCHEMA_URI,
             ],
-            "title": self.format_string(self.osc_project_title or self.osc_project),
-            "description": self.format_string(
-                self.osc_project_title or self.osc_project
-            ),
+            # Used verbatim: OSC requires links to the project to repeat this title
+            "title": self.osc_project_title,
+            "description": self.osc_project_title,
             "keywords": [],
             "license": "various",
             "extent": {
@@ -640,7 +662,7 @@ class OscDatasetStacGenerator:
             "osc:type": "project",
             "osc:status": self.osc_status,
             "themes": themes,
-            "contacts": [],
+            "contacts": self.osc_project_contacts,
             "links": links,
         }
 
@@ -654,7 +676,7 @@ class OscDatasetStacGenerator:
                 "rel": "child",
                 "href": f"./{self.osc_project}/collection.json",
                 "type": "application/json",
-                "title": self.format_string(self.osc_project),
+                "title": self.osc_project_title,
             },
         )
         return data

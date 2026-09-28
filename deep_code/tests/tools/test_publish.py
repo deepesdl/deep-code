@@ -620,6 +620,69 @@ class TestPublisher(unittest.TestCase):
         self.assertIn("workflows/catalog.json", result)
         self.assertIn("experiments/catalog.json", result)
 
+    @patch("deep_code.tools.publish.ExperimentAsOgcRecord")
+    @patch("deep_code.tools.publish.WorkflowAsOgcRecord")
+    @patch("deep_code.tools.publish.LinksBuilder")
+    @patch("deep_code.tools.publish.OSCWorkflowOGCApiRecordGenerator")
+    def test_generate_workflow_records_filters_experiment_links(
+        self, MockRG, MockLinks, MockWF, MockExp
+    ):
+        """Config links OSC rejects on experiments stay on the workflow only."""
+        mock_rg, mock_props, mock_wf_record, mock_exp_record = (
+            self._setup_workflow_mocks()
+        )
+        mock_props.osc_project = "arnetlab"
+        MockRG.return_value = mock_rg
+        MockWF.return_value = mock_wf_record
+        MockExp.return_value = mock_exp_record
+        MockLinks.return_value.build_theme_links_for_records.return_value = []
+        MockLinks.return_value.build_link_to_dataset.return_value = []
+
+        html_link = {"rel": "related", "type": "text/html", "href": "https://a"}
+        git_link = {"rel": "git", "href": "https://github.com/a/b"}
+        self.publisher.workflow_config = {
+            "workflow_id": "my-workflow",
+            "properties": {"title": "My WF", "license": "CC-BY-4.0"},
+            "links": [html_link, git_link],
+        }
+        self.publisher.dataset_config = {
+            "osc_project": "arnetlab",
+            "osc_project_title": "Arnet Lab (ARNETLAB)",
+        }
+        self.publisher.collection_id = "my-collection"
+        with (
+            patch.object(self.publisher, "_update_base_catalog", return_value={}),
+            patch.object(self.publisher, "_project_title", side_effect=lambda _, t: t),
+        ):
+            self.publisher.generate_workflow_experiment_records(
+                write_to_file=False, mode="all"
+            )
+
+        wf_kwargs = MockWF.call_args.kwargs
+        exp_kwargs = MockExp.call_args.kwargs
+        self.assertEqual(wf_kwargs["links"], [html_link, git_link])
+        self.assertEqual(exp_kwargs["links"], [git_link])
+        self.assertEqual(wf_kwargs["project_title"], "Arnet Lab (ARNETLAB)")
+        self.assertEqual(exp_kwargs["project_title"], "Arnet Lab (ARNETLAB)")
+
+    def test_project_title_prefers_existing_collection(self):
+        with tempfile.TemporaryDirectory() as clone_dir:
+            self.publisher.gh_publisher.github_automation.local_clone_dir = clone_dir
+            self.assertEqual(
+                self.publisher._project_title("arnetlab", "Config Title"),
+                "Config Title",
+            )
+
+            project_dir = Path(clone_dir) / "projects" / "arnetlab"
+            project_dir.mkdir(parents=True)
+            (project_dir / "collection.json").write_text(
+                json.dumps({"title": "Existing Title"})
+            )
+            self.assertEqual(
+                self.publisher._project_title("arnetlab", "Config Title"),
+                "Existing Title",
+            )
+
     @patch("deep_code.tools.publish.OSCWorkflowOGCApiRecordGenerator")
     def test_generate_workflow_records_raises_when_workflow_id_missing(self, MockRG):
         self.publisher.workflow_config = {

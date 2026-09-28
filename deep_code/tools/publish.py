@@ -37,6 +37,9 @@ from deep_code.utils.ogc_api_record import (
 from deep_code.utils.ogc_record_generator import OSCWorkflowOGCApiRecordGenerator
 
 logger = logging.getLogger(__name__)
+
+# In experiment records, OSC only allows these link rels with type application/json
+_EXPERIMENT_JSON_ONLY_RELS = {"root", "parent", "child", "related"}
 logging.basicConfig(level=logging.INFO)
 
 
@@ -289,7 +292,7 @@ class Publisher:
         license_type = self.dataset_config.get("license_type")
         visualisation_link = self.dataset_config.get("visualisation_link")
         self.osc_project = self.dataset_config.get("osc_project")
-        osc_project_title = self.dataset_config.get("osc_project_title")
+        osc_project_contacts = self.dataset_config.get("osc_project_contacts")
         self.osc_project_url = self.dataset_config.get("osc_project_url")
         description = self.dataset_config.get("description")
         access_link = self.dataset_config.get("access_link")
@@ -300,6 +303,9 @@ class Publisher:
             raise ValueError("osc_project missing in the config.")
         if not self.osc_project_url:
             raise ValueError("osc_project missing in the config.")
+        osc_project_title = self._project_title(
+            self.osc_project, self.dataset_config.get("osc_project_title")
+        )
 
         if not license_type:
             raise ValueError(
@@ -329,6 +335,7 @@ class Publisher:
             osc_project_url=self.osc_project_url,
             description=description,
             access_link=access_link,
+            osc_project_contacts=osc_project_contacts,
         )
         # Store so publish() can reuse it for zarr STAC catalog generation
         self._last_generator = generator
@@ -396,6 +403,22 @@ class Publisher:
     @staticmethod
     def _normalize_name(name: str | None) -> str | None:
         return name.replace(" ", "-").lower() if name else None
+
+    def _project_title(self, project_id: str, fallback: str | None) -> str | None:
+        """Return the title of an OSC project collection.
+
+        OSC requires every link to a project to repeat its title, so the title
+        of an existing project collection wins over ``fallback`` (the title from
+        the config, used when this publish creates the collection).
+        """
+        collection_path = (
+            Path(self.gh_publisher.github_automation.local_clone_dir)
+            / f"projects/{project_id}/collection.json"
+        )
+        if collection_path.is_file():
+            with open(collection_path, encoding="utf-8") as f:
+                return json.load(f).get("title") or fallback
+        return fallback
 
     def _update_base_catalog(
         self, catalog_path: str, item_id: str, self_href: str
@@ -497,6 +520,15 @@ class Publisher:
         logger.info("Generating OGC API Record for the workflow...")
         rg = OSCWorkflowOGCApiRecordGenerator()
         wf_record_properties = rg.build_record_properties(properties_list, contacts)
+        project_id = wf_record_properties.osc_project
+        project_title = self._project_title(
+            project_id,
+            (
+                self.dataset_config.get("osc_project_title")
+                if project_id == self.dataset_config.get("osc_project")
+                else None
+            ),
+        )
         # make a copy for experiment record
         exp_record_properties = copy.deepcopy(wf_record_properties)
         jupyter_kernel_info = {}
@@ -522,6 +554,7 @@ class Publisher:
             links=links + theme_links + application_link + jnb_open_link,
             jupyter_notebook_url=jupyter_notebook_url,
             themes=osc_themes,
+            project_title=project_title,
         )
         if mode == "all":
             link_builder.build_child_link_to_related_experiment(
@@ -557,6 +590,20 @@ class Publisher:
             # generate experiment record only if there is an output dataset
             dataset_link = link_builder.build_link_to_dataset(self.collection_id)
 
+            experiment_links = []
+            for link in links:
+                if (
+                    link.get("rel") in _EXPERIMENT_JSON_ONLY_RELS
+                    and link.get("type") != "application/json"
+                ):
+                    logger.info(
+                        f"Not adding link {link.get('href')!r} to the experiment "
+                        f"record: OSC only allows rel '{link.get('rel')}' links of "
+                        "type application/json there. It stays on the workflow record."
+                    )
+                    continue
+                experiment_links.append(link)
+
             experiment_record = ExperimentAsOgcRecord(
                 id=workflow_id,
                 title=self.workflow_title,
@@ -564,7 +611,8 @@ class Publisher:
                 jupyter_notebook_url=jupyter_notebook_url,
                 collection_id=self.collection_id,
                 properties=exp_record_properties,
-                links=links + theme_links + dataset_link,
+                links=experiment_links + theme_links + dataset_link,
+                project_title=project_title,
             )
             # Convert to dictionary and cleanup
             experiment_dict = experiment_record.to_dict()

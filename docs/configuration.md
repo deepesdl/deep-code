@@ -23,6 +23,12 @@ items_config:
     item_id: your-item               # no spaces — use hyphens
 osc_project: osc-project-name
 osc_project_url: osc-project-url
+osc_project_title: My Project (MYPROJ)   # used verbatim; ignored if the project already exists in OSC
+osc_project_contacts:                    # only used when the project is new to OSC
+  - name: Jane Doe
+    roles: [technical_officer]
+    emails:
+      - value: jane.doe@esa.int
 
 # Optional
 osc_themes: [cryosphere]        # must match slugs at opensciencedata.esa.int/themes/catalog — auto-lowercased
@@ -59,6 +65,8 @@ prr_output_dir: ./prr/your-collection
 | `items_config`         | Yes      | List of `{dataset_id, item_id}` entries. Use one entry for `publish` today; the generator can emit multiple items when more are provided. `dataset_id` is the Zarr store's path in the `deep-esdl-public` (or `S3_USER_STORAGE_BUCKET`) bucket, or the `https://` URL of a consolidated Zarr store, e.g. the copy served by PRR. `generate-prr-collection` needs an S3 path, because it computes file sizes. |
 | `osc_project`          | Yes      | OSC project ID this dataset belongs to (e.g. `deep-earth-system-data-lab`).                                                                                  |
 | `osc_project_url`      | Yes      | OSC project url used to link to project.                                                                                                                     |
+| `osc_project_title`    | No       | Title of the OSC project, used verbatim (default: `osc_project`). If the project already exists in OSC, its existing title is used instead, because OSC requires every link to a project to repeat the project's title. |
+| `osc_project_contacts` | No       | [STAC contacts](https://github.com/stac-extensions/contacts) for the project collection. Only used when `publish` creates the project because it does not exist in OSC yet. OSC validation then requires a contact with role `technical_officer`, a `name` and an email; `publish` warns if it is missing. Other roles, e.g. `consortium_member`, are optional. |
 | `osc_themes`           | No       | List of OSC theme slugs (e.g. `[cryosphere, oceans]`). Values are automatically lowercased so `Land` and `land` are equivalent.                              |
 | `osc_region`           | No       | Geographical region label (default: `Global`).                                                                                                               |
 | `osc_status`           | No       | One of `ongoing`, `completed`, or `planned` (default: `completed`).                                                                                          |

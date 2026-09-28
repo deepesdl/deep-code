@@ -84,7 +84,14 @@ class TemplateGenerator:
             "visualisation_link": "[OPTIONAL: URL to a visualisation of the dataset (e.g. xcube Viewer, WMS)]",
             "access_link": "[OPTIONAL: absolute URL of the Zarr store — defaults to the Zarr asset of the dataset's PRR item]",
             "stac_catalog_s3_root": "[OPTIONAL: S3 root to publish a STAC Catalog + Item to, e.g. s3://my-bucket/stac/my-collection/ — omit to link the dataset's PRR collection]",
-            "osc_project_title": "[OPTIONAL: display title of the OSC project as it appears in the catalog (e.g. DeepESDL). Defaults to a formatted version of osc_project if omitted]",
+            "osc_project_title": "[OPTIONAL: title of the OSC project, used verbatim (e.g. DeepESDL). Ignored if the project already exists in OSC, whose title is used instead. Defaults to osc_project]",
+            "osc_project_contacts": [
+                {
+                    "name": "[OPTIONAL: only used when the project is new to OSC, which then requires an ESA technical officer. Contact name]",
+                    "roles": ["technical_officer"],
+                    "emails": [{"value": "[contact email]"}],
+                }
+            ],
             "collection_title": "[OPTIONAL: title present in the collection and in the STAC browser]",
             "coord_position": "[OPTIONAL: Position of the coordinates within each grid cell. 'center' assumes coordinates represent cell centers, 'left' assumes they represent the left/bottom edge, and 'right' assumes they represent the right/top edge.]",
             "cf_parameter": [

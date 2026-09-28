@@ -104,3 +104,8 @@
 - Workflow and experiment records now link to the project given by `osc_project`, instead of always linking to the DeepESDL project.
 - Fixed `publish` overwriting upstream OSC catalogs (e.g. `products/catalog.json`) with the stale copies from an out-of-date fork. The fork is now synced with upstream before existing catalogs are read.
 - `publish` now updates the existing `self` link of `workflows/catalog.json` and `experiments/catalog.json` in place, instead of moving it to the end of the links list.
+- Fixed OSC validation failures when `publish` creates a new project collection:
+  - The project's title (`osc_project_title`) is now used verbatim for the project collection and for every link to it (projects catalog, product collection, workflow and experiment records). If the project already exists in OSC, its existing title is used. Before, the title was reformatted differently in each place (e.g. `ARNETLAB` became `Arnetlab`).
+  - New optional dataset config field `osc_project_contacts` sets the project collection's contacts. OSC requires a contact with role `technical_officer` and an email; `publish` warns if it is missing.
+  - The project collection now has `related` links to its themes and declares the contacts extension v0.1.1, as OSC requires.
+- Extra `links` from the workflow config that OSC does not allow on experiment records (`root`, `parent`, `child` or `related` links whose type is not `application/json`) are now added to the workflow record only.

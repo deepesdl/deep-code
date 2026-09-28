@@ -246,10 +246,20 @@ class LinksBuilder:
         ]
 
 
-def _project_link(properties: RecordProperties) -> dict[str, str]:
-    """Link a record to the OSC project given by its ``osc:project``."""
+def _project_link(
+    properties: RecordProperties, project_title: str | None = None
+) -> dict[str, str]:
+    """Link a record to the OSC project given by its ``osc:project``.
+
+    Args:
+        properties: The record properties.
+        project_title: Title of the project collection. OSC requires the link
+            title to be ``Project: {project_title}``.
+    """
     project = properties.osc_project or PROJECT_COLLECTION_NAME
-    title = "DeepESDL" if project == PROJECT_COLLECTION_NAME else project
+    title = project_title or (
+        "DeepESDL" if project == PROJECT_COLLECTION_NAME else project
+    )
     return {
         "rel": "related",
         "href": f"../../projects/{project}/collection.json",
@@ -271,6 +281,7 @@ class WorkflowAsOgcRecord(MappingConstructible["OgcRecord"], JsonSerializable):
         conformsTo: list[str] | None = None,
         geometry: Any | None = None,
         themes: Any | None = None,
+        project_title: str | None = None,
     ):
         if linkTemplates is None:
             linkTemplates = []
@@ -289,9 +300,9 @@ class WorkflowAsOgcRecord(MappingConstructible["OgcRecord"], JsonSerializable):
         self.linkTemplates = linkTemplates
         self.conformsTo = conformsTo
         self.themes = themes
-        self.links = self._generate_static_links() + links
+        self.links = self._generate_static_links(project_title) + links
 
-    def _generate_static_links(self):
+    def _generate_static_links(self, project_title: str | None = None):
         """Generates static links (root and parent) for the record."""
         return [
             {
@@ -320,7 +331,7 @@ class WorkflowAsOgcRecord(MappingConstructible["OgcRecord"], JsonSerializable):
                 "application:platform_supports": ["jupyter-notebook"],
                 "application:preferred_app": "JupyterLab",
             },
-            _project_link(self.properties),
+            _project_link(self.properties, project_title),
             {
                 "rel": "self",
                 "href": f"{BASE_URL_OSC}/workflows/{self.id}/record.json",
@@ -342,6 +353,7 @@ class ExperimentAsOgcRecord(MappingConstructible["OgcRecord"], JsonSerializable)
         linkTemplates=None,
         conformsTo: list[str] | None = None,
         geometry: Any | None = None,
+        project_title: str | None = None,
     ):
         if linkTemplates is None:
             linkTemplates = []
@@ -356,9 +368,9 @@ class ExperimentAsOgcRecord(MappingConstructible["OgcRecord"], JsonSerializable)
         self.geometry = geometry
         self.properties = properties
         self.linkTemplates = linkTemplates
-        self.links = self._generate_static_links() + links
+        self.links = self._generate_static_links(project_title) + links
 
-    def _generate_static_links(self):
+    def _generate_static_links(self, project_title: str | None = None):
         """Generates static links (root and parent) for the record."""
         return [
             {
@@ -379,7 +391,7 @@ class ExperimentAsOgcRecord(MappingConstructible["OgcRecord"], JsonSerializable)
                 "type": "application/json",
                 "title": f"Workflow: {self.title}",
             },
-            _project_link(self.properties),
+            _project_link(self.properties, project_title),
             {
                 "rel": "application-originating-platform",
                 "title": "DeepESDL platform",
