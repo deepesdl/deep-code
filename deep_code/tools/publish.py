@@ -60,6 +60,10 @@ class GitHubPublisher:
         )
         self.github_automation.fork_repository()
         self.github_automation.clone_sync_repository()
+        # Existing catalogs are read from the local clone before publish_files()
+        # runs, so the fork must already match upstream; otherwise a stale fork's
+        # catalogs overwrite upstream's.
+        self.github_automation.sync_fork_with_upstream()
 
     def publish_files(
         self,

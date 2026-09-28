@@ -102,3 +102,4 @@
 - `dataset_id` in `items_config` can now be the `https://` URL of a consolidated Zarr store (e.g. the copy served by PRR), so `publish` works for datasets that are not in a DeepESDL S3 bucket. `publish` no longer computes the Zarr store's file sizes, which it did not use and which required listing every chunk of the store.
 - Fixed `publish` crashing with `AttributeError: 'OscDatasetStacGenerator' object has no attribute 'variables_metadata'` when a dataset introduces a variable that has no OSC variable catalog yet. Variable metadata is now extracted once, so missing GCMD keyword URLs are prompted for only once.
 - Workflow and experiment records now link to the project given by `osc_project`, instead of always linking to the DeepESDL project.
+- Fixed `publish` overwriting upstream OSC catalogs (e.g. `products/catalog.json`) with the stale copies from an out-of-date fork. The fork is now synced with upstream before existing catalogs are read.

@@ -9,9 +9,26 @@ import pytest
 import yaml
 from pystac import Catalog
 
-from deep_code.tools.publish import Publisher
+from deep_code.tools.publish import GitHubPublisher, Publisher
 from deep_code.utils.dataset_stac_generator import OscDatasetStacGenerator
 from deep_code.utils.ogc_api_record import LinksBuilder
+
+
+class TestGitHubPublisher(unittest.TestCase):
+    @patch("deep_code.tools.publish.GitHubAutomation")
+    @patch(
+        "fsspec.open",
+        mock_open(read_data="github-username: user\ngithub-token: token\n"),
+    )
+    def test_init_syncs_fork_before_catalogs_are_read(self, mock_gha):
+        automation = mock_gha.return_value
+
+        GitHubPublisher()
+
+        self.assertEqual(
+            [c[0] for c in automation.method_calls],
+            ["fork_repository", "clone_sync_repository", "sync_fork_with_upstream"],
+        )
 
 
 class TestPublisher(unittest.TestCase):
