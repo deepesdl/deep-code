@@ -1020,7 +1020,7 @@ class OscDatasetStacGenerator:
                     "reference_system": crs.to_epsg(),
                 }
 
-            elif lname == "time":
+            elif lname.startswith("time"):
                 time_min = pd.to_datetime(coord.min().values).to_pydatetime()
                 time_max = pd.to_datetime(coord.max().values).to_pydatetime()
                 dimensions[name] = {
