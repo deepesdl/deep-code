@@ -250,17 +250,39 @@ class OscDatasetStacGenerator:
     @staticmethod
     def _get_temporal_extent(dataset: xr.Dataset) -> TemporalExtent:
         """Extract temporal extent from the dataset."""
-        dataset = dataset
-        if "time" in dataset.coords:
+        time_coords = [name for name in dataset.coords if "time" in name]
+        if time_coords:
             try:
-                # Convert the time bounds to datetime objects
-                time_min = pd.to_datetime(dataset.time.min().values).to_pydatetime()
-                time_max = pd.to_datetime(dataset.time.max().values).to_pydatetime()
+                time_min = min(
+                    pd.to_datetime(dataset[name].min().values) for name in time_coords
+                ).to_pydatetime()
+                time_max = max(
+                    pd.to_datetime(dataset[name].max().values) for name in time_coords
+                ).to_pydatetime()
                 return TemporalExtent([[time_min, time_max]])
             except Exception as e:
                 raise ValueError(f"Failed to parse temporal extent: {e}")
         else:
-            raise ValueError("Dataset does not have a 'time' coordinate.")
+            raise ValueError("Dataset does not have a '*time*' coordinate.")
+
+    @staticmethod
+    def _get_cf_params(dataset: xr.Dataset) -> list:
+        params = []
+
+        for var_name, data_var in dataset.data_vars.items():
+            attrs = data_var.attrs
+
+            params.apend(
+                {
+                    "name": var_name,
+                    "standard_name": attrs.get("standard_name", var_name),
+                    "long_name": attrs.get("long_name"),
+                    "units": attrs.get("units"),
+                    "description": attrs.get("description"),
+                }
+            )
+
+        return params
 
     @staticmethod
     def _normalize_name(name: str | None) -> str | None:
@@ -1168,7 +1190,7 @@ class OscDatasetStacGenerator:
         dataset_ref = open_dataset(
             self.items_config[0].dataset_id, logger=self.logger, calc_filesizes=False
         )
-        variables = self.get_variable_ids(dataset_ref)
+        variables = list(dataset_ref.data_vars)
 
         collection = Collection(
             id=self.collection_id,
@@ -1186,7 +1208,10 @@ class OscDatasetStacGenerator:
         osc_extension.osc_region = self.osc_region
         osc_extension.osc_variables = variables
         osc_extension.osc_missions = self.osc_missions
-        osc_extension.cf_parameter = self.cf_params or [{"name": self.collection_id}]
+        if self.cf_params:
+            osc_extension.cf_parameter = self.cf_params
+        else:
+            osc_extension.cf_parameter = self._get_cf_params(dataset_ref)
 
         now_iso = datetime.now(timezone.utc).isoformat()
         collection.extra_fields["created"] = now_iso
@@ -1375,7 +1400,7 @@ class OscDatasetStacGenerator:
             )
             spatial_extent = self._get_spatial_extent(dataset, self.coord_position)
             temporal_extent = self._get_temporal_extent(dataset)
-            variables = self.get_variable_ids(dataset)
+            variables = list(dataset.dara_vars)
             general_metadata = self._get_general_metadata(dataset)
         except ValueError as e:
             raise ValueError(f"Metadata extraction failed: {e}")
@@ -1399,7 +1424,7 @@ class OscDatasetStacGenerator:
         if self.cf_params:
             osc_extension.cf_parameter = self.cf_params
         else:
-            osc_extension.cf_parameter = [{"name": self.collection_id}]
+            osc_extension.cf_parameter = self._get_cf_params(dataset)
 
         # Add creation and update timestamps for the collection
         now_iso = datetime.now(timezone.utc).isoformat()
