@@ -47,6 +47,7 @@ class TestGitHubAutomation(unittest.TestCase):
         """
         No .git directory → we clone and then ensure upstream remote gets added.
         """
+
         # Simulate: "git remote -v" returns nothing so we add 'upstream'
         def run_side_effect(args, cwd, check, capture_output=False, text=True):
             if args[:3] == ["git", "remote", "-v"]:
@@ -55,8 +56,9 @@ class TestGitHubAutomation(unittest.TestCase):
 
         mock_run.side_effect = run_side_effect
 
-        with patch.object(Path, "mkdir") as _mk, patch(
-            "pathlib.Path.exists", side_effect=lambda p=None: False
+        with (
+            patch.object(Path, "mkdir") as _mk,
+            patch("pathlib.Path.exists", side_effect=lambda p=None: False),
         ):
             self.gha.clone_sync_repository()
 
@@ -239,9 +241,10 @@ class TestGitHubAutomation(unittest.TestCase):
     @patch("subprocess.run")
     def test_add_file(self, mock_run):
         mock_run.return_value = make_cp()
-        with patch.object(Path, "mkdir") as _mk, patch.object(
-            Path, "write_text"
-        ) as _wt:
+        with (
+            patch.object(Path, "mkdir") as _mk,
+            patch.object(Path, "write_text") as _wt,
+        ):
             # Ensure .git exists
             with patch(
                 "pathlib.Path.exists",

@@ -10,7 +10,7 @@ from unittest.mock import MagicMock, call, patch
 import xarray
 import xarray as xr
 
-from deep_code.utils.helper import open_dataset, serialize
+from deep_code.utils.helper import get_osc_status, open_dataset, serialize
 
 
 def make_dummy_dataset():
@@ -157,6 +157,32 @@ class TestOpenDataset(unittest.TestCase):
             "Successfully opened dataset 'test-id' with configuration: Public store"
         )
 
+    @patch("deep_code.utils.helper.new_data_store")
+    @patch("deep_code.utils.helper.xr.open_zarr")
+    def test_https_url_opens_consolidated_zarr(self, mock_open_zarr, mock_new_store):
+        """An https:// dataset_id is opened directly, not through the S3 stores."""
+        dummy = make_dummy_dataset()
+        mock_open_zarr.return_value = dummy
+        url = "https://eoresults.esa.int/d/col/1940/01/01/item/cube.zarr/"
+
+        result = open_dataset(url, calc_filesizes=False)
+
+        self.assertIs(result, dummy)
+        mock_open_zarr.assert_called_once_with(url.rstrip("/"), consolidated=True)
+        mock_new_store.assert_not_called()
+
+    @patch("deep_code.utils.helper.xr.open_zarr")
+    def test_https_url_with_filesizes_raises(self, mock_open_zarr):
+        """File sizes cannot be listed over HTTP, so asking for them fails early."""
+        with self.assertRaisesRegex(ValueError, "Cannot compute file sizes"):
+            open_dataset("https://example.org/cube.zarr")
+        mock_open_zarr.assert_not_called()
+
+    @patch("deep_code.utils.helper.xr.open_zarr", side_effect=OSError("404"))
+    def test_https_url_open_failure_raises(self, _mock_open_zarr):
+        with self.assertRaisesRegex(ValueError, "Failed to open dataset from URL"):
+            open_dataset("https://example.org/cube.zarr", calc_filesizes=False)
+
 
 class TestSerialize(unittest.TestCase):
     def test_set_converted_to_list(self):
@@ -176,3 +202,20 @@ class TestSerialize(unittest.TestCase):
     def test_unserializable_raises_type_error(self):
         with self.assertRaises(TypeError):
             serialize(42)
+
+
+class TestGetOscStatus(unittest.TestCase):
+    def test_osc_status(self):
+        self.assertEqual(get_osc_status({"osc_status": "ongoing"}), "ongoing")
+
+    def test_default(self):
+        self.assertEqual(get_osc_status({}), "completed")
+
+    def test_deprecated_dataset_status(self):
+        with self.assertLogs("deep_code.utils.helper", level="WARNING") as logs:
+            self.assertEqual(get_osc_status({"dataset_status": "planned"}), "planned")
+        self.assertIn("dataset_status", logs.output[0])
+
+    def test_osc_status_wins_over_dataset_status(self):
+        config = {"osc_status": "ongoing", "dataset_status": "planned"}
+        self.assertEqual(get_osc_status(config), "ongoing")

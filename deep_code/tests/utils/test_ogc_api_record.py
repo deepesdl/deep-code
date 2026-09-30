@@ -218,8 +218,78 @@ class TestWorkflowAsOgcRecord(unittest.TestCase):
         self.assertEqual(workflow_record.links[0]["rel"], "root")
         self.assertEqual(workflow_record.links[-1]["rel"], "self")
 
+    def test_records_link_their_own_project(self):
+        """Workflow and experiment records link the project from osc:project."""
+        properties = RecordProperties(
+            created="2023-01-01",
+            type="workflow",
+            title="T",
+            description="D",
+            osc_project="arnetlab",
+        )
+        records = [
+            WorkflowAsOgcRecord(
+                id="wf",
+                type="Feature",
+                title="T",
+                jupyter_notebook_url=None,
+                properties=properties,
+                links=[],
+            ),
+            ExperimentAsOgcRecord(
+                id="wf",
+                title="T",
+                type="Feature",
+                jupyter_notebook_url=None,
+                collection_id="col",
+                properties=properties,
+                links=[],
+            ),
+        ]
+        for record in records:
+            project_links = [
+                lnk for lnk in record.links if "/projects/" in lnk["href"]
+            ]
+            self.assertEqual(
+                project_links,
+                [
+                    {
+                        "rel": "related",
+                        "href": "../../projects/arnetlab/collection.json",
+                        "type": "application/json",
+                        "title": "Project: arnetlab",
+                    }
+                ],
+            )
+
 
 class TestExperimentAsOgcRecord(unittest.TestCase):
+
+    def test_records_use_given_project_title(self):
+        """The project link title repeats the project collection's title."""
+        properties = RecordProperties(
+            created="2023-01-01",
+            type="workflow",
+            title="T",
+            description="D",
+            osc_project="arnetlab",
+        )
+        record = WorkflowAsOgcRecord(
+            id="wf",
+            type="Feature",
+            title="T",
+            jupyter_notebook_url=None,
+            properties=properties,
+            links=[],
+            project_title="Atmospheric River Networks (ARNETLAB)",
+        )
+        project_links = [lnk for lnk in record.links if "/projects/" in lnk["href"]]
+        self.assertEqual(
+            project_links[0]["title"],
+            "Project: Atmospheric River Networks (ARNETLAB)",
+        )
+        self.assertNotIn("project_title", record.to_dict())
+
     def test_experiment_as_ogc_record_initialization(self):
         kernel_info = JupyterKernelInfo(
             name="python3", python_version=3.12, env_file="environment.yml"

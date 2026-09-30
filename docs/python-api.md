@@ -71,21 +71,29 @@ publisher.publish(write_to_file=False, mode="dataset")
 over individual artifacts.
 
 ```python
-from deep_code.utils.dataset_stac_generator import OscDatasetStacGenerator
+from deep_code.utils.dataset_stac_generator import ItemConfig, OscDatasetStacGenerator
 
 generator = OscDatasetStacGenerator(
-    dataset_id="my-dataset.zarr",
     collection_id="my-collection",
     workflow_id="my-workflow",
     workflow_title="My Workflow",
     license_type="CC-BY-4.0",
+    items_config=[ItemConfig(dataset_id="my-dataset.zarr", item_id="my-item")],
     osc_themes=["cryosphere"],
     osc_region="Global",
     osc_status="completed",
     # Optional: override the default project identifier.
     # Controls osc:project on the collection and the link to the project collection.
     osc_project="deep-earth-system-data-lab",
+    # Optional, only used for the S3-hosted STAC item: absolute URL of the Zarr
+    # store. If omitted, it is looked up from the dataset's item in the PRR STAC API.
+    access_link=None,
 )
+
+# Without stac_catalog_s3_root the collection links to the dataset's PRR
+# collection (https://eoresults.esa.int/stac/collections/my-collection),
+# which must already exist.
+collection = generator.build_dataset_stac_collection(mode="dataset")
 ```
 
 ### `osc_project` parameter
@@ -112,6 +120,8 @@ This means publishing to a new project does not require manual catalog setup.
 
 ### STAC Catalog and Item generation
 
+Only needed for datasets that are not in PRR:
+
 ```python
 # Build the S3 STAC hierarchy (dict keyed by S3 path)
 file_dict = generator.build_zarr_stac_catalog_file_dict(
@@ -119,8 +129,35 @@ file_dict = generator.build_zarr_stac_catalog_file_dict(
 )
 # file_dict contains:
 #   "s3://bucket/stac/my-collection/catalog.json"
-#   "s3://bucket/stac/my-collection/my-collection/item.json"
+#   "s3://bucket/stac/my-collection/my-collection/items/my-item.json"
 ```
+
+The item's assets point to `access_link`, or, if it is not passed to the
+generator, to the Zarr store served by PRR, looked up from
+`https://eoresults.esa.int/stac/collections/{collection_id}/items/{item_id}`.
 
 See [STAC Catalog on S3](configuration.md#stac-catalog-on-s3) for details on the
 generated structure.
+
+### PRR collection generation
+
+Build a self-contained PRR (Project Results Repository) `Collection → Item → Assets`
+tree as local files. The high-level helper reads the same dataset config as the CLI:
+
+```python
+from deep_code.tools.prr import generate_prr_collection
+
+out_dir = generate_prr_collection("dataset.yaml", output_dir="./prr")
+# ./prr/<collection_id>/collection.json  +  ./prr/<collection_id>/items/<item_id>.json
+```
+
+Or drive the generator directly:
+
+```python
+generator.save_prr_collection("./prr")   # writes a self-contained tree
+```
+
+The Item includes the `datacube` extension; the Collection declares the OSC, Scientific,
+Processing, Themes and CF extensions and the PRR-mandatory fields. See
+[PRR collection output](configuration.md#prr-collection-output) and
+[Generate a PRR collection](cli.md#generate-a-prr-collection).

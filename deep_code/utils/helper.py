@@ -1,6 +1,5 @@
 import logging
 import os
-from typing import Optional
 
 import xarray as xr
 from xcube.core.store import new_data_store
@@ -22,20 +21,61 @@ def serialize(obj):
     raise TypeError(f"Object of type {type(obj).__name__} is not JSON serializable")
 
 
+def get_osc_status(config: dict, logger: logging.Logger | None = None) -> str:
+    """Return ``osc_status`` from a dataset config, defaulting to ``"completed"``.
+
+    Falls back to the deprecated ``dataset_status`` key with a warning.
+    """
+    osc_status = config.get("osc_status")
+    if not osc_status and config.get("dataset_status"):
+        osc_status = config["dataset_status"]
+        (logger or logging.getLogger(__name__)).warning(
+            "'dataset_status' is deprecated; rename it to 'osc_status' "
+            "in the dataset config."
+        )
+    return osc_status or "completed"
+
+
+def _open_zarr_url(
+    url: str, logger: logging.Logger, calc_filesizes: bool
+) -> xr.Dataset:
+    """Open a consolidated Zarr store over HTTP(S).
+
+    The total store size cannot be computed over HTTP (no directory listing),
+    so ``calc_filesizes`` is not supported for URLs.
+    """
+    if calc_filesizes:
+        raise ValueError(
+            f"Cannot compute file sizes for the Zarr store at {url!r} over HTTP. "
+            "Use the store's S3 path as dataset_id instead."
+        )
+    logger.info(f"Attempting to open dataset from URL '{url}'")
+    try:
+        dataset = xr.open_zarr(url.rstrip("/"), consolidated=True)
+    except Exception as e:
+        raise ValueError(f"Failed to open dataset from URL {url!r}: {e}") from e
+    logger.info(f"Successfully opened dataset from URL '{url}'")
+    return dataset
+
+
 def open_dataset(
     dataset_id: str,
     root: str = "deep-esdl-public",
-    storage_configs: Optional[list[dict]] = None,
-    logger: Optional[logging.Logger] = None,
+    storage_configs: list[dict] | None = None,
+    logger: logging.Logger | None = None,
+    calc_filesizes: bool = True,
 ) -> xr.Dataset:
     """Open an xarray dataset from a specified store.
 
     Args:
-        dataset_id: ID of the dataset (e.g., path to Zarr or NetCDF file).
+        dataset_id: ID of the dataset (e.g., path to Zarr or NetCDF file), or the
+            ``https://`` URL of a consolidated Zarr store (e.g. one served by PRR).
         storage_type: Type of storage (e.g., 's3', 'file'). Defaults to 's3'.
         root: Root path or bucket for the store. Defaults to 'deep-esdl-public'.
         storage_configs: List of storage configurations. If None, uses default S3 configs.
         logger: Optional logger for logging messages. If None, uses default logger.
+        calc_filesizes: Boolean for size calculation of the Zarr store and the Zarr
+            metadata. Defaults to True.
 
     Returns:
         xarray.Dataset: The opened dataset.
@@ -45,6 +85,9 @@ def open_dataset(
     """
     if logger is None:
         logger = logging.getLogger(__name__)
+
+    if dataset_id.startswith(("https://", "http://")):
+        return _open_zarr_url(dataset_id, logger, calc_filesizes)
 
     # Default S3 configurations
     default_configs = [
@@ -63,10 +106,15 @@ def open_dataset(
                 "root": os.environ.get("S3_USER_STORAGE_BUCKET", root),
                 "storage_options": {
                     "anon": False,
-                    **({
-                        "key": os.environ["S3_USER_STORAGE_KEY"],
-                        "secret": os.environ["S3_USER_STORAGE_SECRET"],
-                    } if os.environ.get("S3_USER_STORAGE_KEY") and os.environ.get("S3_USER_STORAGE_SECRET") else {}),
+                    **(
+                        {
+                            "key": os.environ["S3_USER_STORAGE_KEY"],
+                            "secret": os.environ["S3_USER_STORAGE_SECRET"],
+                        }
+                        if os.environ.get("S3_USER_STORAGE_KEY")
+                        and os.environ.get("S3_USER_STORAGE_SECRET")
+                        else {}
+                    ),
                 },
             },
         },
@@ -91,6 +139,13 @@ def open_dataset(
                 storage_options=config["params"]["storage_options"],
             )
             dataset = store.open_data(dataset_id)
+            if calc_filesizes:
+                files = store.fs.find(f"{store.root}/{dataset_id}")
+                dataset.attrs["size"] = sum(
+                    store.fs.info(file)["size"] for file in files
+                )
+                metadata_path = f"{store.root}/{dataset_id}/.zmetadata"
+                dataset.attrs["metadata_size"] = store.fs.info(metadata_path)["size"]
             logger.info(
                 f"Successfully opened dataset '{dataset_id}' with configuration: "
                 f"{config['description']}"

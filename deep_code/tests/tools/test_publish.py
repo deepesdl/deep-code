@@ -9,8 +9,26 @@ import pytest
 import yaml
 from pystac import Catalog
 
-from deep_code.tools.publish import Publisher
+from deep_code.tools.publish import GitHubPublisher, Publisher
+from deep_code.utils.dataset_stac_generator import OscDatasetStacGenerator
 from deep_code.utils.ogc_api_record import LinksBuilder
+
+
+class TestGitHubPublisher(unittest.TestCase):
+    @patch("deep_code.tools.publish.GitHubAutomation")
+    @patch(
+        "fsspec.open",
+        mock_open(read_data="github-username: user\ngithub-token: token\n"),
+    )
+    def test_init_syncs_fork_before_catalogs_are_read(self, mock_gha):
+        automation = mock_gha.return_value
+
+        GitHubPublisher()
+
+        self.assertEqual(
+            [c[0] for c in automation.method_calls],
+            ["fork_repository", "clone_sync_repository", "sync_fork_with_upstream"],
+        )
 
 
 class TestPublisher(unittest.TestCase):
@@ -24,7 +42,7 @@ class TestPublisher(unittest.TestCase):
         # Mock dataset and workflow config files
         self.dataset_config = {
             "collection_id": "test-collection",
-            "dataset_id": "test-dataset",
+            "items_config": [{"dataset_id": "test-dataset", "item_id": "test-item"}],
         }
         self.workflow_config = {
             "properties": {"title": "Test Workflow"},
@@ -90,11 +108,45 @@ class TestPublisher(unittest.TestCase):
         self.assertEqual(updated_catalog.get_self_href(), self_href)
         self.assertIsInstance(updated_catalog, Catalog)
 
+    def test_update_base_catalog_keeps_self_link_position(self):
+        self_href = "https://example.com/workflows/catalog.json"
+        catalog = Catalog.from_dict(
+            {
+                "type": "Catalog",
+                "id": "workflows",
+                "stac_version": "1.0.0",
+                "description": "Workflows",
+                "links": [
+                    {"rel": "self", "href": self_href, "type": "application/json"},
+                    {"rel": "item", "href": "./existing/record.json"},
+                ],
+            }
+        )
+        self.publisher.workflow_title = "Test Workflow"
+
+        with patch("pystac.Catalog.from_file", return_value=catalog):
+            updated_catalog = self.publisher._update_base_catalog(
+                "workflows/catalog.json", "new-workflow", self_href
+            )
+
+        # PySTAC adds its own root link; only the order of the others matters here
+        links = [
+            link for link in updated_catalog.to_dict()["links"] if link["rel"] != "root"
+        ]
+        self.assertEqual(
+            [(link["rel"], link["href"]) for link in links],
+            [
+                ("self", self_href),
+                ("item", "./existing/record.json"),
+                ("item", "./new-workflow/record.json"),
+            ],
+        )
+
     def test_read_config_files(self):
         # Mock dataset and workflow config files
         dataset_config = {
             "collection_id": "test-collection",
-            "dataset_id": "test-dataset",
+            "items_config": [{"dataset_id": "test-dataset", "item_id": "test-item"}],
         }
         workflow_config = {
             "properties": {"title": "Test Workflow"},
@@ -138,7 +190,7 @@ class TestPublisher(unittest.TestCase):
         self.publisher.dataset_config = {
             "stac_catalog_s3_root": "s3://bucket/stac/",
             "collection_id": "test-collection",
-            "dataset_id": "test-dataset",
+            "items_config": [{"dataset_id": "test-dataset", "item_id": "test-item"}],
         }
         self.publisher.gh_publisher.publish_files.return_value = "PR_URL"
 
@@ -197,7 +249,6 @@ class TestPublisher(unittest.TestCase):
         assert "workflow/experiment: wf" in kwargs["commit_message"]
         assert "dataset: col" in kwargs["pr_title"]
         assert "workflow/experiment: wf" in kwargs["pr_title"]
-
 
     # ------------------------------------------------------------------
     # S3 credential resolution
@@ -262,9 +313,7 @@ class TestPublisher(unittest.TestCase):
             "s3://bucket/catalog.json": {"type": "Catalog", "id": "test"},
             "s3://bucket/col/item.json": {"type": "Feature", "id": "item"},
         }
-        self.publisher._write_stac_catalog_to_s3(
-            file_dict, {"key": "k", "secret": "s"}
-        )
+        self.publisher._write_stac_catalog_to_s3(file_dict, {"key": "k", "secret": "s"})
 
         self.assertEqual(mock_fsspec_open.call_count, 2)
         mock_fsspec_open.assert_any_call(
@@ -283,9 +332,7 @@ class TestPublisher(unittest.TestCase):
     def test_publish_writes_zarr_stac_to_s3_when_configured(
         self, mock_publish_ds, mock_fsspec_open
     ):
-        self.publisher.dataset_config["stac_catalog_s3_root"] = (
-            "s3://test-bucket/stac/"
-        )
+        self.publisher.dataset_config["stac_catalog_s3_root"] = "s3://test-bucket/stac/"
 
         mock_ctx = MagicMock()
         mock_ctx.__enter__ = MagicMock(return_value=MagicMock())
@@ -295,7 +342,9 @@ class TestPublisher(unittest.TestCase):
         mock_generator = MagicMock()
         mock_generator.build_zarr_stac_catalog_file_dict.return_value = {
             "s3://test-bucket/stac/catalog.json": {"type": "Catalog"},
-            "s3://test-bucket/stac/test-collection/item.json": {"type": "Feature"},
+            "s3://test-bucket/stac/test-collection/items/test-collection.json": {
+                "type": "Feature"
+            },
         }
         # Simulate what publish_dataset() normally does: store the generator
         self.publisher._last_generator = mock_generator
@@ -330,8 +379,10 @@ class TestPublisher(unittest.TestCase):
         MockGenerator.return_value = mock_gen
 
         self.publisher.dataset_config = {
-            "dataset_id": "test-dataset",
             "collection_id": "test-collection",
+            "items_config": [{"dataset_id": "test-dataset", "item_id": "test-item"}],
+            "osc_project": "test-project",
+            "osc_project_url": "https://example.com/projects/test-project",
             "license_type": "CC-BY-4.0",
             "stac_catalog_s3_root": "s3://bucket/stac/test-collection/",
         }
@@ -340,9 +391,14 @@ class TestPublisher(unittest.TestCase):
         # Project collection is missing; all other file_exists calls return True
         self.publisher.gh_publisher.github_automation.file_exists.return_value = False
 
-        with patch.object(self.publisher, "_update_and_add_to_file_dict") as mock_update, \
-                patch.object(self.publisher, "_update_variable_catalogs"):
-            file_dict = self.publisher.publish_dataset(write_to_file=False)
+        with patch("deep_code.tools.publish.open_dataset", return_value=object()):
+            with (
+                patch.object(
+                    self.publisher, "_update_and_add_to_file_dict"
+                ) as mock_update,
+                patch.object(self.publisher, "_update_variable_catalogs"),
+            ):
+                file_dict = self.publisher.publish_dataset(write_to_file=False)
 
         mock_gen.build_project_collection.assert_called_once()
         self.assertIn("projects/test-project/collection.json", file_dict)
@@ -365,8 +421,10 @@ class TestPublisher(unittest.TestCase):
         MockGenerator.return_value = mock_gen
 
         self.publisher.dataset_config = {
-            "dataset_id": "test-dataset",
             "collection_id": "test-collection",
+            "items_config": [{"dataset_id": "test-dataset", "item_id": "test-item"}],
+            "osc_project": "test-project",
+            "osc_project_url": "https://example.com/projects/test-project",
             "license_type": "CC-BY-4.0",
             "stac_catalog_s3_root": "s3://bucket/stac/test-collection/",
         }
@@ -375,9 +433,14 @@ class TestPublisher(unittest.TestCase):
         # Project collection already exists
         self.publisher.gh_publisher.github_automation.file_exists.return_value = True
 
-        with patch.object(self.publisher, "_update_and_add_to_file_dict") as mock_update, \
-                patch.object(self.publisher, "_update_variable_catalogs"):
-            self.publisher.publish_dataset(write_to_file=False)
+        with patch("deep_code.tools.publish.open_dataset", return_value=object()):
+            with (
+                patch.object(
+                    self.publisher, "_update_and_add_to_file_dict"
+                ) as mock_update,
+                patch.object(self.publisher, "_update_variable_catalogs"),
+            ):
+                self.publisher.publish_dataset(write_to_file=False)
 
         mock_gen.build_project_collection.assert_not_called()
 
@@ -385,14 +448,19 @@ class TestPublisher(unittest.TestCase):
         update_methods = [call.args[2] for call in mock_update.call_args_list]
         self.assertIn(mock_gen.update_deepesdl_collection, update_methods)
 
-    def test_publish_dataset_raises_when_stac_root_missing(self):
-        self.publisher.dataset_config = {
-            "collection_id": "test-collection",
-            "dataset_id": "test-dataset",
-            "license_type": "CC-BY-4.0",
-        }
-        with pytest.raises(ValueError, match="stac_catalog_s3_root"):
-            self.publisher.publish_dataset(write_to_file=False)
+    @patch.object(Publisher, "_write_stac_catalog_to_s3")
+    @patch.object(Publisher, "publish_dataset", return_value={"x": {}})
+    def test_publish_without_stac_root_skips_s3(self, mock_ds, mock_s3):
+        """Without stac_catalog_s3_root nothing is written to S3 (PRR is linked)."""
+        self.publisher.gh_publisher.publish_files.return_value = "PR_URL"
+        self.publisher.collection_id = "col"
+        mock_generator = MagicMock()
+        self.publisher._last_generator = mock_generator
+        self.publisher.dataset_config = {}
+
+        assert self.publisher.publish(write_to_file=False, mode="dataset") == "PR_URL"
+        mock_generator.build_zarr_stac_catalog_file_dict.assert_not_called()
+        mock_s3.assert_not_called()
 
     def test_publish_dataset_raises_when_no_dataset_config(self):
         self.publisher.dataset_config = None
@@ -400,14 +468,24 @@ class TestPublisher(unittest.TestCase):
             self.publisher.publish_dataset(write_to_file=False)
 
     def test_publish_dataset_raises_when_ids_missing(self):
-        self.publisher.dataset_config = {"collection_id": "", "dataset_id": ""}
-        with pytest.raises(ValueError, match="Dataset ID or Collection ID missing"):
+        self.publisher.dataset_config = {
+            "collection_id": "",
+            "items_config": [{"dataset_id": "test-dataset", "item_id": "test-item"}],
+            "osc_project": "test-project",
+            "osc_project_url": "https://example.com/projects/test-project",
+            "license_type": "CC-BY-4.0",
+            "stac_catalog_s3_root": "s3://bucket/stac/test-collection/",
+        }
+        with pytest.raises(ValueError, match="collection_id missing"):
             self.publisher.publish_dataset(write_to_file=False)
 
     def test_publish_dataset_raises_when_license_missing(self):
         self.publisher.dataset_config = {
             "collection_id": "test-collection",
-            "dataset_id": "test-dataset",
+            "items_config": [{"dataset_id": "test-dataset", "item_id": "test-item"}],
+            "osc_project": "test-project",
+            "osc_project_url": "https://example.com/projects/test-project",
+            "stac_catalog_s3_root": "s3://bucket/stac/test-collection/",
         }
         with pytest.raises(ValueError, match="license_type is required"):
             self.publisher.publish_dataset(write_to_file=False)
@@ -431,20 +509,29 @@ class TestPublisher(unittest.TestCase):
         file_dict = {}
         self.publisher.gh_publisher.github_automation.local_clone_dir = "/tmp"
         update_method = MagicMock(return_value={"key": "value"})
-        self.publisher._update_and_add_to_file_dict(file_dict, "some/catalog.json", update_method)
+        self.publisher._update_and_add_to_file_dict(
+            file_dict, "some/catalog.json", update_method
+        )
         update_method.assert_called_once()
         assert any("some/catalog.json" in str(k) for k in file_dict)
 
     def test_update_variable_catalogs_creates_new_when_missing(self):
-        mock_gen = MagicMock()
-        mock_gen.variables_metadata = {"var1": {"variable_id": "var1"}}
-        mock_gen.build_variable_catalog.return_value.to_dict.return_value = {"id": "var1"}
+        # spec=... so accessing a removed attribute (e.g. variables_metadata) fails
+        mock_gen = MagicMock(spec=OscDatasetStacGenerator)
+        mock_gen.build_variable_catalog.return_value.to_dict.return_value = {
+            "id": "var1"
+        }
         self.publisher.gh_publisher.github_automation.file_exists.return_value = False
+        variables_metadata = {"var1": {"variable_id": "var1"}}
 
         file_dict = {}
-        self.publisher._update_variable_catalogs(mock_gen, file_dict, ["var1"])
+        self.publisher._update_variable_catalogs(
+            mock_gen, file_dict, ["var1"], variables_metadata
+        )
 
-        mock_gen.build_variable_catalog.assert_called_once()
+        mock_gen.build_variable_catalog.assert_called_once_with(
+            variables_metadata["var1"]
+        )
         assert "variables/var1/catalog.json" in file_dict
 
     def test_update_variable_catalogs_updates_existing(self):
@@ -454,7 +541,9 @@ class TestPublisher(unittest.TestCase):
         mock_gen.update_existing_variable_catalog.return_value = {"id": "var1"}
 
         file_dict = {}
-        self.publisher._update_variable_catalogs(mock_gen, file_dict, ["var1"])
+        self.publisher._update_variable_catalogs(
+            mock_gen, file_dict, ["var1"], {"var1": {"variable_id": "var1"}}
+        )
 
         mock_gen.update_existing_variable_catalog.assert_called_once()
         assert "variables/var1/catalog.json" in file_dict
@@ -486,7 +575,7 @@ class TestPublisher(unittest.TestCase):
     @patch("deep_code.tools.publish.LinksBuilder")
     @patch("deep_code.tools.publish.OSCWorkflowOGCApiRecordGenerator")
     def test_generate_workflow_records_mode_workflow(self, MockRG, MockLinks, MockWF):
-        mock_rg, mock_props, mock_wf_record, _ = self._setup_workflow_mocks()
+        mock_rg, _mock_props, mock_wf_record, _ = self._setup_workflow_mocks()
         MockRG.return_value = mock_rg
         MockWF.return_value = mock_wf_record
 
@@ -507,8 +596,12 @@ class TestPublisher(unittest.TestCase):
     @patch("deep_code.tools.publish.WorkflowAsOgcRecord")
     @patch("deep_code.tools.publish.LinksBuilder")
     @patch("deep_code.tools.publish.OSCWorkflowOGCApiRecordGenerator")
-    def test_generate_workflow_records_mode_all(self, MockRG, MockLinks, MockWF, MockExp):
-        mock_rg, mock_props, mock_wf_record, mock_exp_record = self._setup_workflow_mocks()
+    def test_generate_workflow_records_mode_all(
+        self, MockRG, MockLinks, MockWF, MockExp
+    ):
+        mock_rg, _mock_props, mock_wf_record, mock_exp_record = (
+            self._setup_workflow_mocks()
+        )
         MockRG.return_value = mock_rg
         MockWF.return_value = mock_wf_record
         MockExp.return_value = mock_exp_record
@@ -526,6 +619,69 @@ class TestPublisher(unittest.TestCase):
         self.assertIn("workflows/my-workflow/record.json", result)
         self.assertIn("workflows/catalog.json", result)
         self.assertIn("experiments/catalog.json", result)
+
+    @patch("deep_code.tools.publish.ExperimentAsOgcRecord")
+    @patch("deep_code.tools.publish.WorkflowAsOgcRecord")
+    @patch("deep_code.tools.publish.LinksBuilder")
+    @patch("deep_code.tools.publish.OSCWorkflowOGCApiRecordGenerator")
+    def test_generate_workflow_records_filters_experiment_links(
+        self, MockRG, MockLinks, MockWF, MockExp
+    ):
+        """Config links OSC rejects on experiments stay on the workflow only."""
+        mock_rg, mock_props, mock_wf_record, mock_exp_record = (
+            self._setup_workflow_mocks()
+        )
+        mock_props.osc_project = "arnetlab"
+        MockRG.return_value = mock_rg
+        MockWF.return_value = mock_wf_record
+        MockExp.return_value = mock_exp_record
+        MockLinks.return_value.build_theme_links_for_records.return_value = []
+        MockLinks.return_value.build_link_to_dataset.return_value = []
+
+        html_link = {"rel": "related", "type": "text/html", "href": "https://a"}
+        git_link = {"rel": "git", "href": "https://github.com/a/b"}
+        self.publisher.workflow_config = {
+            "workflow_id": "my-workflow",
+            "properties": {"title": "My WF", "license": "CC-BY-4.0"},
+            "links": [html_link, git_link],
+        }
+        self.publisher.dataset_config = {
+            "osc_project": "arnetlab",
+            "osc_project_title": "Arnet Lab (ARNETLAB)",
+        }
+        self.publisher.collection_id = "my-collection"
+        with (
+            patch.object(self.publisher, "_update_base_catalog", return_value={}),
+            patch.object(self.publisher, "_project_title", side_effect=lambda _, t: t),
+        ):
+            self.publisher.generate_workflow_experiment_records(
+                write_to_file=False, mode="all"
+            )
+
+        wf_kwargs = MockWF.call_args.kwargs
+        exp_kwargs = MockExp.call_args.kwargs
+        self.assertEqual(wf_kwargs["links"], [html_link, git_link])
+        self.assertEqual(exp_kwargs["links"], [git_link])
+        self.assertEqual(wf_kwargs["project_title"], "Arnet Lab (ARNETLAB)")
+        self.assertEqual(exp_kwargs["project_title"], "Arnet Lab (ARNETLAB)")
+
+    def test_project_title_prefers_existing_collection(self):
+        with tempfile.TemporaryDirectory() as clone_dir:
+            self.publisher.gh_publisher.github_automation.local_clone_dir = clone_dir
+            self.assertEqual(
+                self.publisher._project_title("arnetlab", "Config Title"),
+                "Config Title",
+            )
+
+            project_dir = Path(clone_dir) / "projects" / "arnetlab"
+            project_dir.mkdir(parents=True)
+            (project_dir / "collection.json").write_text(
+                json.dumps({"title": "Existing Title"})
+            )
+            self.assertEqual(
+                self.publisher._project_title("arnetlab", "Config Title"),
+                "Existing Title",
+            )
 
     @patch("deep_code.tools.publish.OSCWorkflowOGCApiRecordGenerator")
     def test_generate_workflow_records_raises_when_workflow_id_missing(self, MockRG):
@@ -583,8 +739,8 @@ class TestParseGithubNotebookUrl:
         ],
     )
     def test_valid_urls(self, url, repo_url, repo_name, branch, file_path):
-        got_repo_url, got_repo_name, got_branch, got_file_path = LinksBuilder._parse_github_notebook_url(
-            url
+        got_repo_url, got_repo_name, got_branch, got_file_path = (
+            LinksBuilder._parse_github_notebook_url(url)
         )
         assert got_repo_url == repo_url
         assert got_repo_name == repo_name
