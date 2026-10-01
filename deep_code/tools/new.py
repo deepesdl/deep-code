@@ -94,9 +94,7 @@ class TemplateGenerator:
             ],
             "collection_title": "[OPTIONAL: title present in the collection and in the STAC browser]",
             "coord_position": "[OPTIONAL: Position of the coordinates within each grid cell. 'center' assumes coordinates represent cell centers, 'left' assumes they represent the left/bottom edge, and 'right' assumes they represent the right/top edge.]",
-            "cf_parameter": [
-                {"name": "[OPTIONAL: CF standard name]", "units": "[unit string]"}
-            ],
+            "cf_parameter": [{"name": "[OPTIONAL: CF standard name]"}],
         }
 
         # Fields used only by `deep-code generate-prr-collection` to build a

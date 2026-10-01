@@ -215,8 +215,6 @@ class TestOSCProductSTACGenerator(unittest.TestCase):
         """CF parameters are derived from variable names and attributes."""
         params = self.generator._get_cf_params(self.mock_dataset)
         self.assertEqual([param["name"] for param in params], ["var1", "var2"])
-        self.assertEqual(params[0]["standard_name"], "var1")
-        self.assertEqual(params[0]["description"], "dummy")
 
     def test_get_variables(self):
         """Test variable ID extraction."""
@@ -1062,7 +1060,11 @@ class TestPRRCollection(unittest.TestCase):
                 "sst": (
                     ("time", "lat", "lon"),
                     np.random.rand(2, 3, 3),
-                    {"units": "K", "long_name": "Sea surface temperature"},
+                    {
+                        "units": "K",
+                        "standard_name": "sea_surface_temperature",
+                        "long_name": "Sea surface temperature",
+                    },
                 ),
                 "chl": (
                     ("time", "lat", "lon"),
@@ -1215,11 +1217,7 @@ class TestPRRCollection(unittest.TestCase):
         self.assertEqual(ef["osc:missions"], ["sentinel-3"])
         self.assertEqual(
             ef["cf:parameter"],
-            [
-                {"long_name": "Sea surface temperature", "name": "sst", "units": "K"},
-                {"name": "chl", "units": "mg m-3"},
-                {"name": "spatial_ref", "units": "1"},
-            ],
+            [{"name": "sea_surface_temperature"}],
         )
         self.assertIn("processing:datetime", ef)
 

@@ -271,18 +271,8 @@ class OscDatasetStacGenerator:
 
         for var_name, data_var in dataset.data_vars.items():
             attrs = data_var.attrs
-
-            params.append(
-                {
-                    "name": var_name,
-                    **{
-                        key: attrs[key]
-                        for key in ("standard_name", "long_name", "description")
-                        if key in attrs
-                    },
-                    "units": attrs.get("units", "1"),
-                }
-            )
+            if "standard_name" in attrs:
+                params.append({"name": attrs["standard_name"]})
 
         return params
 
