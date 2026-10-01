@@ -275,12 +275,12 @@ class OscDatasetStacGenerator:
             params.append(
                 {
                     "name": var_name,
-                    "units": attrs.get("units", "1"),
                     **{
                         key: attrs[key]
                         for key in ("standard_name", "long_name", "description")
                         if key in attrs
                     },
+                    "units": attrs.get("units", "1"),
                 }
             )
 
