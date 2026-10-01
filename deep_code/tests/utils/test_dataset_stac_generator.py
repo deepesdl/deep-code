@@ -198,6 +198,24 @@ class TestOSCProductSTACGenerator(unittest.TestCase):
         self.assertEqual(interval[0], datetime(2023, 1, 1, 0, 0))
         self.assertEqual(interval[1], datetime(2023, 1, 2, 0, 0))
 
+    def test_get_temporal_extent_uses_all_time_coordinates(self):
+        """Temporal bounds include all coordinates whose names contain time."""
+        dataset = Dataset(
+            coords={
+                "time_start": ("time_start", [np.datetime64("2023-01-03")]),
+                "time_end": ("time_end", [np.datetime64("2023-01-05")]),
+            }
+        )
+        extent = self.generator._get_temporal_extent(dataset)
+        self.assertEqual(
+            extent.intervals[0], [datetime(2023, 1, 3), datetime(2023, 1, 5)]
+        )
+
+    def test_get_cf_params_from_data_variables(self):
+        """CF parameters are derived from variable names and attributes."""
+        params = self.generator._get_cf_params(self.mock_dataset)
+        self.assertEqual([param["name"] for param in params], ["var1", "var2"])
+
     def test_get_variables(self):
         """Test variable ID extraction."""
         vars_ = self.generator.get_variable_ids(self.mock_dataset)
@@ -1042,7 +1060,11 @@ class TestPRRCollection(unittest.TestCase):
                 "sst": (
                     ("time", "lat", "lon"),
                     np.random.rand(2, 3, 3),
-                    {"units": "K", "long_name": "Sea surface temperature"},
+                    {
+                        "units": "K",
+                        "standard_name": "sea_surface_temperature",
+                        "long_name": "Sea surface temperature",
+                    },
                 ),
                 "chl": (
                     ("time", "lat", "lon"),
@@ -1193,7 +1215,10 @@ class TestPRRCollection(unittest.TestCase):
         self.assertEqual(ef["osc:region"], "Global")
         self.assertCountEqual(ef["osc:variables"], ["sst", "chl"])
         self.assertEqual(ef["osc:missions"], ["sentinel-3"])
-        self.assertEqual(ef["cf:parameter"], [{"name": "prr-collection"}])
+        self.assertEqual(
+            ef["cf:parameter"],
+            [{"name": "sea_surface_temperature"}],
+        )
         self.assertIn("processing:datetime", ef)
 
         # Extensions declared.

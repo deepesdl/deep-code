@@ -85,7 +85,9 @@ The output conforms to the
 [PRR collection specification](https://eoresults.esa.int/prr_collection_specifications.html)
 when the PRR fields are set in the config. If any required field is missing, the command
 still runs but logs a warning listing what is needed for full conformance. See
-[PRR collection fields](configuration.md#prr-collection-fields).
+[PRR collection fields](configuration.md#prr-collection-fields). Before sending the collection JSON to the PRR team, 
+you can validate the generated collection using the [PRR STAC Collection Editor](https://eoresults.esa.int/prr_collection_editor.html).
+
 
 Options:
 

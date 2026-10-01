@@ -85,8 +85,11 @@
 - Removed redundant `via` access link from the OSC STAC collection; access is already expressed via typed assets (`zarr-data`, `zarr-consolidated-metadata`) on the STAC item.
 - `osc_project` is now omitted from `OscDatasetStacGenerator` when not provided, preserving the callee's default instead of passing `None`.
 
-## Changes in 0.2.0 (in Development)
+## Changes in 0.2.0 (in development)
 
+- Automatically derives OSC CF parameters from data variable metadata when `cf_params` is not provided.
+- Supports temporal coordinates whose names contain `time`.
+- The `osc:variables` extension field now contains the variable names used in the cube rather than the `standard_name` values from the data variable attributes.
 - Generated project collection now includes required STAC extensions (`osc`, `themes`, `contacts`) and OSC-mandatory fields (`osc:type`, `osc:status`, `themes`, `contacts`) to pass OSC catalog validation.
 - Added optional `osc_project_url` field to the dataset config; used as the `via` link in the project collection. Falls back to `documentation_link` if omitted; defaults to the existing DeepESDL project collection when neither is provided.
 - `dataset_status` now defaults to `"ongoing"` when not specified in the dataset config.

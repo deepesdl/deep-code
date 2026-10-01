@@ -250,17 +250,31 @@ class OscDatasetStacGenerator:
     @staticmethod
     def _get_temporal_extent(dataset: xr.Dataset) -> TemporalExtent:
         """Extract temporal extent from the dataset."""
-        dataset = dataset
-        if "time" in dataset.coords:
+        time_coords = [name for name in dataset.coords if "time" in name]
+        if time_coords:
             try:
-                # Convert the time bounds to datetime objects
-                time_min = pd.to_datetime(dataset.time.min().values).to_pydatetime()
-                time_max = pd.to_datetime(dataset.time.max().values).to_pydatetime()
+                time_min = min(
+                    pd.to_datetime(dataset[name].min().values) for name in time_coords
+                ).to_pydatetime()
+                time_max = max(
+                    pd.to_datetime(dataset[name].max().values) for name in time_coords
+                ).to_pydatetime()
                 return TemporalExtent([[time_min, time_max]])
             except Exception as e:
                 raise ValueError(f"Failed to parse temporal extent: {e}")
         else:
-            raise ValueError("Dataset does not have a 'time' coordinate.")
+            raise ValueError("Dataset does not have a '*time*' coordinate.")
+
+    @staticmethod
+    def _get_cf_params(dataset: xr.Dataset) -> list:
+        params = []
+
+        for var_name, data_var in dataset.data_vars.items():
+            attrs = data_var.attrs
+            if "standard_name" in attrs:
+                params.append({"name": attrs["standard_name"]})
+
+        return params
 
     @staticmethod
     def _normalize_name(name: str | None) -> str | None:
@@ -357,13 +371,12 @@ class OscDatasetStacGenerator:
         """Extract metadata for a single variable."""
         long_name = variable_data.attrs.get("long_name")
         standard_name = variable_data.attrs.get("standard_name", "unknown")
-        variable_id = (
-            variable_data.name if standard_name == "unknown" else standard_name
-        )
+        variable_id = variable_data.name
         description = variable_data.attrs.get("description", long_name)
         gcmd_keyword_url = variable_data.attrs.get("gcmd_keyword_url")
         return {
-            "variable_id": self._normalize_name(variable_id),
+            "variable_id": variable_id,
+            "standard_name": standard_name,
             "description": description,
             "gcmd_keyword_url": gcmd_keyword_url,
         }
@@ -386,7 +399,7 @@ class OscDatasetStacGenerator:
         #  Remove 'crs' and 'spatial_ref' from the list if they exist, note that
         #  spatial_ref will be normalized to spatial-ref in variable_ids and skipped.
         return [
-            var_id for var_id in variable_ids if var_id not in ["crs", "spatial-ref"]
+            var_id for var_id in variable_ids if var_id not in ["crs", "spatial_ref"]
         ]
 
     def get_variables_metadata(self, dataset: xr.Dataset) -> dict[str, dict]:
@@ -1186,7 +1199,10 @@ class OscDatasetStacGenerator:
         osc_extension.osc_region = self.osc_region
         osc_extension.osc_variables = variables
         osc_extension.osc_missions = self.osc_missions
-        osc_extension.cf_parameter = self.cf_params or [{"name": self.collection_id}]
+        if self.cf_params:
+            osc_extension.cf_parameter = self.cf_params
+        else:
+            osc_extension.cf_parameter = self._get_cf_params(dataset_ref)
 
         now_iso = datetime.now(timezone.utc).isoformat()
         collection.extra_fields["created"] = now_iso
@@ -1399,7 +1415,7 @@ class OscDatasetStacGenerator:
         if self.cf_params:
             osc_extension.cf_parameter = self.cf_params
         else:
-            osc_extension.cf_parameter = [{"name": self.collection_id}]
+            osc_extension.cf_parameter = self._get_cf_params(dataset)
 
         # Add creation and update timestamps for the collection
         now_iso = datetime.now(timezone.utc).isoformat()
