@@ -272,13 +272,15 @@ class OscDatasetStacGenerator:
         for var_name, data_var in dataset.data_vars.items():
             attrs = data_var.attrs
 
-            params.apend(
+            params.append(
                 {
                     "name": var_name,
-                    "standard_name": attrs.get("standard_name", var_name),
-                    "long_name": attrs.get("long_name"),
-                    "units": attrs.get("units"),
-                    "description": attrs.get("description"),
+                    "units": attrs.get("units", "1"),
+                    **{
+                        key: attrs[key]
+                        for key in ("standard_name", "long_name", "description")
+                        if key in attrs
+                    },
                 }
             )
 
@@ -379,13 +381,12 @@ class OscDatasetStacGenerator:
         """Extract metadata for a single variable."""
         long_name = variable_data.attrs.get("long_name")
         standard_name = variable_data.attrs.get("standard_name", "unknown")
-        variable_id = (
-            variable_data.name if standard_name == "unknown" else standard_name
-        )
+        variable_id = variable_data.name
         description = variable_data.attrs.get("description", long_name)
         gcmd_keyword_url = variable_data.attrs.get("gcmd_keyword_url")
         return {
-            "variable_id": self._normalize_name(variable_id),
+            "variable_id": variable_id,
+            "standard_name": standard_name,
             "description": description,
             "gcmd_keyword_url": gcmd_keyword_url,
         }
@@ -408,7 +409,7 @@ class OscDatasetStacGenerator:
         #  Remove 'crs' and 'spatial_ref' from the list if they exist, note that
         #  spatial_ref will be normalized to spatial-ref in variable_ids and skipped.
         return [
-            var_id for var_id in variable_ids if var_id not in ["crs", "spatial-ref"]
+            var_id for var_id in variable_ids if var_id not in ["crs", "spatial_ref"]
         ]
 
     def get_variables_metadata(self, dataset: xr.Dataset) -> dict[str, dict]:
@@ -1190,7 +1191,7 @@ class OscDatasetStacGenerator:
         dataset_ref = open_dataset(
             self.items_config[0].dataset_id, logger=self.logger, calc_filesizes=False
         )
-        variables = list(dataset_ref.data_vars)
+        variables = self.get_variable_ids(dataset_ref)
 
         collection = Collection(
             id=self.collection_id,
@@ -1400,7 +1401,7 @@ class OscDatasetStacGenerator:
             )
             spatial_extent = self._get_spatial_extent(dataset, self.coord_position)
             temporal_extent = self._get_temporal_extent(dataset)
-            variables = list(dataset.dara_vars)
+            variables = self.get_variable_ids(dataset)
             general_metadata = self._get_general_metadata(dataset)
         except ValueError as e:
             raise ValueError(f"Metadata extraction failed: {e}")

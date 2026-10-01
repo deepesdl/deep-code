@@ -87,6 +87,8 @@
 
 ## Changes in 0.2.0 (in Development)
 
+- Automatically derives OSC CF parameters from data variable metadata when `cf_params` is not provided, and supports temporal coordinates whose names contain `time`.
+
 - Generated project collection now includes required STAC extensions (`osc`, `themes`, `contacts`) and OSC-mandatory fields (`osc:type`, `osc:status`, `themes`, `contacts`) to pass OSC catalog validation.
 - Added optional `osc_project_url` field to the dataset config; used as the `via` link in the project collection. Falls back to `documentation_link` if omitted; defaults to the existing DeepESDL project collection when neither is provided.
 - `dataset_status` now defaults to `"ongoing"` when not specified in the dataset config.
