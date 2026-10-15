@@ -28,13 +28,13 @@ class TestDeepCodePlugin(unittest.TestCase):
                 "title": "Climate Dataset 2025",
             },
         )
-        self.valid_dataset["temperature"].attrs[
-            "gcmd_keyword_url"
-        ] = "https://gcmd.nasa.gov/KeywordViewer/temperature"
+        self.valid_dataset["temperature"].attrs["gcmd_keyword_url"] = (
+            "https://gcmd.nasa.gov/KeywordViewer/temperature"
+        )
         self.valid_dataset["temperature"].attrs["units"] = "K"
-        self.valid_dataset["precipitation"].attrs[
-            "gcmd_keyword_url"
-        ] = "https://gcmd.nasa.gov/KeywordViewer/precipitation"
+        self.valid_dataset["precipitation"].attrs["gcmd_keyword_url"] = (
+            "https://gcmd.nasa.gov/KeywordViewer/precipitation"
+        )
         self.valid_dataset["precipitation"].attrs["units"] = "mm"
 
         # Invalid dataset missing required metadata
@@ -46,9 +46,9 @@ class TestDeepCodePlugin(unittest.TestCase):
             coords={"time": [1], "lat": [0, 1], "lon": [0, 1]},
             attrs={},
         )
-        self.invalid_dataset["temperature"].attrs[
-            "gcmd_keyword_url"
-        ] = "https://gcmd.nasa.gov/KeywordViewer/temperature"
+        self.invalid_dataset["temperature"].attrs["gcmd_keyword_url"] = (
+            "https://gcmd.nasa.gov/KeywordViewer/temperature"
+        )
         self.invalid_dataset["temperature"].attrs["units"] = "K"
         # Intentionally omit gcmd_keyword_url and units for precipitation
 

@@ -247,9 +247,7 @@ class TestWorkflowAsOgcRecord(unittest.TestCase):
             ),
         ]
         for record in records:
-            project_links = [
-                lnk for lnk in record.links if "/projects/" in lnk["href"]
-            ]
+            project_links = [lnk for lnk in record.links if "/projects/" in lnk["href"]]
             self.assertEqual(
                 project_links,
                 [
@@ -264,7 +262,6 @@ class TestWorkflowAsOgcRecord(unittest.TestCase):
 
 
 class TestExperimentAsOgcRecord(unittest.TestCase):
-
     def test_records_use_given_project_title(self):
         """The project link title repeats the project collection's title."""
         properties = RecordProperties(

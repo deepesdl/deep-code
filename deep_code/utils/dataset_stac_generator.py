@@ -437,7 +437,7 @@ class OscDatasetStacGenerator:
             )
         )
         self.logger.info(
-            f'Added GCMD link for {var_metadata.get("variable_id")} '
+            f"Added GCMD link for {var_metadata.get('variable_id')} "
             f"catalog {gcmd_keyword_url}."
         )
 
@@ -1351,8 +1351,7 @@ class OscDatasetStacGenerator:
             The ``output_dir`` that was written.
         """
         self.logger.info(
-            f"Writing PRR STAC collection for '{self.collection_id}' to "
-            f"'{output_dir}'."
+            f"Writing PRR STAC collection for '{self.collection_id}' to '{output_dir}'."
         )
         collection = self.build_prr_collection()
 
