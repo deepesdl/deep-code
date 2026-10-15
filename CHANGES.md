@@ -85,7 +85,7 @@
 - Removed redundant `via` access link from the OSC STAC collection; access is already expressed via typed assets (`zarr-data`, `zarr-consolidated-metadata`) on the STAC item.
 - `osc_project` is now omitted from `OscDatasetStacGenerator` when not provided, preserving the callee's default instead of passing `None`.
 
-## Changes in 0.2.0 (in Development)
+## Changes in 0.2.0 
 
 - Added the `lint-dataset` CLI command, which checks a Zarr dataset's metadata (dataset `description`, `gcmd_keyword_url` on each data variable) before publishing. This also fixes the `deep-code` CLI in 0.1.9 failing at startup with `ModuleNotFoundError: No module named 'deep_code.cli.lint'`.
 - Automatically derives OSC CF parameters from data variable metadata when `cf_params` is not provided.
